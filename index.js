@@ -242,11 +242,49 @@ app.post("/recommend", async (req, res) => {
         (weights.Course * courseScore) +
         (weights.Institution * universityScore);
 
+      const explanation = [];
+
+      // COUNTRY EXPLANATION
+      if (country.pr_opportunity_level > 0.8) {
+        explanation.push("Strong permanent residency pathway");
+      }
+
+      if (country.work_permit_level > 0.8) {
+        explanation.push("Strong post-study work permit duration");
+      }
+
+      if (answers.english_preference === "Yes" && country.english_first_language) {
+        explanation.push("English-speaking country match");
+      }
+
+      // COURSE EXPLANATION
+      if (course.internship_available && answers.internship_importance === "Very strongly") {
+        explanation.push("Includes internship as preferred");
+      }
+
+      if (course.scholarship_level > 0.7 && answers.scholarship_importance.includes("Very strongly")) {
+        explanation.push("Strong scholarship availability");
+      }
+
+      // UNIVERSITY EXPLANATION
+      if (university.ranking_level > 0.8 && answers.ranking_importance.includes("top")) {
+        explanation.push("Highly ranked institution");
+      }
+
+      if (university.career_services_level > 0.8) {
+        explanation.push("Strong career services support");
+      }
+
+      if (university.location_type === answers.location_preference) {
+        explanation.push("Matches preferred campus location");
+      }
+
       return {
         country: country.name,
         university: university.name,
         course: course.name,
-        finalScore
+        finalScore,
+        explanation
       };
     });
 

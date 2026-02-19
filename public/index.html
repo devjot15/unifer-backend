@@ -221,12 +221,19 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   }
 
   data.forEach(item => {
+    const explanationHtml = item.explanation && item.explanation.length > 0 
+      ? `<ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9em; color: #555;">
+          ${item.explanation.map(exp => `<li>${exp}</li>`).join("")}
+         </ul>` 
+      : "";
+
     resultsDiv.innerHTML += `
       <div class="result-item">
         <strong>${item.country}</strong><br>
         ${item.university}<br>
         ${item.course}<br>
         Score: ${item.finalScore.toFixed(3)}
+        ${explanationHtml}
       </div>
     `;
   });
