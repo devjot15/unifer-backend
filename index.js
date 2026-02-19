@@ -1,11 +1,13 @@
-const http = require('http');
+const express = require("express");
+const app = express();
 
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-cache' });
-  res.end('Hello from Replit!\n');
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("Study Abroad Engine is running 🚀");
 });
 
-const PORT = 5000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running at http://0.0.0.0:${PORT}/`);
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
