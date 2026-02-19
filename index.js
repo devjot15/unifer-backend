@@ -203,6 +203,14 @@ app.post("/recommend", async (req, res) => {
 
       // UNIVERSITY SCORE (real ranking intensity)
 
+      let locationScore = 1;
+      if (answers.location_preference === "Main city") {
+        locationScore = university.location_type === "Main city" ? 1 : 0;
+      }
+      if (answers.location_preference === "Smaller cities") {
+        locationScore = university.location_type === "Smaller cities" ? 1 : 0;
+      }
+
       let rankingWeight = 0;
       if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
       if (answers.ranking_importance === "Top and middle institutions are fine") rankingWeight = 0.7;
@@ -219,9 +227,10 @@ app.post("/recommend", async (req, res) => {
       if (answers.admission_speed_importance === "No") admissionWeight = 0.3;
 
       let universityScore =
-        (rankingWeight * university.ranking_level +
+        (locationScore +
+         rankingWeight * university.ranking_level +
          careerWeight * university.career_services_level +
-         admissionWeight * university.admission_speed_level) / 3;
+         admissionWeight * university.admission_speed_level) / 4;
 
       // FINAL ADDITIVE SCORE
       let finalScore =
