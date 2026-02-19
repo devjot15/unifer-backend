@@ -226,11 +226,13 @@ app.post("/recommend", async (req, res) => {
       if (answers.admission_speed_importance === "Not that much") admissionWeight = 0.6;
       if (answers.admission_speed_importance === "No") admissionWeight = 0.3;
 
+      let admissionScore = admissionWeight * university.admission_speed_level;
+
       let universityScore =
         (locationScore +
          rankingWeight * university.ranking_level +
          careerWeight * university.career_services_level +
-         admissionWeight * university.admission_speed_level) / 4;
+         admissionScore) / 4;
 
       // FINAL ADDITIVE SCORE
       let finalScore =
