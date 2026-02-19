@@ -147,6 +147,13 @@ app.post("/recommend", async (req, res) => {
 
       // COUNTRY SCORE (real intensity logic)
 
+      let costScore = 0;
+      if (answers.cost_of_living === country.cost_of_living_band) {
+        costScore = 1;
+      } else {
+        costScore = 0.4; // penalty if mismatch
+      }
+
       let workWeight = 0;
       if (answers.work_permit_importance === "Very strongly (3 years and above)") workWeight = 1;
       if (answers.work_permit_importance === "Wouldn’t mind (less than 3 years and more than 1 year)") workWeight = 0.6;
@@ -163,9 +170,10 @@ app.post("/recommend", async (req, res) => {
       if (answers.gov_support_importance === "Don’t mind") govWeight = 0.3;
 
       let countryScore =
-        (workWeight * country.work_permit_level +
+        (costScore +
+         workWeight * country.work_permit_level +
          govWeight * country.government_support_level +
-         prWeight * country.pr_opportunity_level) / 3;
+         prWeight * country.pr_opportunity_level) / 4;
 
       // COURSE SCORE (real intensity logic)
 
