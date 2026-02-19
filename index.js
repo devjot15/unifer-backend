@@ -172,12 +172,22 @@ app.post("/recommend", async (req, res) => {
 
       let courseScore = (internshipScore + scholarshipScore) / 2;
 
-      // UNIVERSITY SCORE
-      let universityScore = (
-        university.ranking_level +
-        university.career_services_level +
-        university.admission_speed_level
-      ) / 3;
+      // UNIVERSITY SCORE (real ranking intensity)
+
+      let rankingWeight = 0;
+      if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
+      if (answers.ranking_importance === "Top and middle institutions are fine") rankingWeight = 0.7;
+      if (answers.ranking_importance === "All institution irrespective of ranking") rankingWeight = 0.4;
+
+      let careerWeight = 0;
+      if (answers.career_importance === "Very strongly (placement driven institutions)") careerWeight = 1;
+      if (answers.career_importance === "Moderately (academics driven institutions)") careerWeight = 0.6;
+      if (answers.career_importance === "Not that much") careerWeight = 0.3;
+
+      let universityScore =
+        (rankingWeight * university.ranking_level +
+         careerWeight * university.career_services_level +
+         university.admission_speed_level) / 3;
 
       // FINAL ADDITIVE SCORE
       let finalScore =

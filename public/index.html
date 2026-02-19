@@ -2,6 +2,13 @@
 <html>
 <head>
   <title>Study Abroad Engine</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    select, button { margin-top: 5px; padding: 8px; width: 100%; }
+    .result-item { border-bottom: 1px solid #ccc; padding: 10px 0; }
+    h1 { color: #2c3e50; }
+  </style>
 </head>
 <body>
   <h1>Study Abroad Recommendation Engine</h1>
@@ -11,53 +18,110 @@
     <select id="level">
       <option>UG</option>
       <option>PG</option>
-    </select><br><br>
+    </select>
 
     <label>Duration:</label>
     <select id="duration">
       <option>3 years or less</option>
       <option>More than 3 years</option>
       <option>1 year or less</option>
-    </select><br><br>
+    </select>
 
     <label>Tuition Band:</label>
     <select id="tuition">
       <option>Less than $12k</option>
       <option>$12k - $25k</option>
       <option>More than $25K</option>
-    </select><br><br>
+    </select>
 
     <label>Field:</label>
     <select id="field">
       <option>engineering & tech</option>
-    </select><br><br>
+    </select>
 
     <label>GRE Filter:</label>
     <select id="gre">
       <option>No filter</option>
       <option>Without GRE or GMAT</option>
-    </select><br><br>
+    </select>
 
+    <hr>
+    <h3>Country Preferences</h3>
+    <label>Work Permit Importance:</label>
+    <select id="work_permit_importance">
+      <option>Very strongly (3 years and above)</option>
+      <option>Wouldn’t mind (less than 3 years and more than 1 year)</option>
+      <option>Not really (1 year or less)</option>
+    </select>
+
+    <label>PR Importance:</label>
+    <select id="pr_importance">
+      <option>Very strongly</option>
+      <option>Wouldn’t mind</option>
+      <option>Don’t care</option>
+    </select>
+
+    <label>Government Support Importance:</label>
+    <select id="gov_support_importance">
+      <option>Very strongly</option>
+      <option>Wouldn’t mind</option>
+      <option>Don’t mind</option>
+    </select>
+
+    <hr>
+    <h3>Course Preferences</h3>
+    <label>Internship Importance:</label>
+    <select id="internship_importance">
+      <option>Very strongly</option>
+      <option>Wouldn’t mind</option>
+      <option>Don’t care</option>
+    </select>
+
+    <label>Scholarship Importance:</label>
+    <select id="scholarship_importance">
+      <option>Very strongly (more than 20% of tuition)</option>
+      <option>Wouldn’t mind getting one (less than 20% of tuition or none)</option>
+      <option>Don’t care</option>
+    </select>
+
+    <hr>
+    <h3>Institution Preferences</h3>
+    <label>Ranking Importance:</label>
+    <select id="ranking_importance">
+      <option>Only want to apply in top institutions</option>
+      <option>Top and middle institutions are fine</option>
+      <option>All institution irrespective of ranking</option>
+    </select>
+
+    <label>Career Services Importance:</label>
+    <select id="career_importance">
+      <option>Very strongly (placement driven institutions)</option>
+      <option>Moderately (academics driven institutions)</option>
+      <option>Not that much</option>
+    </select>
+
+    <hr>
+    <h3>Priorities</h3>
     <label>Priority 1:</label>
     <select id="p1">
-      <option>Course</option>
-      <option>Country</option>
-      <option>Institution</option>
-    </select><br><br>
+      <option value="Course">Course</option>
+      <option value="Country">Country</option>
+      <option value="Institution">Institution</option>
+    </select>
 
     <label>Priority 2:</label>
     <select id="p2">
-      <option>Country</option>
-      <option>Course</option>
-      <option>Institution</option>
-    </select><br><br>
+      <option value="Country">Country</option>
+      <option value="Course">Course</option>
+      <option value="Institution">Institution</option>
+    </select>
 
     <label>Priority 3:</label>
     <select id="p3">
-      <option>Institution</option>
-      <option>Country</option>
-      <option>Course</option>
-    </select><br><br>
+      <option value="Institution">Institution</option>
+      <option value="Country">Country</option>
+      <option value="Course">Course</option>
+    </select>
 
     <button type="submit">Get Recommendations</button>
   </form>
@@ -69,19 +133,32 @@
 document.getElementById("recommendForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
+  const body = {
+    level: document.getElementById("level").value,
+    duration: document.getElementById("duration").value,
+    tuition_band: document.getElementById("tuition").value,
+    field: document.getElementById("field").value,
+    gre_filter: document.getElementById("gre").value,
+    
+    work_permit_importance: document.getElementById("work_permit_importance").value,
+    pr_importance: document.getElementById("pr_importance").value,
+    gov_support_importance: document.getElementById("gov_support_importance").value,
+    
+    internship_importance: document.getElementById("internship_importance").value,
+    scholarship_importance: document.getElementById("scholarship_importance").value,
+    
+    ranking_importance: document.getElementById("ranking_importance").value,
+    career_importance: document.getElementById("career_importance").value,
+    
+    priority_1: document.getElementById("p1").value,
+    priority_2: document.getElementById("p2").value,
+    priority_3: document.getElementById("p3").value
+  };
+
   const response = await fetch("/recommend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      level: document.getElementById("level").value,
-      duration: document.getElementById("duration").value,
-      tuition_band: document.getElementById("tuition").value,
-      field: document.getElementById("field").value,
-      gre_filter: document.getElementById("gre").value,
-      priority_1: document.getElementById("p1").value,
-      priority_2: document.getElementById("p2").value,
-      priority_3: document.getElementById("p3").value
-    })
+    body: JSON.stringify(body)
   });
 
   const data = await response.json();
@@ -90,18 +167,17 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   resultsDiv.innerHTML = "";
 
   if (!Array.isArray(data)) {
-    resultsDiv.innerHTML = "<p>No results found.</p>";
+    resultsDiv.innerHTML = `<p>${data.message || "No results found."}</p>`;
     return;
   }
 
   data.forEach(item => {
     resultsDiv.innerHTML += `
-      <div>
+      <div class="result-item">
         <strong>${item.country}</strong><br>
         ${item.university}<br>
         ${item.course}<br>
         Score: ${item.finalScore.toFixed(3)}
-        <hr>
       </div>
     `;
   });
