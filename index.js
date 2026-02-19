@@ -45,11 +45,12 @@ app.get("/seed", async (req, res) => {
       { name: "Ireland", cost_of_living_band: "20-30K", work_permit_level: 0.8, english_first_language: true, government_support_level: 0.7, pr_opportunity_level: 0.6 }
     ];
 
-    const { data: countries } = await supabase.from("countries").insert(countriesData).select();
+    const { data: countries, error: countriesError } = await supabase.from("countries").insert(countriesData).select();
+    if (countriesError) throw countriesError;
 
     for (let country of countries) {
       for (let i = 1; i <= 5; i++) {
-        const { data: university } = await supabase
+        const { data: university, error: uniError } = await supabase
           .from("universities")
           .insert({
             name: `${country.name} University ${i}`,
@@ -61,9 +62,12 @@ app.get("/seed", async (req, res) => {
           })
           .select()
           .single();
+        
+        if (uniError) throw uniError;
+        if (!university) continue;
 
         for (let j = 1; j <= 10; j++) {
-          await supabase.from("courses").insert({
+          const { error: courseError } = await supabase.from("courses").insert({
             name: `Course ${j}`,
             university_id: university.id,
             level: j % 2 === 0 ? "UG" : "PG",
@@ -75,6 +79,7 @@ app.get("/seed", async (req, res) => {
             tuition_band: j % 3 === 0 ? "Less than $12k" : j % 3 === 1 ? "$12k - $25k" : "More than $25K",
             field_category: "engineering & tech"
           });
+          if (courseError) throw courseError;
         }
       }
     }
