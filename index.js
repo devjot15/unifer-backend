@@ -101,7 +101,7 @@ app.post("/recommend", async (req, res) => {
     const { data: universities } = await supabase.from("universities").select("*");
     const { data: courses } = await supabase.from("courses").select("*");
 
-    // 2️⃣ HARD COURSE ELIMINATION
+      // 2️⃣ HARD COURSE ELIMINATION
     const eligibleCourses = courses.filter(course => {
       const university = universities.find(u => u.id === course.university_id);
       const country = countries.find(c => c.id === university.country_id);
@@ -111,11 +111,12 @@ app.post("/recommend", async (req, res) => {
       if (course.field_category !== answers.field) return false;
       if (country.cost_of_living_band !== answers.cost_of_living) return false;
 
+      if (answers.location_preference !== "Anywhere in the country") {
+        if (university.location_type !== answers.location_preference) return false;
+      }
+
       if (answers.english_preference === "Yes") {
         if (!country.english_first_language) return false;
-      } else if (answers.english_preference === "Prefer but flexible") {
-        // Optional logic: maybe lower weight instead of hard filter? 
-        // For now, keep it as a filter if that's the intent of List A.
       }
 
       if (answers.gre_filter !== "No filter") {
@@ -195,10 +196,15 @@ app.post("/recommend", async (req, res) => {
       if (answers.career_importance === "Moderately (academics driven institutions)") careerWeight = 0.6;
       if (answers.career_importance === "Not that much") careerWeight = 0.3;
 
+      let admissionWeight = 0;
+      if (answers.admission_speed_importance === "Very strongly") admissionWeight = 1;
+      if (answers.admission_speed_importance === "Not that much") admissionWeight = 0.6;
+      if (answers.admission_speed_importance === "No") admissionWeight = 0.3;
+
       let universityScore =
         (rankingWeight * university.ranking_level +
          careerWeight * university.career_services_level +
-         university.admission_speed_level) / 3;
+         admissionWeight * university.admission_speed_level) / 3;
 
       // FINAL ADDITIVE SCORE
       let finalScore =

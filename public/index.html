@@ -85,6 +85,37 @@
     </select>
 
     <hr>
+    <h2>Questions for University Selection (List C)</h2>
+
+    <label>What is your preference for location of the campus?</label>
+    <select id="location_preference">
+      <option>Main city</option>
+      <option>Smaller cities</option>
+      <option>Anywhere in the country</option>
+    </select>
+
+    <label>How strongly ranking affects your decision?</label>
+    <select id="ranking_importance">
+      <option>Only want to apply in top institutions</option>
+      <option>Top and middle institutions are fine</option>
+      <option>All institution irrespective of ranking</option>
+    </select>
+
+    <label>How does career services affect your decision?</label>
+    <select id="career_importance">
+      <option>Very strongly (placement driven institutions)</option>
+      <option>Moderately (academics driven institutions)</option>
+      <option>Not that much</option>
+    </select>
+
+    <label>How fast admission is a deciding factor?</label>
+    <select id="admission_speed_importance">
+      <option>Very strongly</option>
+      <option>Not that much</option>
+      <option>No</option>
+    </select>
+
+    <hr>
     <h3>Course Preferences</h3>
     <label>Internship Importance:</label>
     <select id="internship_importance">
@@ -98,22 +129,6 @@
       <option>Very strongly (more than 20% of tuition)</option>
       <option>Wouldn’t mind getting one (less than 20% of tuition or none)</option>
       <option>Don’t care</option>
-    </select>
-
-    <hr>
-    <h3>Institution Preferences</h3>
-    <label>Ranking Importance:</label>
-    <select id="ranking_importance">
-      <option>Only want to apply in top institutions</option>
-      <option>Top and middle institutions are fine</option>
-      <option>All institution irrespective of ranking</option>
-    </select>
-
-    <label>Career Services Importance:</label>
-    <select id="career_importance">
-      <option>Very strongly (placement driven institutions)</option>
-      <option>Moderately (academics driven institutions)</option>
-      <option>Not that much</option>
     </select>
 
     <hr>
@@ -163,12 +178,14 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     english_preference: document.getElementById("english_preference").value,
     gov_support_importance: document.getElementById("gov_support_importance").value,
     pr_importance: document.getElementById("pr_importance").value,
+
+    location_preference: document.getElementById("location_preference").value,
+    ranking_importance: document.getElementById("ranking_importance").value,
+    career_importance: document.getElementById("career_importance").value,
+    admission_speed_importance: document.getElementById("admission_speed_importance").value,
     
     internship_importance: document.getElementById("internship_importance").value,
     scholarship_importance: document.getElementById("scholarship_importance").value,
-    
-    ranking_importance: document.getElementById("ranking_importance").value,
-    career_importance: document.getElementById("career_importance").value,
     
     priority_1: document.getElementById("priority_1").value,
     priority_2: document.getElementById("priority_2").value,
