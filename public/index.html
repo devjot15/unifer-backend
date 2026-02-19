@@ -8,6 +8,7 @@
     select, button { margin-top: 5px; padding: 8px; width: 100%; }
     .result-item { border-bottom: 1px solid #ccc; padding: 10px 0; }
     h1 { color: #2c3e50; }
+    hr { margin: 20px 0; }
   </style>
 </head>
 <body>
@@ -46,26 +47,41 @@
     </select>
 
     <hr>
-    <h3>Country Preferences</h3>
-    <label>Work Permit Importance:</label>
+    <h2>Questions For Country Selection (List A)</h2>
+
+    <label>What is your preferred cost of living per year range?</label>
+    <select id="cost_of_living">
+      <option>$0 - $20K</option>
+      <option>$20K – $30K</option>
+      <option>More than $30K</option>
+    </select>
+
+    <label>How does duration of post study work permit effect your decision?</label>
     <select id="work_permit_importance">
       <option>Very strongly (3 years and above)</option>
       <option>Wouldn’t mind (less than 3 years and more than 1 year)</option>
       <option>Not really (1 year or less)</option>
     </select>
 
-    <label>PR Importance:</label>
-    <select id="pr_importance">
-      <option>Very strongly</option>
-      <option>Wouldn’t mind</option>
-      <option>Don’t care</option>
+    <label>Do you want to prefer a country where english is the first language?</label>
+    <select id="english_preference">
+      <option>Yes</option>
+      <option>Prefer but flexible</option>
+      <option>No preference</option>
     </select>
 
-    <label>Government Support Importance:</label>
+    <label>How strongly does government support affect your decision?</label>
     <select id="gov_support_importance">
       <option>Very strongly</option>
       <option>Wouldn’t mind</option>
       <option>Don’t mind</option>
+    </select>
+
+    <label>How strongly does opportunity to immigrate permanently affect your decision?</label>
+    <select id="pr_importance">
+      <option>Very strongly</option>
+      <option>Wouldn’t mind</option>
+      <option>Don’t care</option>
     </select>
 
     <hr>
@@ -142,9 +158,11 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     field: document.getElementById("field").value,
     gre_filter: document.getElementById("gre").value,
     
+    cost_of_living: document.getElementById("cost_of_living").value,
     work_permit_importance: document.getElementById("work_permit_importance").value,
-    pr_importance: document.getElementById("pr_importance").value,
+    english_preference: document.getElementById("english_preference").value,
     gov_support_importance: document.getElementById("gov_support_importance").value,
+    pr_importance: document.getElementById("pr_importance").value,
     
     internship_importance: document.getElementById("internship_importance").value,
     scholarship_importance: document.getElementById("scholarship_importance").value,

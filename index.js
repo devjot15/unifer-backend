@@ -103,9 +103,20 @@ app.post("/recommend", async (req, res) => {
 
     // 2️⃣ HARD COURSE ELIMINATION
     const eligibleCourses = courses.filter(course => {
+      const university = universities.find(u => u.id === course.university_id);
+      const country = countries.find(c => c.id === university.country_id);
+
       if (course.level !== answers.level) return false;
       if (course.tuition_band !== answers.tuition_band) return false;
       if (course.field_category !== answers.field) return false;
+      if (country.cost_of_living_band !== answers.cost_of_living) return false;
+
+      if (answers.english_preference === "Yes") {
+        if (!country.english_first_language) return false;
+      } else if (answers.english_preference === "Prefer but flexible") {
+        // Optional logic: maybe lower weight instead of hard filter? 
+        // For now, keep it as a filter if that's the intent of List A.
+      }
 
       if (answers.gre_filter !== "No filter") {
         if (course.gre_required || course.gmat_required) return false;
