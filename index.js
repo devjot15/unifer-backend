@@ -154,6 +154,14 @@ app.post("/recommend", async (req, res) => {
         costScore = 0.4; // penalty if mismatch
       }
 
+      let englishScore = 1;
+      if (answers.english_preference === "Yes") {
+        englishScore = country.english_first_language ? 1 : 0;
+      }
+      if (answers.english_preference === "Prefer but flexible") {
+        englishScore = country.english_first_language ? 1 : 0.6;
+      }
+
       let workWeight = 0;
       if (answers.work_permit_importance === "Very strongly (3 years and above)") workWeight = 1;
       if (answers.work_permit_importance === "Wouldn’t mind (less than 3 years and more than 1 year)") workWeight = 0.6;
@@ -171,9 +179,10 @@ app.post("/recommend", async (req, res) => {
 
       let countryScore =
         (costScore +
+         englishScore +
          workWeight * country.work_permit_level +
          govWeight * country.government_support_level +
-         prWeight * country.pr_opportunity_level) / 4;
+         prWeight * country.pr_opportunity_level) / 5;
 
       // COURSE SCORE (real intensity logic)
 
