@@ -1,0 +1,87 @@
+app.post("/recommend", async (req, res) => {
+  try {
+    const answers = req.body;
+
+    // 1️⃣ Fetch all data
+    const { data: countries } = await supabase.from("countries").select("*");
+    const { data: universities } = await supabase.from("universities").select("*");
+    const { data: courses } = await supabase.from("courses").select("*");
+
+    // 2️⃣ HARD COURSE ELIMINATION
+    const eligibleCourses = courses.filter(course => {
+      if (course.level !== answers.level) return false;
+      if (course.tuition_band !== answers.tuition_band) return false;
+      if (course.field_category !== answers.field) return false;
+
+      if (answers.gre_filter !== "No filter") {
+        if (course.gre_required || course.gmat_required) return false;
+      }
+
+      if (answers.level === "UG" && course.duration_category !== answers.duration) return false;
+      if (answers.level === "PG" && course.duration_category !== answers.duration) return false;
+
+      return true;
+    });
+
+    if (eligibleCourses.length === 0) {
+      return res.json({ message: "No eligible courses found." });
+    }
+
+    // 3️⃣ MACRO WEIGHTS
+    const weights = { Country: 0, Course: 0, Institution: 0 };
+
+    weights[answers.priority_1] = 0.50;
+    weights[answers.priority_2] = 0.32;
+    weights[answers.priority_3] = 0.18;
+
+    // 4️⃣ SCORE PATHWAYS
+    const pathways = eligibleCourses.map(course => {
+      const university = universities.find(u => u.id === course.university_id);
+      const country = countries.find(c => c.id === university.country_id);
+
+      // COUNTRY SCORE
+      let countryScore = (
+        country.work_permit_level +
+        country.government_support_level +
+        country.pr_opportunity_level
+      ) / 3;
+
+      // COURSE SCORE
+      let internshipScore = course.internship_available ? 1 : 0;
+      let scholarshipScore = course.scholarship_level;
+
+      let courseScore = (internshipScore + scholarshipScore) / 2;
+
+      // UNIVERSITY SCORE
+      let universityScore = (
+        university.ranking_level +
+        university.career_services_level +
+        university.admission_speed_level
+      ) / 3;
+
+      // FINAL ADDITIVE SCORE
+      let finalScore =
+        (weights.Country * countryScore) +
+        (weights.Course * courseScore) +
+        (weights.Institution * universityScore);
+
+      return {
+        country: country.name,
+        university: university.name,
+        course: course.name,
+        finalScore
+      };
+    });
+
+    // 5️⃣ Sort & Return Top 5
+    const top5 = pathways
+      .sort((a, b) => b.finalScore - a.finalScore)
+      .slice(0, 5);
+
+    res.json(top5);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Recommendation failed");
+  }
+});
