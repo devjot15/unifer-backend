@@ -133,12 +133,27 @@ app.post("/recommend", async (req, res) => {
       const university = universities.find(u => u.id === course.university_id);
       const country = countries.find(c => c.id === university.country_id);
 
-      // COUNTRY SCORE
-      let countryScore = (
-        country.work_permit_level +
-        country.government_support_level +
-        country.pr_opportunity_level
-      ) / 3;
+      // COUNTRY SCORE (real intensity logic)
+
+      let workWeight = 0;
+      if (answers.work_permit_importance === "Very strongly (3 years and above)") workWeight = 1;
+      if (answers.work_permit_importance === "Wouldn’t mind (less than 3 years and more than 1 year)") workWeight = 0.6;
+      if (answers.work_permit_importance === "Not really (1 year or less)") workWeight = 0.3;
+
+      let prWeight = 0;
+      if (answers.pr_importance === "Very strongly") prWeight = 1;
+      if (answers.pr_importance === "Wouldn’t mind") prWeight = 0.6;
+      if (answers.pr_importance === "Don’t care") prWeight = 0.3;
+
+      let govWeight = 0;
+      if (answers.gov_support_importance === "Very strongly") govWeight = 1;
+      if (answers.gov_support_importance === "Wouldn’t mind") govWeight = 0.6;
+      if (answers.gov_support_importance === "Don’t mind") govWeight = 0.3;
+
+      let countryScore =
+        (workWeight * country.work_permit_level +
+         govWeight * country.government_support_level +
+         prWeight * country.pr_opportunity_level) / 3;
 
       // COURSE SCORE
       let internshipScore = course.internship_available ? 1 : 0;
