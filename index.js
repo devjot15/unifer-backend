@@ -155,9 +155,20 @@ app.post("/recommend", async (req, res) => {
          govWeight * country.government_support_level +
          prWeight * country.pr_opportunity_level) / 3;
 
-      // COURSE SCORE
-      let internshipScore = course.internship_available ? 1 : 0;
-      let scholarshipScore = course.scholarship_level;
+      // COURSE SCORE (real intensity logic)
+
+      let internshipWeight = 0;
+      if (answers.internship_importance === "Very strongly") internshipWeight = 1;
+      if (answers.internship_importance === "Wouldn’t mind") internshipWeight = 0.6;
+      if (answers.internship_importance === "Don’t care") internshipWeight = 0.3;
+
+      let scholarshipWeight = 0;
+      if (answers.scholarship_importance === "Very strongly (more than 20% of tuition)") scholarshipWeight = 1;
+      if (answers.scholarship_importance === "Wouldn’t mind getting one (less than 20% of tuition or none)") scholarshipWeight = 0.6;
+      if (answers.scholarship_importance === "Don’t care") scholarshipWeight = 0.3;
+
+      let internshipScore = course.internship_available ? internshipWeight : 0;
+      let scholarshipScore = scholarshipWeight * course.scholarship_level;
 
       let courseScore = (internshipScore + scholarshipScore) / 2;
 
