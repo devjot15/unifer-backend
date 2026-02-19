@@ -15,37 +15,6 @@
   <h1>Study Abroad Recommendation Engine</h1>
 
   <form id="recommendForm">
-    <label>Program Level:</label>
-    <select id="level">
-      <option>UG</option>
-      <option>PG</option>
-    </select>
-
-    <label>Duration:</label>
-    <select id="duration">
-      <option>3 years or less</option>
-      <option>More than 3 years</option>
-      <option>1 year or less</option>
-    </select>
-
-    <label>Tuition Band:</label>
-    <select id="tuition">
-      <option>Less than $12k</option>
-      <option>$12k - $25k</option>
-      <option>More than $25K</option>
-    </select>
-
-    <label>Field:</label>
-    <select id="field">
-      <option>engineering & tech</option>
-    </select>
-
-    <label>GRE Filter:</label>
-    <select id="gre">
-      <option>No filter</option>
-      <option>Without GRE or GMAT</option>
-    </select>
-
     <hr>
     <h2>Questions For Country Selection (List A)</h2>
 
@@ -114,21 +83,64 @@
       <option>Not that much</option>
       <option>No</option>
     </select>
-
     <hr>
-    <h3>Course Preferences</h3>
-    <label>Internship Importance:</label>
+    <h2>Questions for Course Selection (List B)</h2>
+
+    <label>What level of program do you want to study?</label>
+    <select id="level">
+      <option>UG</option>
+      <option>PG</option>
+    </select><br><br>
+
+    <label>What will be ideal course duration for you?</label>
+    <select id="duration">
+      <option>3 years or less</option>
+      <option>More than 3 years</option>
+      <option>1 year or less</option>
+      <option>More than 1 year</option>
+    </select><br><br>
+
+    <label>How strongly courses with internship as a part of the curriculum impact your decision?</label>
     <select id="internship_importance">
       <option>Very strongly</option>
       <option>Wouldn’t mind</option>
       <option>Don’t care</option>
-    </select>
+    </select><br><br>
 
-    <label>Scholarship Importance:</label>
+    <label>Select a preferred filter for courses with respect to GRE or GMAT requirements?</label>
+    <select id="gre_filter">
+      <option>Without GRE or GMAT</option>
+      <option>Without GRE</option>
+      <option>Without GMAT</option>
+      <option>No filter</option>
+    </select><br><br>
+
+    <label>How strongly scholarships or bursaries affect your decision?</label>
     <select id="scholarship_importance">
       <option>Very strongly (more than 20% of tuition)</option>
       <option>Wouldn’t mind getting one (less than 20% of tuition or none)</option>
       <option>Don’t care</option>
+    </select><br><br>
+
+    <label>What is the amount of annual tuition fee which you think will be ideal for you?</label>
+    <select id="tuition_band">
+      <option>Less than $12k</option>
+      <option>$12k - $25k</option>
+      <option>More than $25K</option>
+    </select><br><br>
+
+    <label>Please select the field which associates the most with the field of study you want to study?</label>
+    <select id="field">
+      <option>engineering & tech</option>
+      <option>business, management and economics</option>
+      <option>science & applied science</option>
+      <option>medicine, health and life science</option>
+      <option>social science & humanities</option>
+      <option>arts, design & creative studies</option>
+      <option>law, public policy & governance</option>
+      <option>hospitality, tourism & service industry</option>
+      <option>education & teaching</option>
+      <option>agriculture, sustainability & environmental studies</option>
     </select>
 
     <hr>
@@ -169,9 +181,9 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   const body = {
     level: document.getElementById("level").value,
     duration: document.getElementById("duration").value,
-    tuition_band: document.getElementById("tuition").value,
+    tuition_band: document.getElementById("tuition_band").value,
     field: document.getElementById("field").value,
-    gre_filter: document.getElementById("gre").value,
+    gre_filter: document.getElementById("gre_filter").value,
     
     cost_of_living: document.getElementById("cost_of_living").value,
     work_permit_importance: document.getElementById("work_permit_importance").value,

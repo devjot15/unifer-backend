@@ -109,7 +109,6 @@ app.post("/recommend", async (req, res) => {
       if (course.level !== answers.level) return false;
       if (course.tuition_band !== answers.tuition_band) return false;
       if (course.field_category !== answers.field) return false;
-      if (country.cost_of_living_band !== answers.cost_of_living) return false;
 
       if (answers.location_preference !== "Anywhere in the country") {
         if (university.location_type !== answers.location_preference) return false;
@@ -120,11 +119,16 @@ app.post("/recommend", async (req, res) => {
       }
 
       if (answers.gre_filter !== "No filter") {
-        if (course.gre_required || course.gmat_required) return false;
+        if (answers.gre_filter === "Without GRE or GMAT") {
+          if (course.gre_required || course.gmat_required) return false;
+        } else if (answers.gre_filter === "Without GRE") {
+          if (course.gre_required) return false;
+        } else if (answers.gre_filter === "Without GMAT") {
+          if (course.gmat_required) return false;
+        }
       }
 
-      if (answers.level === "UG" && course.duration_category !== answers.duration) return false;
-      if (answers.level === "PG" && course.duration_category !== answers.duration) return false;
+      if (course.duration_category !== answers.duration) return false;
 
       return true;
     });
