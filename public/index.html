@@ -101,26 +101,28 @@
     </select>
 
     <hr>
-    <h3>Priorities</h3>
-    <label>Priority 1:</label>
-    <select id="p1">
-      <option value="Course">Course</option>
-      <option value="Country">Country</option>
-      <option value="Institution">Institution</option>
-    </select>
+    <h2>Introductory Question</h2>
+    <label>In your decision to study abroad which of the following is more important, select in decreasing order?</label><br>
 
-    <label>Priority 2:</label>
-    <select id="p2">
-      <option value="Country">Country</option>
-      <option value="Course">Course</option>
-      <option value="Institution">Institution</option>
-    </select>
+    Priority 1:
+    <select id="priority_1">
+      <option>Course</option>
+      <option>Country</option>
+      <option>Institution</option>
+    </select><br><br>
 
-    <label>Priority 3:</label>
-    <select id="p3">
-      <option value="Institution">Institution</option>
-      <option value="Country">Country</option>
-      <option value="Course">Course</option>
+    Priority 2:
+    <select id="priority_2">
+      <option>Country</option>
+      <option>Course</option>
+      <option>Institution</option>
+    </select><br><br>
+
+    Priority 3:
+    <select id="priority_3">
+      <option>Institution</option>
+      <option>Country</option>
+      <option>Course</option>
     </select>
 
     <button type="submit">Get Recommendations</button>
@@ -150,9 +152,9 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     ranking_importance: document.getElementById("ranking_importance").value,
     career_importance: document.getElementById("career_importance").value,
     
-    priority_1: document.getElementById("p1").value,
-    priority_2: document.getElementById("p2").value,
-    priority_3: document.getElementById("p3").value
+    priority_1: document.getElementById("priority_1").value,
+    priority_2: document.getElementById("priority_2").value,
+    priority_3: document.getElementById("priority_3").value
   };
 
   const response = await fetch("/recommend", {
