@@ -101,34 +101,32 @@ app.post("/recommend", async (req, res) => {
     const { data: universities } = await supabase.from("universities").select("*");
     const { data: courses } = await supabase.from("courses").select("*");
 
-      // 2️⃣ HARD COURSE ELIMINATION
+    // 2️⃣ HARD COURSE ELIMINATION
     const eligibleCourses = courses.filter(course => {
-      const university = universities.find(u => u.id === course.university_id);
-      const country = countries.find(c => c.id === university.country_id);
-
+      // Level
       if (course.level !== answers.level) return false;
+
+      // Duration
+      if (course.duration_category !== answers.duration) return false;
+
+      // Tuition band
       if (course.tuition_band !== answers.tuition_band) return false;
+
+      // Field
       if (course.field_category !== answers.field) return false;
 
-      if (answers.location_preference !== "Anywhere in the country") {
-        if (university.location_type !== answers.location_preference) return false;
+      // GRE/GMAT filter
+      if (answers.gre_filter === "Without GRE or GMAT") {
+        if (course.gre_required || course.gmat_required) return false;
       }
 
-      if (answers.english_preference === "Yes") {
-        if (!country.english_first_language) return false;
+      if (answers.gre_filter === "Without GRE") {
+        if (course.gre_required) return false;
       }
 
-      if (answers.gre_filter !== "No filter") {
-        if (answers.gre_filter === "Without GRE or GMAT") {
-          if (course.gre_required || course.gmat_required) return false;
-        } else if (answers.gre_filter === "Without GRE") {
-          if (course.gre_required) return false;
-        } else if (answers.gre_filter === "Without GMAT") {
-          if (course.gmat_required) return false;
-        }
+      if (answers.gre_filter === "Without GMAT") {
+        if (course.gmat_required) return false;
       }
-
-      if (course.duration_category !== answers.duration) return false;
 
       return true;
     });
