@@ -51,22 +51,19 @@ body {
 }
 
 .progress-bar {
-  height: 8px;
+  height: 6px;
   background: #e6eeee;
   border-radius: 4px;
-  margin-bottom: 30px;
-  position: relative;
+  margin-bottom: 40px;
   overflow: hidden;
 }
 
 .progress-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
   height: 100%;
-  width: 25%;
+  width: 0%;
   background: #0F7C78;
-  transition: width 0.3s ease-out;
+  border-radius: 4px;
+  transition: width 0.4s ease;
 }
 
 /* CONTAINER */
@@ -390,7 +387,8 @@ button:hover {
 <script>
 // Initial progress set to 25% for Step 1
 document.addEventListener("DOMContentLoaded", () => {
-  document.querySelector(".progress-fill").style.width = "25%";
+  const fill = document.querySelector(".progress-fill");
+  if (fill) fill.style.width = "25%";
 });
 
 // Update progress bar based on scroll
