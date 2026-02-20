@@ -215,6 +215,22 @@ button:hover {
   border-top: 1px solid #e8eeee;
 }
 
+.form-message {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 1.2em;
+}
+
+.form-message.error {
+  color: #d93025;
+}
+
+.form-message.success {
+  color: #0F7C78;
+}
+
 /* MOBILE */
 
 @media (max-width: 768px) {
@@ -249,6 +265,7 @@ button:hover {
       <div class="progress-fill"></div>
     </div>
     <form id="recommendForm">
+      <div id="formMessage" class="form-message"></div>
       <div class="section">
         <h2>Step 1 — Define Your Priority</h2>
 
@@ -513,12 +530,23 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   const priority_2 = document.getElementById("priority_2").value;
   const priority_3 = document.getElementById("priority_3").value;
 
+  const formMessage = document.getElementById("formMessage");
+  if (formMessage) {
+    formMessage.textContent = "";
+    formMessage.className = "form-message";
+  }
+
   if (
     priority_1 === priority_2 ||
     priority_1 === priority_3 ||
     priority_2 === priority_3
   ) {
-    alert("Please select unique priorities in decreasing order.");
+    if (formMessage) {
+      formMessage.textContent = "Please select unique priorities in decreasing order.";
+      formMessage.classList.add("error");
+    } else {
+      alert("Please select unique priorities in decreasing order.");
+    }
     return;
   }
 
