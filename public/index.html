@@ -572,6 +572,15 @@ document.querySelectorAll(".option-group").forEach(group => {
       if (hiddenInput) {
         hiddenInput.value = card.dataset.value;
       }
+
+      group.classList.remove("invalid");
+      if (formMessage.textContent) {
+        formMessage.textContent = "";
+      }
+      validateAllFields();
+      if (fieldName && fieldName.indexOf("priority") === 0) {
+        checkPriorities();
+      }
     });
   });
 });
