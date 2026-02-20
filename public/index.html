@@ -436,9 +436,9 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   };
 
   // Update progress to 100% on submit and then hide it
-  const progressFill = document.querySelector(".progress-fill");
+  const progressFillElement = document.querySelector(".progress-fill");
   const progressContainer = document.querySelector(".progress-container");
-  progressFill.style.width = "100%";
+  progressFillElement.style.width = "100%";
   
   setTimeout(() => {
     progressContainer.style.display = "none";
