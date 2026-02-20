@@ -242,6 +242,10 @@ app.post("/recommend", async (req, res) => {
         (weights.Course * courseScore) +
         (weights.Institution * universityScore);
 
+      if (!isFinite(finalScore)) {
+        finalScore = 0;
+      }
+
       const explanation = [];
 
       // COUNTRY EXPLANATION (relative logic)
