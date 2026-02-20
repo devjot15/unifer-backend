@@ -472,33 +472,19 @@ button:disabled {
   </footer>
 
   <script>
-var currentStep = 1;
-var totalSteps = 4;
+let currentStep = 1;
+const steps = document.querySelectorAll(".form-step");
+const progressFill = document.querySelector(".step-progress-fill");
 
 var form = document.getElementById("recommendForm");
 var submitBtn = document.getElementById("submitBtn");
 var formMessage = document.getElementById("formMessage");
 var allSelects = form.querySelectorAll("select");
-var steps = document.querySelectorAll(".form-step");
-var nextBtns = document.querySelectorAll(".next-btn");
-var prevBtns = document.querySelectorAll(".prev-btn");
 
-function updateProgressBar() {
-  var fill = document.querySelector(".step-progress-fill");
-  if (fill) {
-    fill.style.width = ((currentStep / totalSteps) * 100) + "%";
-  }
-}
-
-function showStep(stepNum) {
-  steps.forEach(function(step) {
-    step.classList.remove("active");
-    if (parseInt(step.dataset.step) === stepNum) {
-      step.classList.add("active");
-    }
-  });
-  updateProgressBar();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+function updateStep(step) {
+  steps.forEach(s => s.classList.remove("active"));
+  document.querySelector('[data-step="' + step + '"]').classList.add("active");
+  progressFill.style.width = (step * 25) + "%";
 }
 
 function validateCurrentStep() {
@@ -546,20 +532,24 @@ function validateAllFields() {
   submitBtn.disabled = !allValid;
 }
 
-nextBtns.forEach(function(btn) {
-  btn.addEventListener("click", function() {
+document.querySelectorAll(".next-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
     if (!validateCurrentStep()) return;
     formMessage.textContent = "";
-    currentStep++;
-    showStep(currentStep);
+    if (currentStep < 4) {
+      currentStep++;
+      updateStep(currentStep);
+    }
   });
 });
 
-prevBtns.forEach(function(btn) {
-  btn.addEventListener("click", function() {
+document.querySelectorAll(".prev-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
     formMessage.textContent = "";
-    currentStep--;
-    showStep(currentStep);
+    if (currentStep > 1) {
+      currentStep--;
+      updateStep(currentStep);
+    }
   });
 });
 
@@ -582,11 +572,10 @@ allSelects.forEach(function(sel) {
 form.addEventListener("submit", function(e) {
   e.preventDefault();
 
-  if (currentStep !== totalSteps) return;
+  if (currentStep !== 4) return;
   if (!checkPriorities()) return;
 
   var resultsDiv = document.getElementById("results");
-  var progressFill = document.querySelector(".step-progress-fill");
 
   progressFill.style.width = "70%";
 
@@ -665,7 +654,7 @@ form.addEventListener("submit", function(e) {
   });
 });
 
-updateProgressBar();
+
 </script>
 
 </body>
