@@ -12,11 +12,12 @@
   </style>
 </head>
 <body>
-  <h1>Study Abroad Recommendation Engine</h1>
+  <div class="container">
+    <h1>Study Abroad Recommendation Engine</h1>
 
-  <form id="recommendForm">
-    <hr>
-    <h2>Questions For Country Selection (List A)</h2>
+    <form id="recommendForm">
+      <hr>
+      <h2>Questions For Country Selection (List A)</h2>
 
     <label>What is your preferred cost of living per year range?</label>
     <select id="cost_of_living">
@@ -169,10 +170,11 @@
     </select>
 
     <button type="submit">Get Recommendations</button>
-  </form>
+    </form>
 
-  <h2>Results</h2>
-  <div id="results"></div>
+    <h2>Results</h2>
+    <div id="results"></div>
+  </div>
 
 <script>
 document.getElementById("recommendForm").addEventListener("submit", async function(e) {
