@@ -31,6 +31,17 @@ body {
   height: 60px;
   width: auto;
   display: block;
+  margin: 0 auto;
+}
+
+.sub-brand {
+  font-size: 14px;
+  color: #0F7C78;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 15px;
+  text-align: center;
 }
 
 /* CONTAINER */
@@ -161,10 +172,13 @@ button:hover {
 <body>
 
   <header class="navbar">
-    <div class="nav-container">
+    <div class="nav-container" style="flex-direction: column;">
       <img src="D5944696-E4C2-4DEA-9C6F-5AF0144FEFFC.jpeg" 
            alt="UNIFER Logo" 
            class="logo">
+      <div class="sub-brand">
+        Study Abroad Decision Intelligence
+      </div>
     </div>
   </header>
 
