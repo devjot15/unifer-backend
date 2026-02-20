@@ -272,23 +272,31 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   const resultsDiv = document.getElementById("results");
   resultsDiv.innerHTML = "<p>Analyzing your preferences...</p>";
 
-  const response = await fetch("/recommend", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
+  try {
+    const response = await fetch("/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
 
-  const data = await response.json();
+    if (!response.ok) {
+      throw new Error("Failed to fetch recommendations");
+    }
 
-  const resultsDiv = document.getElementById("results");
-  resultsDiv.innerHTML = "";
+    const data = await response.json();
 
-  if (!Array.isArray(data)) {
-    resultsDiv.innerHTML = `<p>${data.message || "No results found."}</p>`;
-    return;
-  }
+    resultsDiv.innerHTML = "";
+
+    if (!Array.isArray(data)) {
+      resultsDiv.innerHTML = `<p>${data.message || "No results found."}</p>`;
+      return;
+    }
 
     data.forEach((item, index) => {
+      const explanationHtml = item.explanation && item.explanation.length > 0 
+        ? `<ul>${item.explanation.map(e => `<li>${e}</li>`).join("")}</ul>` 
+        : "";
+
       resultsDiv.innerHTML += `
         <div class="result-card">
           <strong>#${index + 1} Recommended Pathway</strong><br><br>
@@ -296,12 +304,14 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
           <b>University:</b> ${item.university}<br>
           <b>Course:</b> ${item.course}<br><br>
           <b>Why this is recommended:</b>
-          <ul>
-            ${item.explanation.map(e => `<li>${e}</li>`).join("")}
-          </ul>
+          ${explanationHtml}
         </div>
       `;
     });
+  } catch (error) {
+    console.error("Error:", error);
+    resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+  }
 });
 </script>
 
