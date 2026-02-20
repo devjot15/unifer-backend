@@ -269,6 +269,9 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     priority_3: document.getElementById("priority_3").value
   };
 
+  const resultsDiv = document.getElementById("results");
+  resultsDiv.innerHTML = "<p>Analyzing your preferences...</p>";
+
   const response = await fetch("/recommend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
