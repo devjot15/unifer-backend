@@ -515,6 +515,23 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     resultsDiv.innerHTML = "<p>Something went wrong. Please try again.</p>";
   }
 });
+
+const progressFillScroll = document.querySelector(".progress-fill");
+
+window.addEventListener("scroll", () => {
+  const form = document.getElementById("recommendForm");
+
+  const formTop = form.offsetTop;
+  const formHeight = form.offsetHeight;
+  const scrollY = window.scrollY + window.innerHeight;
+
+  const progress = Math.min(
+    Math.max((scrollY - formTop) / formHeight, 0),
+    1
+  );
+
+  progressFillScroll.style.width = (progress * 100) + "%";
+});
 </script>
 
 </body>
