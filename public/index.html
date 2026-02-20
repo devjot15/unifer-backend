@@ -26,8 +26,13 @@ body {
   justify-content: space-between;
 }
 
-.logo {
+.logo-wrapper img {
   height: 40px;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
 }
 
 .brand-tagline {
@@ -166,8 +171,14 @@ button:hover {
 
   <header class="navbar">
     <div class="nav-container">
-      <img src="logo.png" alt="UNIFER Logo" class="logo">
-      <span class="brand-tagline">Decision Intelligence for Study Abroad</span>
+      <div class="logo-wrapper">
+        <img src="Unifer-Logo-01.jpeg" alt="UNIFER Logo">
+      </div>
+      <div class="nav-right">
+        <span class="brand-tagline">
+          Decision Intelligence Platform
+        </span>
+      </div>
     </div>
   </header>
 
