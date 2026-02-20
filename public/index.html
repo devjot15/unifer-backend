@@ -283,19 +283,17 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     return;
   }
 
-    data.forEach(item => {
-      const explanationHtml = item.explanation && item.explanation.length > 0 
-        ? `<ul style="margin: 5px 0; padding-left: 20px; font-size: 0.9em; color: #555;">
-            ${item.explanation.map(exp => `<li>${exp}</li>`).join("")}
-           </ul>` 
-        : "";
-
+    data.forEach((item, index) => {
       resultsDiv.innerHTML += `
         <div class="result-card">
-          <strong>${item.country}</strong><br>
-          ${item.university}<br>
-          ${item.course}<br>
-          ${explanationHtml}
+          <strong>#${index + 1} Recommended Pathway</strong><br><br>
+          <b>Country:</b> ${item.country}<br>
+          <b>University:</b> ${item.university}<br>
+          <b>Course:</b> ${item.course}<br><br>
+          <b>Why this is recommended:</b>
+          <ul>
+            ${item.explanation.map(e => `<li>${e}</li>`).join("")}
+          </ul>
         </div>
       `;
     });
