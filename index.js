@@ -95,6 +95,7 @@ app.get("/seed", async (req, res) => {
 app.post("/recommend", async (req, res) => {
   try {
     const answers = req.body;
+    console.log("Incoming answers:", answers);
 
     // 1️⃣ Fetch all data
     const { data: countries } = await supabase.from("countries").select("*");
