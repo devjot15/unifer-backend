@@ -451,6 +451,38 @@ function updateProgress() {
 }
 updateProgress();
 
+const form = document.getElementById("recommendForm");
+const submitBtn = document.getElementById("submitBtn");
+const selects = form.querySelectorAll("select");
+const formMessage = document.getElementById("formMessage");
+
+function validateForm() {
+  let allValid = true;
+
+  selects.forEach(select => {
+    if (!select.value) {
+      select.classList.add("invalid");
+      select.classList.remove("valid");
+      allValid = false;
+    } else {
+      select.classList.remove("invalid");
+      select.classList.add("valid");
+    }
+  });
+
+  submitBtn.disabled = !allValid;
+
+  if (!allValid) {
+    formMessage.textContent = "Please complete all required fields.";
+  } else {
+    formMessage.textContent = "";
+  }
+}
+
+selects.forEach(select => {
+  select.addEventListener("change", validateForm);
+});
+
 document.getElementById("recommendForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
@@ -589,21 +621,11 @@ window.addEventListener("scroll", () => {
 });
 
 // Enable/disable submit button based on form validity
-const form = document.getElementById("recommendForm");
-const submitBtn = document.getElementById("submitBtn");
+const formEl = document.getElementById("recommendForm");
+const submitBtnEl = document.getElementById("submitBtn");
 
-form.addEventListener("input", (e) => {
-  submitBtn.disabled = !form.checkValidity();
-  
-  if (e.target.tagName === 'SELECT') {
-    if (e.target.value) {
-      e.target.classList.add('valid');
-      e.target.classList.remove('invalid');
-    } else {
-      e.target.classList.remove('valid');
-      e.target.classList.add('invalid');
-    }
-  }
+formEl.addEventListener("input", (e) => {
+  // Existing logic handled by validateForm now
 });
 </script>
 
