@@ -14,7 +14,7 @@ body {
 
 .navbar {
   background: white;
-  padding: 60px 0;
+  padding: 80px 0 40px 0;
   border-bottom: 1px solid #e8eeee;
 }
 
@@ -47,28 +47,38 @@ body {
 /* PROGRESS BAR */
 
 .progress-container {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 999;
-  background: white;
-  padding: 10px 0;
+  left: 0;
+  width: 100vw;
+  z-index: 999999;
+  background: #e6eeee;
+  padding: 0;
   margin: 0;
-  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .progress-bar {
-  height: 4px;
+  height: 8px;
   background: #e6eeee;
   border-radius: 0;
-  margin-bottom: 20px;
+  margin: 0;
+  width: 100%;
+  position: relative;
 }
 
 .progress-fill {
-  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 8px;
   width: 25%;
-  background: #0F7C78;
+  background: #0F7C78 !important;
   border-radius: 0;
-  transition: width 0.5s ease;
+  transition: width 0.2s ease-out;
+  z-index: 100001;
 }
 
 /* CONTAINER */
@@ -399,13 +409,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Update progress bar based on scroll
 function updateProgress() {
-  window.addEventListener('scroll', () => {
-    const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
-    const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-    // Calculate progress between 25% and 100%
-    const scrolled = 25 + (winScroll / height) * 75;
-    document.querySelector(".progress-fill").style.width = Math.min(scrolled, 100) + "%";
-  });
+  const update = () => {
+    const winScroll = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+    const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+    
+    // Total scrollable distance
+    const height = scrollHeight - clientHeight;
+    
+    const progressFill = document.querySelector(".progress-fill");
+    if (!progressFill) return;
+
+    // Use a simpler, more robust calculation
+    let percentage = 0;
+    if (height > 0) {
+      // Use scrollY for more reliable position
+      const currentScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      percentage = (currentScroll / height);
+    }
+    
+    // Progress starts at 25% and goes to 100%
+    const scrolled = 25 + (percentage * 75);
+    const finalWidth = Math.min(Math.max(scrolled, 25), 100) + '%';
+    progressFill.style.width = finalWidth;
+    
+    // Force a repaint for some browsers
+    progressFill.offsetHeight; 
+  };
+  
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update, { passive: true });
+  
+  // Initial call
+  update();
+  
+  // Periodic updates to handle content loading/DOM changes
+  setInterval(update, 500);
 }
 updateProgress();
 
