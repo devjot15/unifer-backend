@@ -98,37 +98,6 @@ label {
   color: #333;
 }
 
-select {
-  width: 100%;
-  padding: 12px;
-  margin-top: 6px;
-  border-radius: 8px;
-  border: 1px solid #dce8e8;
-  font-size: 14px;
-  background: #fafcfc;
-  transition: 0.2s ease;
-  color: #333;
-}
-
-select:focus {
-  border-color: #0F7C78;
-  background: white;
-  outline: none;
-}
-
-select:invalid {
-  color: #999;
-}
-
-select.valid {
-  border-color: #0F7C78;
-  background: #ffffff;
-}
-
-select.invalid {
-  border-color: #d9534f;
-  background: #fff5f5;
-}
 
 .form-message {
   text-align: center;
@@ -225,12 +194,14 @@ button:disabled {
 
 .option-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 15px;
   margin-top: 15px;
 }
 
 .option-card {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 120px;
   padding: 15px;
   border: 1px solid #dce8e8;
   border-radius: 8px;
@@ -303,28 +274,25 @@ button:disabled {
           <label>In your decision to study abroad which of the following is more important, select in decreasing order?</label>
 
           <label>Priority 1</label>
-          <select id="priority_1" required>
-            <option value="" disabled selected>Select Priority 1</option>
-            <option value="Course">Course</option>
-            <option value="Country">Country</option>
-            <option value="Institution">Institution</option>
-          </select>
+          <div class="option-group" data-field="priority_1">
+            <div class="option-card" data-value="Course">Course</div>
+            <div class="option-card" data-value="Country">Country</div>
+            <div class="option-card" data-value="Institution">Institution</div>
+          </div>
 
           <label>Priority 2</label>
-          <select id="priority_2" required>
-            <option value="" disabled selected>Select Priority 2</option>
-            <option value="Country">Country</option>
-            <option value="Course">Course</option>
-            <option value="Institution">Institution</option>
-          </select>
+          <div class="option-group" data-field="priority_2">
+            <div class="option-card" data-value="Country">Country</div>
+            <div class="option-card" data-value="Course">Course</div>
+            <div class="option-card" data-value="Institution">Institution</div>
+          </div>
 
           <label>Priority 3</label>
-          <select id="priority_3" required>
-            <option value="" disabled selected>Select Priority 3</option>
-            <option value="Institution">Institution</option>
-            <option value="Country">Country</option>
-            <option value="Course">Course</option>
-          </select>
+          <div class="option-group" data-field="priority_3">
+            <div class="option-card" data-value="Institution">Institution</div>
+            <div class="option-card" data-value="Country">Country</div>
+            <div class="option-card" data-value="Course">Course</div>
+          </div>
         </div>
         <div class="nav-buttons">
           <button type="button" class="next-btn">Next</button>
@@ -336,45 +304,39 @@ button:disabled {
         <div class="section">
           <h2>Step 2 — Country Selection</h2>
           <label>What is your preferred cost of living per year range?</label>
-          <select id="cost_of_living" required>
-            <option value="" disabled selected>Select cost range</option>
-            <option value="$0 - $20K">$0 - $20K</option>
-            <option value="$20K – $30K">$20K – $30K</option>
-            <option value="More than $30K">More than $30K</option>
-          </select>
+          <div class="option-group" data-field="cost_of_living">
+            <div class="option-card" data-value="$0 - $20K">$0 - $20K</div>
+            <div class="option-card" data-value="$20K – $30K">$20K – $30K</div>
+            <div class="option-card" data-value="More than $30K">More than $30K</div>
+          </div>
 
           <label>How does duration of post study work permit effect your decision?</label>
-          <select id="work_permit_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Very strongly (3 years and above)">Very strongly (3 years and above)</option>
-            <option value="Wouldn’t mind (less than 3 years and more than 1 year)">Wouldn’t mind (less than 3 years and more than 1 year)</option>
-            <option value="Not really (1 year or less)">Not really (1 year or less)</option>
-          </select>
+          <div class="option-group" data-field="work_permit_importance">
+            <div class="option-card" data-value="Very strongly (3 years and above)">Very strongly (3+ years)</div>
+            <div class="option-card" data-value="Wouldn’t mind (less than 3 years and more than 1 year)">Wouldn’t mind (1-3 years)</div>
+            <div class="option-card" data-value="Not really (1 year or less)">Not really (1 year or less)</div>
+          </div>
 
           <label>Do you want to prefer a country where english is the first language?</label>
-          <select id="english_preference" required>
-            <option value="" disabled selected>Select preference</option>
-            <option value="Yes">Yes</option>
-            <option value="Prefer but flexible">Prefer but flexible</option>
-            <option value="No preference">No preference</option>
-          </select>
+          <div class="option-group" data-field="english_preference">
+            <div class="option-card" data-value="Yes">Yes</div>
+            <div class="option-card" data-value="Prefer but flexible">Prefer but flexible</div>
+            <div class="option-card" data-value="No preference">No preference</div>
+          </div>
 
           <label>How strongly does government support affect your decision?</label>
-          <select id="gov_support_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Very strongly">Very strongly</option>
-            <option value="Wouldn’t mind">Wouldn’t mind</option>
-            <option value="Don’t mind">Don’t mind</option>
-          </select>
+          <div class="option-group" data-field="gov_support_importance">
+            <div class="option-card" data-value="Very strongly">Very strongly</div>
+            <div class="option-card" data-value="Wouldn’t mind">Wouldn’t mind</div>
+            <div class="option-card" data-value="Don’t mind">Don’t mind</div>
+          </div>
 
           <label>How strongly does opportunity to immigrate permanently affect your decision?</label>
-          <select id="pr_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Very strongly">Very strongly</option>
-            <option value="Wouldn’t mind">Wouldn’t mind</option>
-            <option value="Don’t care">Don’t care</option>
-          </select>
-        </div>
+          <div class="option-group" data-field="pr_importance">
+            <div class="option-card" data-value="Very strongly">Very strongly</div>
+            <div class="option-card" data-value="Wouldn’t mind">Wouldn’t mind</div>
+            <div class="option-card" data-value="Don’t care">Don’t care</div>
+          </div></div>
         <div class="nav-buttons">
           <button type="button" class="prev-btn">Back</button>
           <button type="button" class="next-btn">Next</button>
@@ -386,69 +348,61 @@ button:disabled {
         <div class="section">
           <h2>Step 3 — Course Selection</h2>
           <label>What level of program do you want to study?</label>
-          <select id="level" required>
-            <option value="" disabled selected>Select program level</option>
-            <option value="UG">UG</option>
-            <option value="PG">PG</option>
-          </select>
+          <div class="option-group" data-field="level">
+            <div class="option-card" data-value="UG">UG</div>
+            <div class="option-card" data-value="PG">PG</div>
+          </div>
 
           <label>What will be ideal course duration for you?</label>
-          <select id="duration" required>
-            <option value="" disabled selected>Select duration</option>
-            <option value="3 years or less">3 years or less</option>
-            <option value="More than 3 years">More than 3 years</option>
-            <option value="1 year or less">1 year or less</option>
-            <option value="More than 1 year">More than 1 year</option>
-          </select>
+          <div class="option-group" data-field="duration">
+            <div class="option-card" data-value="3 years or less">3 years or less</div>
+            <div class="option-card" data-value="More than 3 years">More than 3 years</div>
+            <div class="option-card" data-value="1 year or less">1 year or less</div>
+            <div class="option-card" data-value="More than 1 year">More than 1 year</div>
+          </div>
 
           <label>How strongly courses with internship as a part of the curriculum impact your decision?</label>
-          <select id="internship_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Very strongly">Very strongly</option>
-            <option value="Wouldn’t mind">Wouldn’t mind</option>
-            <option value="Don’t care">Don’t care</option>
-          </select>
+          <div class="option-group" data-field="internship_importance">
+            <div class="option-card" data-value="Very strongly">Very strongly</div>
+            <div class="option-card" data-value="Wouldn’t mind">Wouldn’t mind</div>
+            <div class="option-card" data-value="Don’t care">Don’t care</div>
+          </div>
 
           <label>Select a preferred filter for courses with respect to GRE or GMAT requirements?</label>
-          <select id="gre_filter" required>
-            <option value="" disabled selected>Select filter</option>
-            <option value="Without GRE or GMAT">Without GRE or GMAT</option>
-            <option value="Without GRE">Without GRE</option>
-            <option value="Without GMAT">Without GMAT</option>
-            <option value="No filter">No filter</option>
-          </select>
+          <div class="option-group" data-field="gre_filter">
+            <div class="option-card" data-value="Without GRE or GMAT">Without GRE or GMAT</div>
+            <div class="option-card" data-value="Without GRE">Without GRE</div>
+            <div class="option-card" data-value="Without GMAT">Without GMAT</div>
+            <div class="option-card" data-value="No filter">No filter</div>
+          </div>
 
           <label>How strongly scholarships or bursaries affect your decision?</label>
-          <select id="scholarship_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Very strongly (more than 20% of tuition)">Very strongly (more than 20% of tuition)</option>
-            <option value="Wouldn’t mind getting one (less than 20% of tuition or none)">Wouldn’t mind getting one (less than 20% of tuition or none)</option>
-            <option value="Don’t care">Don’t care</option>
-          </select>
+          <div class="option-group" data-field="scholarship_importance">
+            <div class="option-card" data-value="Very strongly (more than 20% of tuition)">Very strongly (>20% of tuition)</div>
+            <div class="option-card" data-value="Wouldn’t mind getting one (less than 20% of tuition or none)">Wouldn’t mind (<20% or none)</div>
+            <div class="option-card" data-value="Don’t care">Don’t care</div>
+          </div>
 
           <label>What is the amount of annual tuition fee which you think will be ideal for you?</label>
-          <select id="tuition_band" required>
-            <option value="" disabled selected>Select tuition range</option>
-            <option value="Less than $12k">Less than $12k</option>
-            <option value="$12k - $25k">$12k - $25k</option>
-            <option value="More than $25K">More than $25K</option>
-          </select>
+          <div class="option-group" data-field="tuition_band">
+            <div class="option-card" data-value="Less than $12k">Less than $12k</div>
+            <div class="option-card" data-value="$12k - $25k">$12k - $25k</div>
+            <div class="option-card" data-value="More than $25K">More than $25K</div>
+          </div>
 
           <label>Please select the field which associates the most with the field of study you want to study?</label>
-          <select id="field" required>
-            <option value="" disabled selected>Select field</option>
-            <option value="engineering & tech">engineering & tech</option>
-            <option value="business, management and economics">business, management and economics</option>
-            <option value="science & applied science">science & applied science</option>
-            <option value="medicine, health and life science">medicine, health and life science</option>
-            <option value="social science & humanities">social science & humanities</option>
-            <option value="arts, design & creative studies">arts, design & creative studies</option>
-            <option value="law, public policy & governance">law, public policy & governance</option>
-            <option value="hospitality, tourism & service industry">hospitality, tourism & service industry</option>
-            <option value="education & teaching">education & teaching</option>
-            <option value="agriculture, sustainability & environmental studies">agriculture, sustainability & environmental studies</option>
-          </select>
-        </div>
+          <div class="option-group" data-field="field">
+            <div class="option-card" data-value="engineering & tech">Engineering & Tech</div>
+            <div class="option-card" data-value="business, management and economics">Business & Economics</div>
+            <div class="option-card" data-value="science & applied science">Science & Applied Science</div>
+            <div class="option-card" data-value="medicine, health and life science">Medicine & Health</div>
+            <div class="option-card" data-value="social science & humanities">Social Science & Humanities</div>
+            <div class="option-card" data-value="arts, design & creative studies">Arts & Design</div>
+            <div class="option-card" data-value="law, public policy & governance">Law & Public Policy</div>
+            <div class="option-card" data-value="hospitality, tourism & service industry">Hospitality & Tourism</div>
+            <div class="option-card" data-value="education & teaching">Education & Teaching</div>
+            <div class="option-card" data-value="agriculture, sustainability & environmental studies">Agriculture & Environment</div>
+          </div></div>
         <div class="nav-buttons">
           <button type="button" class="prev-btn">Back</button>
           <button type="button" class="next-btn">Next</button>
@@ -460,37 +414,32 @@ button:disabled {
         <div class="section" style="border-bottom: none; margin-bottom: 0;">
           <h2>Step 4 — University Selection</h2>
           <label>What is your preference for location of the campus?</label>
-          <select id="location_preference" required>
-            <option value="" disabled selected>Select location</option>
-            <option value="Main city">Main city</option>
-            <option value="Smaller cities">Smaller cities</option>
-            <option value="Anywhere in the country">Anywhere in the country</option>
-          </select>
+          <div class="option-group" data-field="location_preference">
+            <div class="option-card" data-value="Main city">Main city</div>
+            <div class="option-card" data-value="Smaller cities">Smaller cities</div>
+            <div class="option-card" data-value="Anywhere in the country">Anywhere in the country</div>
+          </div>
 
           <label>How strongly ranking affects your decision?</label>
-          <select id="ranking_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Only want to apply in top institutions">Only want to apply in top institutions</option>
-            <option value="Top and middle institutions are fine">Top and middle institutions are fine</option>
-            <option value="All institution irrespective of ranking">All institution irrespective of ranking</option>
-          </select>
+          <div class="option-group" data-field="ranking_importance">
+            <div class="option-card" data-value="Only want to apply in top institutions">Top institutions only</div>
+            <div class="option-card" data-value="Top and middle institutions are fine">Top and middle are fine</div>
+            <div class="option-card" data-value="All institution irrespective of ranking">All institutions</div>
+          </div>
 
           <label>How does career services affect your decision?</label>
-          <select id="career_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Very strongly (placement driven institutions)">Very strongly (placement driven institutions)</option>
-            <option value="Moderately (academics driven institutions)">Moderately (academics driven institutions)</option>
-            <option value="Not that much">Not that much</option>
-          </select>
+          <div class="option-group" data-field="career_importance">
+            <div class="option-card" data-value="Very strongly (placement driven institutions)">Very strongly (placement driven)</div>
+            <div class="option-card" data-value="Moderately (academics driven institutions)">Moderately (academics driven)</div>
+            <div class="option-card" data-value="Not that much">Not that much</div>
+          </div>
 
           <label>How fast admission is a deciding factor?</label>
-          <select id="admission_speed_importance" required>
-            <option value="" disabled selected>Select importance</option>
-            <option value="Very strongly">Very strongly</option>
-            <option value="Not that much">Not that much</option>
-            <option value="No">No</option>
-          </select>
-        </div>
+          <div class="option-group" data-field="admission_speed_importance">
+            <div class="option-card" data-value="Very strongly">Very strongly</div>
+            <div class="option-card" data-value="Not that much">Not that much</div>
+            <div class="option-card" data-value="No">No</div>
+          </div></div>
         <div class="nav-buttons">
           <button type="button" class="prev-btn">Back</button>
           <button type="submit" id="submitBtn" class="analyze-btn" disabled>Run Decision Analysis</button>
@@ -510,30 +459,39 @@ button:disabled {
   </footer>
 
   <script>
-let currentStep = 1;
-const steps = document.querySelectorAll(".form-step");
-const progressFill = document.querySelector(".step-progress-fill");
-
+var currentStep = 1;
+var steps = document.querySelectorAll(".form-step");
+var progressFill = document.querySelector(".step-progress-fill");
 var form = document.getElementById("recommendForm");
 var submitBtn = document.getElementById("submitBtn");
 var formMessage = document.getElementById("formMessage");
-var allSelects = form.querySelectorAll("select");
+var allGroups = document.querySelectorAll(".option-group");
+
+function getFieldValue(fieldName) {
+  var group = document.querySelector('.option-group[data-field="' + fieldName + '"]');
+  if (!group) return "";
+  var selected = group.querySelector(".option-card.selected");
+  return selected ? selected.getAttribute("data-value") : "";
+}
 
 function updateStep(step) {
-  steps.forEach(s => s.classList.remove("active"));
+  steps.forEach(function(s) { s.classList.remove("active"); });
   document.querySelector('[data-step="' + step + '"]').classList.add("active");
   progressFill.style.width = (step * 25) + "%";
 }
 
 function validateCurrentStep() {
   var stepDiv = document.querySelector('.form-step[data-step="' + currentStep + '"]');
-  var selectsInStep = stepDiv.querySelectorAll("select");
+  var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
-  selectsInStep.forEach(function(s) {
-    if (!s.value) {
-      s.classList.add("invalid");
+  groupsInStep.forEach(function(group) {
+    var hasSelection = group.querySelector(".option-card.selected");
+    if (!hasSelection) {
+      group.classList.add("invalid");
       allFilled = false;
+    } else {
+      group.classList.remove("invalid");
     }
   });
 
@@ -549,9 +507,9 @@ function validateCurrentStep() {
 }
 
 function checkPriorities() {
-  var p1 = document.getElementById("priority_1").value;
-  var p2 = document.getElementById("priority_2").value;
-  var p3 = document.getElementById("priority_3").value;
+  var p1 = getFieldValue("priority_1");
+  var p2 = getFieldValue("priority_2");
+  var p3 = getFieldValue("priority_3");
 
   if (p1 && p2 && p3) {
     if (p1 === p2 || p1 === p3 || p2 === p3) {
@@ -564,14 +522,36 @@ function checkPriorities() {
 
 function validateAllFields() {
   var allValid = true;
-  allSelects.forEach(function(sel) {
-    if (!sel.value) allValid = false;
+  allGroups.forEach(function(group) {
+    if (!group.querySelector(".option-card.selected")) allValid = false;
   });
   submitBtn.disabled = !allValid;
 }
 
-document.querySelectorAll(".next-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
+allGroups.forEach(function(group) {
+  var cards = group.querySelectorAll(".option-card");
+  cards.forEach(function(card) {
+    card.addEventListener("click", function() {
+      cards.forEach(function(c) { c.classList.remove("selected"); });
+      card.classList.add("selected");
+      group.classList.remove("invalid");
+
+      if (formMessage.textContent) {
+        formMessage.textContent = "";
+      }
+
+      validateAllFields();
+
+      var fieldName = group.getAttribute("data-field");
+      if (fieldName && fieldName.indexOf("priority") === 0) {
+        checkPriorities();
+      }
+    });
+  });
+});
+
+document.querySelectorAll(".next-btn").forEach(function(btn) {
+  btn.addEventListener("click", function() {
     if (!validateCurrentStep()) return;
     formMessage.textContent = "";
     if (currentStep < 4) {
@@ -581,28 +561,12 @@ document.querySelectorAll(".next-btn").forEach(btn => {
   });
 });
 
-document.querySelectorAll(".prev-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
+document.querySelectorAll(".prev-btn").forEach(function(btn) {
+  btn.addEventListener("click", function() {
     formMessage.textContent = "";
     if (currentStep > 1) {
       currentStep--;
       updateStep(currentStep);
-    }
-  });
-});
-
-allSelects.forEach(function(sel) {
-  sel.addEventListener("change", function() {
-    if (sel.value) {
-      sel.classList.remove("invalid");
-      sel.classList.add("valid");
-    }
-    if (formMessage.textContent) {
-      formMessage.textContent = "";
-    }
-    validateAllFields();
-    if (sel.id.indexOf("priority") === 0) {
-      checkPriorities();
     }
   });
 });
@@ -614,36 +578,31 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   var resultsDiv = document.getElementById("results");
-
   progressFill.style.width = "70%";
-
-  var p1 = document.getElementById("priority_1").value;
-  var p2 = document.getElementById("priority_2").value;
-  var p3 = document.getElementById("priority_3").value;
 
   fetch("/recommend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      level: document.getElementById("level").value,
-      duration: document.getElementById("duration").value,
-      tuition_band: document.getElementById("tuition_band").value,
-      field: document.getElementById("field").value,
-      gre_filter: document.getElementById("gre_filter").value,
-      priority_1: p1,
-      priority_2: p2,
-      priority_3: p3,
-      cost_of_living: document.getElementById("cost_of_living").value,
-      english_preference: document.getElementById("english_preference").value,
-      work_permit_importance: document.getElementById("work_permit_importance").value,
-      gov_support_importance: document.getElementById("gov_support_importance").value,
-      pr_importance: document.getElementById("pr_importance").value,
-      internship_importance: document.getElementById("internship_importance").value,
-      scholarship_importance: document.getElementById("scholarship_importance").value,
-      ranking_importance: document.getElementById("ranking_importance").value,
-      career_importance: document.getElementById("career_importance").value,
-      location_preference: document.getElementById("location_preference").value,
-      admission_speed_importance: document.getElementById("admission_speed_importance").value
+      level: getFieldValue("level"),
+      duration: getFieldValue("duration"),
+      tuition_band: getFieldValue("tuition_band"),
+      field: getFieldValue("field"),
+      gre_filter: getFieldValue("gre_filter"),
+      priority_1: getFieldValue("priority_1"),
+      priority_2: getFieldValue("priority_2"),
+      priority_3: getFieldValue("priority_3"),
+      cost_of_living: getFieldValue("cost_of_living"),
+      english_preference: getFieldValue("english_preference"),
+      work_permit_importance: getFieldValue("work_permit_importance"),
+      gov_support_importance: getFieldValue("gov_support_importance"),
+      pr_importance: getFieldValue("pr_importance"),
+      internship_importance: getFieldValue("internship_importance"),
+      scholarship_importance: getFieldValue("scholarship_importance"),
+      ranking_importance: getFieldValue("ranking_importance"),
+      career_importance: getFieldValue("career_importance"),
+      location_preference: getFieldValue("location_preference"),
+      admission_speed_importance: getFieldValue("admission_speed_importance")
     })
   })
   .then(function(response) { return response.json(); })
@@ -691,7 +650,6 @@ form.addEventListener("submit", function(e) {
     resultsDiv.innerHTML = '<p class="error">Something went wrong. Please check your connection and try again.</p>';
   });
 });
-
 
 </script>
 
