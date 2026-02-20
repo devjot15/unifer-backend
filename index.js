@@ -304,7 +304,7 @@ app.post("/recommend", async (req, res) => {
 
     // 5️⃣ Sort & Return Top 5
     const top5 = pathways
-      .sort((a, b) => b.finalScore - a.finalScore)
+      .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
       .slice(0, 5);
 
     res.json(top5);
