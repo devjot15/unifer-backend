@@ -264,6 +264,25 @@ button:disabled {
       <div class="step-progress-fill"></div>
     </div>
     <form id="recommendForm">
+      <input type="hidden" id="priority_1" name="priority_1">
+      <input type="hidden" id="priority_2" name="priority_2">
+      <input type="hidden" id="priority_3" name="priority_3">
+      <input type="hidden" id="cost_of_living" name="cost_of_living">
+      <input type="hidden" id="work_permit_importance" name="work_permit_importance">
+      <input type="hidden" id="english_preference" name="english_preference">
+      <input type="hidden" id="gov_support_importance" name="gov_support_importance">
+      <input type="hidden" id="pr_importance" name="pr_importance">
+      <input type="hidden" id="level" name="level">
+      <input type="hidden" id="duration" name="duration">
+      <input type="hidden" id="internship_importance" name="internship_importance">
+      <input type="hidden" id="gre_filter" name="gre_filter">
+      <input type="hidden" id="scholarship_importance" name="scholarship_importance">
+      <input type="hidden" id="tuition_band" name="tuition_band">
+      <input type="hidden" id="field" name="field">
+      <input type="hidden" id="location_preference" name="location_preference">
+      <input type="hidden" id="ranking_importance" name="ranking_importance">
+      <input type="hidden" id="career_importance" name="career_importance">
+      <input type="hidden" id="admission_speed_importance" name="admission_speed_importance">
       <div id="formMessage" class="form-message"></div>
 
       <!-- Step 1 -->
@@ -467,13 +486,6 @@ var submitBtn = document.getElementById("submitBtn");
 var formMessage = document.getElementById("formMessage");
 var allGroups = document.querySelectorAll(".option-group");
 
-function getFieldValue(fieldName) {
-  var group = document.querySelector('.option-group[data-field="' + fieldName + '"]');
-  if (!group) return "";
-  var selected = group.querySelector(".option-card.selected");
-  return selected ? selected.getAttribute("data-value") : "";
-}
-
 function updateStep(step) {
   steps.forEach(function(s) { s.classList.remove("active"); });
   document.querySelector('[data-step="' + step + '"]').classList.add("active");
@@ -507,9 +519,9 @@ function validateCurrentStep() {
 }
 
 function checkPriorities() {
-  var p1 = getFieldValue("priority_1");
-  var p2 = getFieldValue("priority_2");
-  var p3 = getFieldValue("priority_3");
+  var p1 = document.getElementById("priority_1").value;
+  var p2 = document.getElementById("priority_2").value;
+  var p3 = document.getElementById("priority_3").value;
 
   if (p1 && p2 && p3) {
     if (p1 === p2 || p1 === p3 || p2 === p3) {
@@ -528,12 +540,14 @@ function validateAllFields() {
   submitBtn.disabled = !allValid;
 }
 
-allGroups.forEach(function(group) {
-  var cards = group.querySelectorAll(".option-card");
-  cards.forEach(function(card) {
+document.querySelectorAll(".option-group").forEach(function(group) {
+  var hiddenInput = document.getElementById(group.dataset.field);
+
+  group.querySelectorAll(".option-card").forEach(function(card) {
     card.addEventListener("click", function() {
-      cards.forEach(function(c) { c.classList.remove("selected"); });
+      group.querySelectorAll(".option-card").forEach(function(c) { c.classList.remove("selected"); });
       card.classList.add("selected");
+      hiddenInput.value = card.dataset.value;
       group.classList.remove("invalid");
 
       if (formMessage.textContent) {
@@ -542,8 +556,7 @@ allGroups.forEach(function(group) {
 
       validateAllFields();
 
-      var fieldName = group.getAttribute("data-field");
-      if (fieldName && fieldName.indexOf("priority") === 0) {
+      if (group.dataset.field && group.dataset.field.indexOf("priority") === 0) {
         checkPriorities();
       }
     });
@@ -584,25 +597,25 @@ form.addEventListener("submit", function(e) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      level: getFieldValue("level"),
-      duration: getFieldValue("duration"),
-      tuition_band: getFieldValue("tuition_band"),
-      field: getFieldValue("field"),
-      gre_filter: getFieldValue("gre_filter"),
-      priority_1: getFieldValue("priority_1"),
-      priority_2: getFieldValue("priority_2"),
-      priority_3: getFieldValue("priority_3"),
-      cost_of_living: getFieldValue("cost_of_living"),
-      english_preference: getFieldValue("english_preference"),
-      work_permit_importance: getFieldValue("work_permit_importance"),
-      gov_support_importance: getFieldValue("gov_support_importance"),
-      pr_importance: getFieldValue("pr_importance"),
-      internship_importance: getFieldValue("internship_importance"),
-      scholarship_importance: getFieldValue("scholarship_importance"),
-      ranking_importance: getFieldValue("ranking_importance"),
-      career_importance: getFieldValue("career_importance"),
-      location_preference: getFieldValue("location_preference"),
-      admission_speed_importance: getFieldValue("admission_speed_importance")
+      level: document.getElementById("level").value,
+      duration: document.getElementById("duration").value,
+      tuition_band: document.getElementById("tuition_band").value,
+      field: document.getElementById("field").value,
+      gre_filter: document.getElementById("gre_filter").value,
+      priority_1: document.getElementById("priority_1").value,
+      priority_2: document.getElementById("priority_2").value,
+      priority_3: document.getElementById("priority_3").value,
+      cost_of_living: document.getElementById("cost_of_living").value,
+      english_preference: document.getElementById("english_preference").value,
+      work_permit_importance: document.getElementById("work_permit_importance").value,
+      gov_support_importance: document.getElementById("gov_support_importance").value,
+      pr_importance: document.getElementById("pr_importance").value,
+      internship_importance: document.getElementById("internship_importance").value,
+      scholarship_importance: document.getElementById("scholarship_importance").value,
+      ranking_importance: document.getElementById("ranking_importance").value,
+      career_importance: document.getElementById("career_importance").value,
+      location_preference: document.getElementById("location_preference").value,
+      admission_speed_importance: document.getElementById("admission_speed_importance").value
     })
   })
   .then(function(response) { return response.json(); })
