@@ -518,13 +518,20 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
 
 const progressFill = document.querySelector(".progress-fill");
 
+let ticking = false;
+
 window.addEventListener("scroll", () => {
-  const scrollTop = window.scrollY;
-  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+  if (!ticking) {
+    window.requestAnimationFrame(() => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = scrollTop / docHeight;
 
-  const progress = scrollTop / docHeight;
-
-  progressFill.style.width = (progress * 100) + "%";
+      progressFill.style.width = (progress * 100) + "%";
+      ticking = false;
+    });
+    ticking = true;
+  }
 });
 </script>
 
