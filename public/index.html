@@ -50,7 +50,7 @@ body {
   display: none;
 }
 
-.progress-bar {
+.step-progress {
   position: sticky;
   top: 0;
   height: 6px;
@@ -60,12 +60,12 @@ body {
   z-index: 1000;
 }
 
-.progress-fill {
+.step-progress-fill {
   height: 100%;
   width: 0%;
   background: #0F7C78;
   border-radius: 4px;
-  transition: width 0.1s linear;
+  transition: width 0.3s ease;
 }
 
 /* CONTAINER */
@@ -255,8 +255,8 @@ button:disabled {
   </header>
 
   <div class="container">
-    <div class="progress-bar">
-      <div class="progress-fill"></div>
+    <div class="step-progress">
+      <div class="step-progress-fill"></div>
     </div>
     <form id="recommendForm">
       <div id="formMessage" class="form-message"></div>
@@ -488,7 +488,7 @@ var nextBtns = document.querySelectorAll(".next-btn");
 var prevBtns = document.querySelectorAll(".prev-btn");
 
 function updateProgressBar() {
-  var fill = document.querySelector(".progress-fill");
+  var fill = document.querySelector(".step-progress-fill");
   if (fill) {
     fill.style.width = ((currentStep / totalSteps) * 100) + "%";
   }
@@ -590,7 +590,7 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   var resultsDiv = document.getElementById("results");
-  var progressFill = document.querySelector(".progress-fill");
+  var progressFill = document.querySelector(".step-progress-fill");
 
   progressFill.style.width = "70%";
 
