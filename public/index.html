@@ -393,6 +393,10 @@ button:hover {
     </form>
 
     <div id="results"></div>
+
+    <button type="button" onclick="location.reload()" class="reset-btn" style="display: none; margin: 40px auto 0 auto; width: auto; min-width: 200px; background: #e6eeee; color: #0F7C78;">
+      Start Again
+    </button>
   </div>
 
   <footer class="footer">
@@ -532,6 +536,10 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     });
 
     resultsDiv.scrollIntoView({ behavior: "smooth" });
+
+    // Show reset button after results
+    const resetBtn = document.querySelector(".reset-btn");
+    if (resetBtn) resetBtn.style.display = "block";
 
   } catch (error) {
     console.error(error);
