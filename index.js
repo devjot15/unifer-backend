@@ -224,8 +224,6 @@ app.post("/recommend", async (req, res) => {
         countryComponents.reduce((a, b) => a + b, 0) /
         (countryWeights.reduce((a, b) => a + b, 0) || 1);
 
-      console.log("Country:", country.name, "Score:", countryScore);
-
       // COURSE SCORE (real intensity logic)
 
       let courseComponents = [];
