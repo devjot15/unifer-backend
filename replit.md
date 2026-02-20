@@ -24,6 +24,16 @@ Preferred communication style: Simple, everyday language.
 - **Architecture:** Single-page HTML application (`public/index.html`) with inline CSS and JavaScript
 - **No build step or framework** — plain HTML, CSS, and vanilla JS
 - **UI:** Multi-step questionnaire form that collects user preferences and posts to the `/recommend` endpoint
+- **Validation:** 
+  - All fields are required before submission
+  - Unique priorities (Country, Course, Institution) must be selected in decreasing order
+  - Submit button is disabled until all required fields are filled
+- **UX Features:**
+  - Sticky progress bar tracking overall page scroll
+  - Performance-optimized scroll tracking using `requestAnimationFrame`
+  - Professional UNIFER branding with teal color scheme (#0F7C78)
+  - Result highlighting for "Best Overall Match"
+  - "Start Again" button to reset the search process
 
 ### Database (Supabase / PostgreSQL)
 - **Provider:** Supabase (external hosted PostgreSQL with REST API)
@@ -53,30 +63,13 @@ Preferred communication style: Simple, everyday language.
   1. Fetches all countries, universities, and courses
   2. Applies hard filters (level, tuition band, field, GRE/GMAT, duration)
   3. Assigns macro weights based on user's priority ranking (50% / 32% / 18%)
-  4. Scores each eligible course pathway (country score + course score + institution score)
+  4. Scoring dimensions: Country (50%), Course (32%), Institution (18%)
   5. Returns ranked recommendations
 
-### Recommendation Algorithm
-- **Hard elimination:** Courses are filtered out if they don't match the user's required level, tuition band, field, duration, or GRE/GMAT preferences
-- **Weighted scoring:** Three scoring dimensions (Country, Course, Institution) are each calculated as averages of their respective attribute levels (0-1 floats), then combined using user-specified priority weights (50%, 32%, 18%)
-- **Country score:** Average of work_permit_level, government_support_level, pr_opportunity_level
-- **Course score:** Factors include internship availability and scholarship level
-- **Institution score:** Factors include ranking_level, career_services_level, admission_speed_level
-
-## External Dependencies
-
-### Services
-- **Supabase** — PostgreSQL database and REST API. Requires `SUPABASE_URL` and `SUPABASE_KEY` environment variables to be set. The database schema (tables for countries, universities, courses) must be created in Supabase before the app can seed or query data.
-
-### NPM Packages
-- `express` (v5) — Web server framework
-- `@supabase/supabase-js` (v2) — Supabase client for database operations
-- `cors` — Cross-origin resource sharing middleware
-- `dotenv` — Environment variable loading from `.env` file
-- `@types/node` — Node.js type definitions (likely residual, not used for TypeScript)
-
-### Environment Variables Required
-| Variable | Description |
-|---|---|
-| `SUPABASE_URL` | The URL of your Supabase project |
-| `SUPABASE_KEY` | The anon/service key for your Supabase project |
+### Recent Changes
+- **2026-02-20:** 
+  - Implemented strict dropdown pattern with `required` attribute and explicit `value` attributes
+  - Added real-time form validation to enable/disable the "Get My Recommendations" button
+  - Optimized scroll-based progress bar with `requestAnimationFrame` and a 0.1s linear transition
+  - Added a "Start Again" button and a professional footer with UNIFER branding
+  - Refined CSS for disabled button states and invalid select placeholders
