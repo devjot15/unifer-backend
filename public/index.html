@@ -610,14 +610,28 @@ form.addEventListener("submit", function(e) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      level: document.getElementById("level")?.value || "",
-      duration: document.getElementById("duration")?.value || "",
-      tuition_band: document.getElementById("tuition_band")?.value || "",
-      field: document.getElementById("field")?.value || "",
-      gre_filter: document.getElementById("gre_filter")?.value || "",
-      priority_1: document.getElementById("priority_1")?.value || "",
-      priority_2: document.getElementById("priority_2")?.value || "",
-      priority_3: document.getElementById("priority_3")?.value || ""
+      priority_1: document.getElementById("priority_1").value,
+      priority_2: document.getElementById("priority_2").value,
+      priority_3: document.getElementById("priority_3").value,
+
+      cost_of_living: document.getElementById("cost_of_living").value,
+      work_permit_importance: document.getElementById("work_permit_importance").value,
+      english_preference: document.getElementById("english_preference").value,
+      gov_support_importance: document.getElementById("gov_support_importance").value,
+      pr_importance: document.getElementById("pr_importance").value,
+
+      level: document.getElementById("level").value,
+      duration: document.getElementById("duration").value,
+      tuition_band: document.getElementById("tuition_band").value,
+      field: document.getElementById("field").value,
+      gre_filter: document.getElementById("gre_filter").value,
+      internship_importance: document.getElementById("internship_importance").value,
+      scholarship_importance: document.getElementById("scholarship_importance").value,
+
+      location_preference: document.getElementById("location_preference").value,
+      ranking_importance: document.getElementById("ranking_importance").value,
+      career_importance: document.getElementById("career_importance").value,
+      admission_speed_importance: document.getElementById("admission_speed_importance").value
     })
   })
   .then(function(response) { return response.json(); })
