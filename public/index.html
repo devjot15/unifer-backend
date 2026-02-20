@@ -435,8 +435,14 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     priority_3: document.getElementById("priority_3").value
   };
 
-  // Update progress to 100% on submit
-  document.querySelector(".progress-fill").style.width = "100%";
+  // Update progress to 100% on submit and then hide it
+  const progressFill = document.querySelector(".progress-fill");
+  const progressContainer = document.querySelector(".progress-container");
+  progressFill.style.width = "100%";
+  
+  setTimeout(() => {
+    progressContainer.style.display = "none";
+  }, 500);
 
   const resultsDiv = document.getElementById("results");
   resultsDiv.innerHTML = "<p>Analyzing your preferences...</p>";
