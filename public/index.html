@@ -486,13 +486,18 @@ selects.forEach(select => {
 document.getElementById("recommendForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
-  const selects = document.querySelectorAll("select");
+  const p1 = document.getElementById("priority_1").value;
+  const p2 = document.getElementById("priority_2").value;
+  const p3 = document.getElementById("priority_3").value;
 
-  for (let select of selects) {
-    if (!select.value) {
-      alert("Please complete all required fields.");
-      return;
+  if (p1 === p2 || p1 === p3 || p2 === p3) {
+    if (formMessage) {
+      formMessage.textContent = "Please select unique priorities in decreasing order.";
+      formMessage.classList.add("error");
+    } else {
+      alert("Please select unique priorities in decreasing order.");
     }
+    return;
   }
 
   const resultsDiv = document.getElementById("results");
@@ -508,30 +513,6 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     progressFill.style.width = "70%";
   }, 50);
 
-  const priority_1 = document.getElementById("priority_1").value;
-  const priority_2 = document.getElementById("priority_2").value;
-  const priority_3 = document.getElementById("priority_3").value;
-
-  const formMessage = document.getElementById("formMessage");
-  if (formMessage) {
-    formMessage.textContent = "";
-    formMessage.className = "form-message";
-  }
-
-  if (
-    priority_1 === priority_2 ||
-    priority_1 === priority_3 ||
-    priority_2 === priority_3
-  ) {
-    if (formMessage) {
-      formMessage.textContent = "Please select unique priorities in decreasing order.";
-      formMessage.classList.add("error");
-    } else {
-      alert("Please select unique priorities in decreasing order.");
-    }
-    return;
-  }
-
   try {
     const response = await fetch("/recommend", {
       method: "POST",
@@ -542,9 +523,9 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
         tuition_band: document.getElementById("tuition_band").value,
         field: document.getElementById("field").value,
         gre_filter: document.getElementById("gre_filter").value,
-        priority_1: priority_1,
-        priority_2: priority_2,
-        priority_3: priority_3,
+        priority_1: p1,
+        priority_2: p2,
+        priority_3: p3,
         cost_of_living: document.getElementById("cost_of_living").value,
         english_preference: document.getElementById("english_preference").value,
         work_permit_importance: document.getElementById("work_permit_importance").value,
