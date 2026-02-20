@@ -297,6 +297,7 @@ app.post("/recommend", async (req, res) => {
         country: country.name,
         university: university.name,
         course: course.name,
+        finalScore,   // 🔥 ADD THIS
         explanation
       };
     });
