@@ -351,11 +351,12 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
 
       resultsDiv.innerHTML += `
         <div class="result-card">
-          <strong>#${index + 1} Recommended Pathway</strong><br><br>
-          <b>Country:</b> ${item.country}<br>
-          <b>University:</b> ${item.university}<br>
-          <b>Course:</b> ${item.course}<br><br>
-          <b>Why this is recommended:</b>
+          <strong>Recommended Pathway #${index + 1}</strong>
+          <hr style="border:none; border-top:1px solid #eee; margin:15px 0;">
+          <p><b>Country:</b> ${item.country}</p>
+          <p><b>University:</b> ${item.university}</p>
+          <p><b>Course:</b> ${item.course}</p>
+          <p><b>Why this fits you:</b></p>
           ${explanationHtml}
         </div>
       `;
