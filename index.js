@@ -227,36 +227,49 @@ app.post("/recommend", async (req, res) => {
 
       // UNIVERSITY SCORE (real ranking intensity)
 
-      let locationScore = 1;
-      if (answers.location_preference === "Main city") {
-        locationScore = university.location_type === "Main city" ? 1 : 0;
-      }
-      if (answers.location_preference === "Smaller cities") {
-        locationScore = university.location_type === "Smaller cities" ? 1 : 0;
-      }
+      let uniComponents = [];
+      let uniWeights = [];
 
-      let rankingWeight = 0;
-      if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
-      if (answers.ranking_importance === "Top and middle institutions are fine") rankingWeight = 0.7;
-      if (answers.ranking_importance === "All institution irrespective of ranking") rankingWeight = 0.4;
+      let locationScore =
+        answers.location_preference === "Anywhere in the country"
+          ? 1
+          : university.location_type === answers.location_preference
+          ? 1
+          : 0;
 
-      let careerWeight = 0;
-      if (answers.career_importance === "Very strongly (placement driven institutions)") careerWeight = 1;
-      if (answers.career_importance === "Moderately (academics driven institutions)") careerWeight = 0.6;
-      if (answers.career_importance === "Not that much") careerWeight = 0.3;
+      uniComponents.push(locationScore);
+      uniWeights.push(1);
 
-      let admissionWeight = 0;
-      if (answers.admission_speed_importance === "Very strongly") admissionWeight = 1;
-      if (answers.admission_speed_importance === "Not that much") admissionWeight = 0.6;
-      if (answers.admission_speed_importance === "No") admissionWeight = 0.3;
+      let rankingWeightMap = {
+        "Only want to apply in top institutions": 1,
+        "Top and middle institutions are fine": 0.7,
+        "All institution irrespective of ranking": 0.4
+      };
+      let rankingWeight = rankingWeightMap[answers.ranking_importance] || 0;
+      uniComponents.push(rankingWeight * university.ranking_level);
+      uniWeights.push(rankingWeight);
 
-      let admissionScore = admissionWeight * university.admission_speed_level;
+      let careerWeightMap = {
+        "Very strongly (placement driven institutions)": 1,
+        "Moderately (academics driven institutions)": 0.6,
+        "Not that much": 0.3
+      };
+      let careerWeight = careerWeightMap[answers.career_importance] || 0;
+      uniComponents.push(careerWeight * university.career_services_level);
+      uniWeights.push(careerWeight);
+
+      let admissionWeightMap = {
+        "Very strongly": 1,
+        "Not that much": 0.6,
+        "No": 0.3
+      };
+      let admissionWeight = admissionWeightMap[answers.admission_speed_importance] || 0;
+      uniComponents.push(admissionWeight * university.admission_speed_level);
+      uniWeights.push(admissionWeight);
 
       let universityScore =
-        (locationScore +
-         rankingWeight * university.ranking_level +
-         careerWeight * university.career_services_level +
-         admissionScore) / 4;
+        uniComponents.reduce((a, b) => a + b, 0) /
+        (uniWeights.reduce((a, b) => a + b, 0) || 1);
 
       // FINAL ADDITIVE SCORE
       let finalScore =
