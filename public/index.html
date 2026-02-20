@@ -718,20 +718,29 @@ form.addEventListener("submit", function(e) {
     if (resetBtn) resetBtn.style.display = "block";
 
     data.forEach(function(item, index) {
+
       var card = document.createElement("div");
       card.className = "result-card";
       if (index === 0) card.classList.add("best-match");
 
-      var badge = index === 0
-        ? '<div class="match-badge">Best Overall Match</div>'
-        : '<div class="match-badge">Recommended Pathway</div>';
+      var header = index === 0
+        ? '<div class="result-header best">Recommended Primary Pathway</div>'
+        : '<div class="result-header">Alternative Pathway ' + index + '</div>';
 
       card.innerHTML =
-        badge +
-        '<h3>' + item.course + '</h3>' +
-        '<p><strong>' + item.university + '</strong>, ' + item.country + '</p>' +
-        '<div class="explanation-block">' +
-          '<p><strong>Why this fits you:</strong></p>' +
+        header +
+
+        '<div class="result-main">' +
+          '<div class="result-course">' + item.course + '</div>' +
+          '<div class="result-meta">' +
+            item.university + ' \u2022 ' + item.country +
+          '</div>' +
+        '</div>' +
+
+        '<div class="result-divider"></div>' +
+
+        '<div class="result-explanation">' +
+          '<div class="explain-title">Why this aligns with your profile:</div>' +
           '<ul>' +
             item.explanation.map(function(e) {
               return '<li>' + e + '</li>';
