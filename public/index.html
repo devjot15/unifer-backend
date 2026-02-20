@@ -14,7 +14,7 @@ body {
 
 .navbar {
   background: white;
-  padding: 80px 0 40px 0;
+  padding: 40px 0 20px 0;
   border-bottom: 1px solid #e8eeee;
 }
 
@@ -28,57 +28,45 @@ body {
 }
 
 .logo {
-  height: 80px;
+  height: 60px;
   width: auto;
   display: block;
   margin: 0 auto;
 }
 
 .sub-brand {
-  font-size: 18px;
+  font-size: 14px;
   color: #1a1a1a;
   font-weight: 500;
-  letter-spacing: 3px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  margin-top: 20px;
+  margin-top: 12px;
   text-align: center;
 }
 
 /* PROGRESS BAR */
 
 .progress-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  z-index: 999999;
-  background: #e6eeee;
-  padding: 0;
-  margin: 0;
-  height: 8px;
-  overflow: hidden;
-  pointer-events: none;
+  display: none;
 }
 
 .progress-bar {
   height: 8px;
   background: #e6eeee;
-  border-radius: 0;
-  margin: 0;
-  width: 100%;
+  border-radius: 4px;
+  margin-bottom: 30px;
   position: relative;
+  overflow: hidden;
 }
 
 .progress-fill {
   position: absolute;
   top: 0;
   left: 0;
-  height: 8px;
+  height: 100%;
   width: 25%;
-  background: #0F7C78 !important;
-  border-radius: 0;
-  transition: width 0.2s ease-out;
-  z-index: 100001;
+  background: #0F7C78;
+  transition: width 0.3s ease-out;
 }
 
 /* CONTAINER */
@@ -233,10 +221,8 @@ button:hover {
   </header>
 
   <div class="container">
-    <div class="progress-container">
-      <div class="progress-bar">
-        <div class="progress-fill"></div>
-      </div>
+    <div class="progress-bar" id="inline-progress">
+      <div class="progress-fill" style="width: 25%;"></div>
     </div>
     <form id="recommendForm">
       <div class="section">
@@ -417,24 +403,22 @@ function updateProgress() {
     // Total scrollable distance
     const height = scrollHeight - clientHeight;
     
-    const progressFill = document.querySelector(".progress-fill");
-    if (!progressFill) return;
+    // Target ALL elements with .progress-fill (both fixed and in-container)
+    const progressFills = document.querySelectorAll(".progress-fill");
+    if (progressFills.length === 0) return;
 
-    // Use a simpler, more robust calculation
-    let percentage = 0;
-    if (height > 0) {
-      // Use scrollY for more reliable position
-      const currentScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-      percentage = (currentScroll / height);
-    }
+    // Use scrollY for more reliable position
+    const currentScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+
+    // Progress = 25% base + (percentage of scroll * 75%)
+    // If page is not scrollable, height will be 0, so we default to 0% scroll
+    const scrollPercent = height > 0 ? (currentScroll / height) : 0;
+    const scrolled = 25 + scrollPercent * 75;
+    const finalWidth = Math.min(Math.max(scrolled, 25), 100) + "%";
     
-    // Progress starts at 25% and goes to 100%
-    const scrolled = 25 + (percentage * 75);
-    const finalWidth = Math.min(Math.max(scrolled, 25), 100) + '%';
-    progressFill.style.width = finalWidth;
-    
-    // Force a repaint for some browsers
-    progressFill.offsetHeight; 
+    progressFills.forEach(fill => {
+      fill.style.width = finalWidth;
+    });
   };
   
   window.addEventListener('scroll', update, { passive: true });
@@ -478,12 +462,16 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   };
 
   // Update progress to 100% on submit and then hide it
-  const progressFillElement = document.querySelector(".progress-fill");
+  const progressFills = document.querySelectorAll(".progress-fill");
   const progressContainer = document.querySelector(".progress-container");
-  progressFillElement.style.width = "100%";
+  
+  progressFills.forEach(fill => fill.style.width = "100%");
   
   setTimeout(() => {
-    progressContainer.style.display = "none";
+    if (progressContainer) progressContainer.style.display = "none";
+    // Also hide the in-container progress bar
+    const inlineBar = document.getElementById("inline-progress");
+    if (inlineBar) inlineBar.style.display = "none";
   }, 600);
 
   const resultsDiv = document.getElementById("results");
