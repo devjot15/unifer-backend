@@ -67,9 +67,18 @@ Preferred communication style: Simple, everyday language.
   5. Returns ranked recommendations
 
 ### Recent Changes
-- **2026-02-20:** 
+- **2026-02-20 (latest):**
+  - Converted single-page form into a **4-step wizard** with Next/Back navigation buttons
+  - Step 1: Define Your Priority, Step 2: Country Selection, Step 3: Course Selection, Step 4: University Selection
+  - Progress bar now tracks step completion (25% per step) instead of scroll position
+  - Per-step validation: users must complete all fields before advancing
+  - Priority uniqueness validation on Step 1 (prevents duplicate priorities)
+  - Submit button ("Run Decision Analysis") only appears on Step 4 and is gated to that step
+  - Rewrote JavaScript to use string concatenation instead of template literals to avoid nested backtick issues in inline scripts
+  - CSS: `.form-step` visibility toggling, `.nav-buttons` layout, styled `.prev-btn`, `.next-btn`, `.analyze-btn`
+  - Stale validation messages auto-clear when user changes selections
+- **2026-02-20 (earlier):**
   - Implemented strict dropdown pattern with `required` attribute and explicit `value` attributes
-  - Added real-time form validation to enable/disable the "Get My Recommendations" button
-  - Optimized scroll-based progress bar with `requestAnimationFrame` and a 0.1s linear transition
+  - Added real-time form validation to enable/disable the submit button
   - Added a "Start Again" button and a professional footer with UNIFER branding
   - Refined CSS for disabled button states and invalid select placeholders

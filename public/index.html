@@ -476,277 +476,200 @@ button:disabled {
   </footer>
 
   <script>
-// Initial progress set to 25% for Step 1
-document.addEventListener("DOMContentLoaded", () => {
-  const fill = document.querySelector(".progress-fill");
-  if (fill) fill.style.width = "25%";
-});
+var currentStep = 1;
+var totalSteps = 4;
 
-// Update progress bar based on scroll
-function updateProgress() {
-  const update = () => {
-    const winScroll = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
-    const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
-    const clientHeight = window.innerHeight || document.documentElement.clientHeight;
-    
-    // Total scrollable distance
-    const height = scrollHeight - clientHeight;
-    
-    // Target ALL elements with .progress-fill (both fixed and in-container)
-    const progressFills = document.querySelectorAll(".progress-fill");
-    if (progressFills.length === 0) return;
+var form = document.getElementById("recommendForm");
+var submitBtn = document.getElementById("submitBtn");
+var formMessage = document.getElementById("formMessage");
+var allSelects = form.querySelectorAll("select");
+var steps = document.querySelectorAll(".form-step");
+var nextBtns = document.querySelectorAll(".next-btn");
+var prevBtns = document.querySelectorAll(".prev-btn");
 
-    // Use scrollY for more reliable position
-    const currentScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-
-    // Progress = 25% base + (percentage of scroll * 75%)
-    // If page is not scrollable, height will be 0, so we default to 0% scroll
-    const scrollPercent = height > 0 ? (currentScroll / height) : 0;
-    const scrolled = 25 + scrollPercent * 75;
-    const finalWidth = Math.min(Math.max(scrolled, 25), 100) + "%";
-    
-    progressFills.forEach(fill => {
-      fill.style.width = finalWidth;
-    });
-  };
-  
-  window.addEventListener('scroll', update, { passive: true });
-  window.addEventListener('resize', update, { passive: true });
-  
-  // Initial call
-  update();
-  
-  // Periodic updates to handle content loading/DOM changes
-  setInterval(update, 500);
+function updateProgressBar() {
+  var fill = document.querySelector(".progress-fill");
+  if (fill) {
+    fill.style.width = ((currentStep / totalSteps) * 100) + "%";
+  }
 }
-updateProgress();
-
-// Multi-step form logic
-const steps = document.querySelectorAll(".form-step");
-const nextBtns = document.querySelectorAll(".next-btn");
-const prevBtns = document.querySelectorAll(".prev-btn");
-
-let currentStep = 1;
 
 function showStep(stepNum) {
-  steps.forEach(step => {
+  steps.forEach(function(step) {
     step.classList.remove("active");
     if (parseInt(step.dataset.step) === stepNum) {
       step.classList.add("active");
     }
   });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  updateProgressBar();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-nextBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    // Basic validation before going to next step
-    const currentStepDiv = document.querySelector(`.form-step[data-step="${currentStep}"]`);
-    const selectsInStep = currentStepDiv.querySelectorAll("select");
-    let allFilled = true;
-    
-    selectsInStep.forEach(s => {
-      if (!s.value) {
-        s.classList.add("invalid");
-        allFilled = false;
-      }
-    });
+function validateCurrentStep() {
+  var stepDiv = document.querySelector('.form-step[data-step="' + currentStep + '"]');
+  var selectsInStep = stepDiv.querySelectorAll("select");
+  var allFilled = true;
 
-    if (!allFilled) {
-      document.getElementById("formMessage").textContent = "Please answer all questions in this step before proceeding.";
-      return;
-    }
-
-    document.getElementById("formMessage").textContent = "";
-    currentStep++;
-    showStep(currentStep);
-  });
-});
-
-prevBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    currentStep--;
-    showStep(currentStep);
-  });
-});
-
-const form = document.getElementById("recommendForm");
-const submitBtn = document.getElementById("submitBtn");
-const selects = form.querySelectorAll("select");
-const formMessage = document.getElementById("formMessage");
-
-function validateForm() {
-  let allValid = true;
-
-  selects.forEach(select => {
-    if (!select.value) {
-      // Don't mark as invalid immediately unless it's the current step
-      const step = select.closest('.form-step');
-      if (step && parseInt(step.dataset.step) <= currentStep) {
-        // select.classList.add("invalid"); // Removed to avoid red fields on initial load
-      }
-      allValid = false;
-    } else {
-      select.classList.remove("invalid");
-      select.classList.add("valid");
+  selectsInStep.forEach(function(s) {
+    if (!s.value) {
+      s.classList.add("invalid");
+      allFilled = false;
     }
   });
 
-  submitBtn.disabled = !allValid;
-
-  // Clear "complete all fields" message if everything is valid
-  if (allValid && formMessage.textContent === "Please complete all required fields.") {
-    formMessage.textContent = "";
+  if (currentStep === 1 && allFilled) {
+    if (!checkPriorities()) return false;
   }
+
+  if (!allFilled) {
+    formMessage.textContent = "Please answer all questions in this step before proceeding.";
+  }
+
+  return allFilled;
 }
 
-// Add validation for priority uniqueness specifically
 function checkPriorities() {
-  const p1 = document.getElementById("priority_1").value;
-  const p2 = document.getElementById("priority_2").value;
-  const p3 = document.getElementById("priority_3").value;
+  var p1 = document.getElementById("priority_1").value;
+  var p2 = document.getElementById("priority_2").value;
+  var p3 = document.getElementById("priority_3").value;
 
   if (p1 && p2 && p3) {
     if (p1 === p2 || p1 === p3 || p2 === p3) {
       formMessage.textContent = "Please select unique priorities in decreasing order.";
-      formMessage.classList.add("error");
       return false;
-    } else {
-      if (formMessage.classList.contains("error")) {
-        formMessage.textContent = "";
-        formMessage.classList.remove("error");
-      }
     }
   }
   return true;
 }
 
-selects.forEach(select => {
-  select.addEventListener("change", () => {
-    validateForm();
-    if (select.id.startsWith("priority_")) {
+function validateAllFields() {
+  var allValid = true;
+  allSelects.forEach(function(sel) {
+    if (!sel.value) allValid = false;
+  });
+  submitBtn.disabled = !allValid;
+}
+
+nextBtns.forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    if (!validateCurrentStep()) return;
+    formMessage.textContent = "";
+    currentStep++;
+    showStep(currentStep);
+  });
+});
+
+prevBtns.forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    formMessage.textContent = "";
+    currentStep--;
+    showStep(currentStep);
+  });
+});
+
+allSelects.forEach(function(sel) {
+  sel.addEventListener("change", function() {
+    if (sel.value) {
+      sel.classList.remove("invalid");
+      sel.classList.add("valid");
+    }
+    if (formMessage.textContent) {
+      formMessage.textContent = "";
+    }
+    validateAllFields();
+    if (sel.id.indexOf("priority") === 0) {
       checkPriorities();
     }
   });
 });
 
-document.getElementById("recommendForm").addEventListener("submit", async function(e) {
+form.addEventListener("submit", function(e) {
   e.preventDefault();
 
+  if (currentStep !== totalSteps) return;
   if (!checkPriorities()) return;
 
-  const resultsDiv = document.getElementById("results");
-  const progressBar = document.querySelector(".progress-bar");
-  const progressFill = document.querySelector(".progress-fill");
+  var resultsDiv = document.getElementById("results");
+  var progressFill = document.querySelector(".progress-fill");
 
-  // Reset progress bar
-  progressBar.style.display = "block";
-  progressFill.style.width = "0%";
+  progressFill.style.width = "70%";
 
-  // Small delay so animation triggers
-  setTimeout(() => {
-    progressFill.style.width = "70%";
-  }, 50);
+  var p1 = document.getElementById("priority_1").value;
+  var p2 = document.getElementById("priority_2").value;
+  var p3 = document.getElementById("priority_3").value;
 
-  try {
-    const p1 = document.getElementById("priority_1").value;
-    const p2 = document.getElementById("priority_2").value;
-    const p3 = document.getElementById("priority_3").value;
-
-    const response = await fetch("/recommend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        level: document.getElementById("level").value,
-        duration: document.getElementById("duration").value,
-        tuition_band: document.getElementById("tuition_band").value,
-        field: document.getElementById("field").value,
-        gre_filter: document.getElementById("gre_filter").value,
-        priority_1: p1,
-        priority_2: p2,
-        priority_3: p3,
-        cost_of_living: document.getElementById("cost_of_living").value,
-        english_preference: document.getElementById("english_preference").value,
-        work_permit_importance: document.getElementById("work_permit_importance").value,
-        gov_support_importance: document.getElementById("gov_support_importance").value,
-        pr_importance: document.getElementById("pr_importance").value,
-        internship_importance: document.getElementById("internship_importance").value,
-        scholarship_importance: document.getElementById("scholarship_importance").value,
-        ranking_importance: document.getElementById("ranking_importance").value,
-        career_importance: document.getElementById("career_importance").value,
-        location_preference: document.getElementById("location_preference").value,
-        admission_speed_importance: document.getElementById("admission_speed_importance").value
-      })
-    });
-
-    const data = await response.json();
-
-    // Complete progress
+  fetch("/recommend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      level: document.getElementById("level").value,
+      duration: document.getElementById("duration").value,
+      tuition_band: document.getElementById("tuition_band").value,
+      field: document.getElementById("field").value,
+      gre_filter: document.getElementById("gre_filter").value,
+      priority_1: p1,
+      priority_2: p2,
+      priority_3: p3,
+      cost_of_living: document.getElementById("cost_of_living").value,
+      english_preference: document.getElementById("english_preference").value,
+      work_permit_importance: document.getElementById("work_permit_importance").value,
+      gov_support_importance: document.getElementById("gov_support_importance").value,
+      pr_importance: document.getElementById("pr_importance").value,
+      internship_importance: document.getElementById("internship_importance").value,
+      scholarship_importance: document.getElementById("scholarship_importance").value,
+      ranking_importance: document.getElementById("ranking_importance").value,
+      career_importance: document.getElementById("career_importance").value,
+      location_preference: document.getElementById("location_preference").value,
+      admission_speed_importance: document.getElementById("admission_speed_importance").value
+    })
+  })
+  .then(function(response) { return response.json(); })
+  .then(function(data) {
     progressFill.style.width = "100%";
-
-    setTimeout(() => {
-      progressBar.style.display = "none";
-    }, 500);
-
+    setTimeout(function() { progressFill.style.width = "0%"; }, 600);
     resultsDiv.innerHTML = "";
 
-    if (!Array.isArray(data)) {
-      resultsDiv.innerHTML = "<p>No results found.</p>";
+    if (!Array.isArray(data) || data.length === 0) {
+      resultsDiv.innerHTML = '<p style="text-align:center;padding:40px;color:#666;">No courses found matching your filters. Try adjusting your preferences.</p>';
       return;
     }
 
-    data.forEach((item, index) => {
-      resultsDiv.innerHTML += `
-        <div class="result-card ${index === 0 ? 'top-result' : ''}">
-          <strong>${index === 0 ? 'Best Overall Match' : 'Recommended Pathway ' + (index + 1)}</strong>
-          <p><b>Country:</b> ${item.country}</p>
-          <p><b>University:</b> ${item.university}</p>
-          <p><b>Course:</b> ${item.course}</p>
-          <ul>
-            ${item.explanation.map(e => `<li>${e}</li>`).join("")}
-          </ul>
-        </div>
-      `;
+    form.style.display = "none";
+    var resetBtn = document.querySelector(".reset-btn");
+    if (resetBtn) resetBtn.style.display = "block";
+
+    data.forEach(function(item, index) {
+      var card = document.createElement("div");
+      card.className = "result-card";
+      if (index === 0) card.classList.add("best-match");
+
+      var badge = index === 0 ? '<div class="match-badge">Best Overall Match</div>' : "";
+      var internshipText = item.internship_available ? "Included" : "None";
+
+      card.innerHTML = badge +
+        '<div class="score-pill">Match Score: ' + Math.round(item.score) + '%</div>' +
+        '<h3>' + item.course_name + '</h3>' +
+        '<p><strong>' + item.university_name + '</strong>, ' + item.country_name + '</p>' +
+        '<div class="result-grid">' +
+          '<div class="result-item"><small>Tuition</small><div>' + item.tuition_band + '</div></div>' +
+          '<div class="result-item"><small>Duration</small><div>' + item.duration + '</div></div>' +
+          '<div class="result-item"><small>Field</small><div>' + item.field + '</div></div>' +
+          '<div class="result-item"><small>Internship</small><div>' + internshipText + '</div></div>' +
+        '</div>';
+
+      resultsDiv.appendChild(card);
     });
 
     resultsDiv.scrollIntoView({ behavior: "smooth" });
-
-    // Show reset button after results
-    const resetBtn = document.querySelector(".reset-btn");
-    if (resetBtn) resetBtn.style.display = "block";
-
-  } catch (error) {
+  })
+  .catch(function(error) {
     console.error(error);
-    progressBar.style.display = "none";
-    resultsDiv.innerHTML = "<p>Something went wrong. Please try again.</p>";
-  }
+    progressFill.style.width = "0%";
+    resultsDiv.innerHTML = '<p class="error">Something went wrong. Please check your connection and try again.</p>';
+  });
 });
 
-const progressFill = document.querySelector(".progress-fill");
-
-let ticking = false;
-
-window.addEventListener("scroll", () => {
-  if (!ticking) {
-    window.requestAnimationFrame(() => {
-      const scrollTop = window.scrollY;
-      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      const progress = scrollTop / docHeight;
-
-      progressFill.style.width = (progress * 100) + "%";
-      ticking = false;
-    });
-    ticking = true;
-  }
-});
-
-// Enable/disable submit button based on form validity
-const formEl = document.getElementById("recommendForm");
-const submitBtnEl = document.getElementById("submitBtn");
-
-formEl.addEventListener("input", (e) => {
-  // Existing logic handled by validateForm now
-});
+updateProgressBar();
 </script>
 
 </body>
