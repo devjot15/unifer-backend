@@ -433,74 +433,68 @@ updateProgress();
 document.getElementById("recommendForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
-  const body = {
-    level: document.getElementById("level").value,
-    duration: document.getElementById("duration").value,
-    tuition_band: document.getElementById("tuition_band").value,
-    field: document.getElementById("field").value,
-    gre_filter: document.getElementById("gre_filter").value,
-    
-    cost_of_living: document.getElementById("cost_of_living").value,
-    work_permit_importance: document.getElementById("work_permit_importance").value,
-    english_preference: document.getElementById("english_preference").value,
-    gov_support_importance: document.getElementById("gov_support_importance").value,
-    pr_importance: document.getElementById("pr_importance").value,
-
-    location_preference: document.getElementById("location_preference").value,
-    ranking_importance: document.getElementById("ranking_importance").value,
-    career_importance: document.getElementById("career_importance").value,
-    admission_speed_importance: document.getElementById("admission_speed_importance").value,
-    
-    internship_importance: document.getElementById("internship_importance").value,
-    scholarship_importance: document.getElementById("scholarship_importance").value,
-    
-    priority_1: document.getElementById("priority_1").value,
-    priority_2: document.getElementById("priority_2").value,
-    priority_3: document.getElementById("priority_3").value
-  };
-
-  // Update progress to 100% on submit and then hide it
-  const progressFills = document.querySelectorAll(".progress-fill");
-  const progressContainer = document.querySelector(".progress-container");
-  
-  progressFills.forEach(fill => fill.style.width = "100%");
-  
-  setTimeout(() => {
-    if (progressContainer) progressContainer.style.display = "none";
-    // Also hide the in-container progress bar
-    const inlineBar = document.getElementById("inline-progress");
-    if (inlineBar) inlineBar.style.display = "none";
-  }, 600);
-
   const resultsDiv = document.getElementById("results");
-  resultsDiv.innerHTML = "<p>Analyzing your preferences...</p>";
+  const progressBar = document.querySelector(".progress-bar");
+  const progressFill = document.querySelector(".progress-fill");
+
+  // Reset progress bar
+  progressBar.style.display = "block";
+  progressFill.style.width = "0%";
+
+  // Small delay so animation triggers
+  setTimeout(() => {
+    progressFill.style.width = "70%";
+  }, 50);
+
+  resultsDiv.innerHTML = "Analyzing your preferences...";
 
   try {
     const response = await fetch("/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        level: document.getElementById("level").value,
+        duration: document.getElementById("duration").value,
+        tuition_band: document.getElementById("tuition_band").value,
+        field: document.getElementById("field").value,
+        gre_filter: document.getElementById("gre_filter").value,
+        priority_1: document.getElementById("priority_1").value,
+        priority_2: document.getElementById("priority_2").value,
+        priority_3: document.getElementById("priority_3").value,
+        cost_of_living: document.getElementById("cost_of_living").value,
+        english_preference: document.getElementById("english_preference").value,
+        work_permit_importance: document.getElementById("work_permit_importance").value,
+        gov_support_importance: document.getElementById("gov_support_importance").value,
+        pr_importance: document.getElementById("pr_importance").value,
+        internship_importance: document.getElementById("internship_importance").value,
+        scholarship_importance: document.getElementById("scholarship_importance").value,
+        ranking_importance: document.getElementById("ranking_importance").value,
+        career_importance: document.getElementById("career_importance").value,
+        location_preference: document.getElementById("location_preference").value,
+        admission_speed_importance: document.getElementById("admission_speed_importance").value
+      })
     });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch recommendations");
-    }
-
     const data = await response.json();
+
+    // Complete progress
+    progressFill.style.width = "100%";
+
+    setTimeout(() => {
+      progressBar.style.display = "none";
+    }, 500);
 
     resultsDiv.innerHTML = "";
 
     if (!Array.isArray(data)) {
-      resultsDiv.innerHTML = `<p>${data.message || "No results found."}</p>`;
+      resultsDiv.innerHTML = "<p>No results found.</p>";
       return;
     }
 
     data.forEach((item, index) => {
       resultsDiv.innerHTML += `
         <div class="result-card ${index === 0 ? 'top-result' : ''}">
-          <strong>
-            ${index === 0 ? 'Best Overall Match' : 'Recommended Pathway ' + (index + 1)}
-          </strong>
+          <strong>${index === 0 ? 'Best Overall Match' : 'Recommended Pathway ' + (index + 1)}</strong>
           <p><b>Country:</b> ${item.country}</p>
           <p><b>University:</b> ${item.university}</p>
           <p><b>Course:</b> ${item.course}</p>
@@ -509,10 +503,14 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
           </ul>
         </div>
       `;
+    });
+
     resultsDiv.scrollIntoView({ behavior: "smooth" });
+
   } catch (error) {
-    console.error("Error:", error);
-    resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+    console.error(error);
+    progressBar.style.display = "none";
+    resultsDiv.innerHTML = "<p>Something went wrong. Please try again.</p>";
   }
 });
 </script>
