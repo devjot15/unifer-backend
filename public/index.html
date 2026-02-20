@@ -190,6 +190,15 @@ button:hover {
   color: #444;
 }
 
+.footer {
+  text-align: center;
+  padding: 40px 0;
+  margin-top: 60px;
+  border-top: 1px solid #e8eeee;
+  color: #666;
+  font-size: 14px;
+}
+
 /* MOBILE */
 
 @media (max-width: 768px) {
@@ -386,7 +395,11 @@ button:hover {
     <div id="results"></div>
   </div>
 
-<script>
+  <footer class="footer">
+    <p>© 2026 UNIFER. Structured decision intelligence for study abroad.</p>
+  </footer>
+
+  <script>
 // Initial progress set to 25% for Step 1
 document.addEventListener("DOMContentLoaded", () => {
   const fill = document.querySelector(".progress-fill");
