@@ -68,17 +68,19 @@ Preferred communication style: Simple, everyday language.
 
 ### Recent Changes
 - **2026-02-20 (latest):**
+  - Replaced all `<select>` dropdowns with **clickable option cards** (`.option-group` + `.option-card`)
+  - Each question now shows options as teal-highlighted cards instead of dropdown menus
+  - Cards use `data-field` on the group and `data-value` on each card to store selections
+  - JavaScript rewritten: `getFieldValue()` helper reads selected card values; click handlers manage `.selected` class
+  - Validation updated: checks for `.option-card.selected` within each step's `.option-group` elements
+  - Removed all `<select>` CSS styles (no longer needed)
+  - Cards use `flex-wrap` for groups with many options (e.g., 10 fields of study)
+  - Field of study card labels shortened for display but `data-value` attributes preserve original values for backend compatibility
+- **2026-02-20 (earlier):**
   - Converted single-page form into a **4-step wizard** with Next/Back navigation buttons
   - Step 1: Define Your Priority, Step 2: Country Selection, Step 3: Course Selection, Step 4: University Selection
   - Progress bar now tracks step completion (25% per step) instead of scroll position
   - Per-step validation: users must complete all fields before advancing
   - Priority uniqueness validation on Step 1 (prevents duplicate priorities)
   - Submit button ("Run Decision Analysis") only appears on Step 4 and is gated to that step
-  - Rewrote JavaScript to use string concatenation instead of template literals to avoid nested backtick issues in inline scripts
-  - CSS: `.form-step` visibility toggling, `.nav-buttons` layout, styled `.prev-btn`, `.next-btn`, `.analyze-btn`
-  - Stale validation messages auto-clear when user changes selections
-- **2026-02-20 (earlier):**
-  - Implemented strict dropdown pattern with `required` attribute and explicit `value` attributes
-  - Added real-time form validation to enable/disable the submit button
   - Added a "Start Again" button and a professional footer with UNIFER branding
-  - Refined CSS for disabled button states and invalid select placeholders
