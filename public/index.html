@@ -553,28 +553,24 @@ function validateAllFields() {
   submitBtn.disabled = !allValid;
 }
 
-document.querySelectorAll(".option-group").forEach(function(group) {
-  var hiddenInput = document.getElementById(group.dataset.name);
+document.querySelectorAll(".option-group").forEach(group => {
+  const fieldName = group.dataset.name;
+  const hiddenInput = document.getElementById(fieldName);
 
-  group.querySelectorAll(".option-card").forEach(function(card) {
-    card.addEventListener("click", function() {
-      group.querySelectorAll(".option-card").forEach(function(c) { c.classList.remove("selected"); });
+  group.querySelectorAll(".option-card").forEach(card => {
+    card.addEventListener("click", () => {
+
+      // Remove selection in this group
+      group.querySelectorAll(".option-card").forEach(c => {
+        c.classList.remove("selected");
+      });
+
+      // Select clicked
       card.classList.add("selected");
 
+      // Set hidden input value
       if (hiddenInput) {
         hiddenInput.value = card.dataset.value;
-      }
-
-      group.classList.remove("invalid");
-
-      if (formMessage.textContent) {
-        formMessage.textContent = "";
-      }
-
-      validateAllFields();
-
-      if (group.dataset.name && group.dataset.name.indexOf("priority") === 0) {
-        checkPriorities();
       }
     });
   });
