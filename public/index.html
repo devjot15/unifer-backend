@@ -608,6 +608,32 @@ var submitBtn = document.getElementById("submitBtn");
 var formMessage = document.getElementById("formMessage");
 var allGroups = document.querySelectorAll(".option-group");
 
+function updateDurationOptions() {
+  var level = getFieldValue("level");
+  var durationGroup = document.getElementById("durationGroup");
+
+  if (!durationGroup) return;
+
+  var ugOptions = durationGroup.querySelectorAll(".ug-option");
+  var pgOptions = durationGroup.querySelectorAll(".pg-option");
+
+  // Reset selection
+  document.getElementById("duration").value = "";
+  durationGroup.querySelectorAll(".option-card").forEach(function(card) {
+    card.classList.remove("selected");
+  });
+
+  if (level === "UG") {
+    ugOptions.forEach(opt => opt.style.display = "block");
+    pgOptions.forEach(opt => opt.style.display = "none");
+  }
+
+  if (level === "PG") {
+    ugOptions.forEach(opt => opt.style.display = "none");
+    pgOptions.forEach(opt => opt.style.display = "block");
+  }
+}
+
 function getFieldValue(fieldName) {
   var input = document.getElementById(fieldName);
   if (input && input.value) return input.value;
