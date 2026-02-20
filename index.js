@@ -97,21 +97,6 @@ app.post("/recommend", async (req, res) => {
     console.log("======== NEW REQUEST ========");
     console.log("BODY:", req.body);
     const answers = req.body;
-    // 🔒 SAFE DEFAULTS TO PREVENT NaN
-
-    answers.cost_of_living = answers.cost_of_living || "No preference";
-    answers.work_permit_importance = answers.work_permit_importance || "Don't care";
-    answers.english_preference = answers.english_preference || "No preference";
-    answers.gov_support_importance = answers.gov_support_importance || "Don't mind";
-    answers.pr_importance = answers.pr_importance || "Don't care";
-
-    answers.internship_importance = answers.internship_importance || "Don't care";
-    answers.scholarship_importance = answers.scholarship_importance || "Don't care";
-
-    answers.location_preference = answers.location_preference || "Anywhere in the country";
-    answers.ranking_importance = answers.ranking_importance || "All institution irrespective of ranking";
-    answers.career_importance = answers.career_importance || "Not that much";
-    answers.admission_speed_importance = answers.admission_speed_importance || "No";
 
     // 1️⃣ Fetch all data
     const { data: countries } = await supabase.from("countries").select("*");
