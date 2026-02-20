@@ -160,7 +160,34 @@ button:hover {
   <div class="container">
     <form id="recommendForm">
       <div class="section">
-        <h2>Questions For Country Selection (List A)</h2>
+        <h2>Step 1 — Define Your Priority</h2>
+
+        <label>In your decision to study abroad which of the following is more important, select in decreasing order?</label>
+
+        <label>Priority 1</label>
+        <select id="priority_1">
+          <option>Course</option>
+          <option>Country</option>
+          <option>Institution</option>
+        </select>
+
+        <label>Priority 2</label>
+        <select id="priority_2">
+          <option>Country</option>
+          <option>Course</option>
+          <option>Institution</option>
+        </select>
+
+        <label>Priority 3</label>
+        <select id="priority_3">
+          <option>Institution</option>
+          <option>Country</option>
+          <option>Course</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <h2>Step 2 — Country Selection</h2>
         <label>What is your preferred cost of living per year range?</label>
         <select id="cost_of_living">
           <option>$0 - $20K</option>
@@ -198,38 +225,7 @@ button:hover {
       </div>
 
       <div class="section">
-        <h2>Questions for University Selection (List C)</h2>
-        <label>What is your preference for location of the campus?</label>
-        <select id="location_preference">
-          <option>Main city</option>
-          <option>Smaller cities</option>
-          <option>Anywhere in the country</option>
-        </select>
-
-        <label>How strongly ranking affects your decision?</label>
-        <select id="ranking_importance">
-          <option>Only want to apply in top institutions</option>
-          <option>Top and middle institutions are fine</option>
-          <option>All institution irrespective of ranking</option>
-        </select>
-
-        <label>How does career services affect your decision?</label>
-        <select id="career_importance">
-          <option>Very strongly (placement driven institutions)</option>
-          <option>Moderately (academics driven institutions)</option>
-          <option>Not that much</option>
-        </select>
-
-        <label>How fast admission is a deciding factor?</label>
-        <select id="admission_speed_importance">
-          <option>Very strongly</option>
-          <option>Not that much</option>
-          <option>No</option>
-        </select>
-      </div>
-
-      <div class="section">
-        <h2>Questions for Course Selection (List B)</h2>
+        <h2>Step 3 — Course Selection</h2>
         <label>What level of program do you want to study?</label>
         <select id="level">
           <option>UG</option>
@@ -289,27 +285,33 @@ button:hover {
       </div>
 
       <div class="section" style="border-bottom: none; margin-bottom: 0;">
-        <h2>Introductory Question</h2>
-        <label>In your decision to study abroad which of the following is more important, select in decreasing order?</label>
-        <label>Priority 1:</label>
-        <select id="priority_1">
-          <option>Course</option>
-          <option>Country</option>
-          <option>Institution</option>
+        <h2>Step 4 — University Selection</h2>
+        <label>What is your preference for location of the campus?</label>
+        <select id="location_preference">
+          <option>Main city</option>
+          <option>Smaller cities</option>
+          <option>Anywhere in the country</option>
         </select>
 
-        <label>Priority 2:</label>
-        <select id="priority_2">
-          <option>Country</option>
-          <option>Course</option>
-          <option>Institution</option>
+        <label>How strongly ranking affects your decision?</label>
+        <select id="ranking_importance">
+          <option>Only want to apply in top institutions</option>
+          <option>Top and middle institutions are fine</option>
+          <option>All institution irrespective of ranking</option>
         </select>
 
-        <label>Priority 3:</label>
-        <select id="priority_3">
-          <option>Institution</option>
-          <option>Country</option>
-          <option>Course</option>
+        <label>How does career services affect your decision?</label>
+        <select id="career_importance">
+          <option>Very strongly (placement driven institutions)</option>
+          <option>Moderately (academics driven institutions)</option>
+          <option>Not that much</option>
+        </select>
+
+        <label>How fast admission is a deciding factor?</label>
+        <select id="admission_speed_importance">
+          <option>Very strongly</option>
+          <option>Not that much</option>
+          <option>No</option>
         </select>
       </div>
 
