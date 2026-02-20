@@ -413,7 +413,7 @@ button:hover {
         </select>
       </div>
 
-      <button type="submit">Get My Recommendations</button>
+      <button type="submit" id="submitBtn" disabled>Get My Recommendations</button>
     </form>
 
     <div id="results"></div>
@@ -597,6 +597,14 @@ window.addEventListener("scroll", () => {
     });
     ticking = true;
   }
+});
+
+// Enable/disable submit button based on form validity
+const form = document.getElementById("recommendForm");
+const submitBtn = document.getElementById("submitBtn");
+
+form.addEventListener("input", () => {
+  submitBtn.disabled = !form.checkValidity();
 });
 </script>
 
