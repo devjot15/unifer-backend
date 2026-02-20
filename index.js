@@ -94,7 +94,28 @@ app.get("/seed", async (req, res) => {
 
 app.post("/recommend", async (req, res) => {
   try {
-    const answers = req.body;
+    const answers = {
+      level: "",
+      duration: "",
+      tuition_band: "",
+      field: "",
+      gre_filter: "",
+      priority_1: "",
+      priority_2: "",
+      priority_3: "",
+      cost_of_living: "",
+      work_permit_importance: "",
+      english_preference: "",
+      gov_support_importance: "",
+      pr_importance: "",
+      internship_importance: "",
+      scholarship_importance: "",
+      location_preference: "",
+      ranking_importance: "",
+      career_importance: "",
+      admission_speed_importance: "",
+      ...req.body
+    };
     console.log("Incoming answers:", answers);
 
     // 1️⃣ Fetch all data
