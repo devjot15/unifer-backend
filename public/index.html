@@ -484,7 +484,7 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
           </ul>
         </div>
       `;
-    });
+    resultsDiv.scrollIntoView({ behavior: "smooth" });
   } catch (error) {
     console.error("Error:", error);
     resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
