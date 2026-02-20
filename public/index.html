@@ -516,21 +516,15 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
   }
 });
 
-const progressFillScroll = document.querySelector(".progress-fill");
+const progressFill = document.querySelector(".progress-fill");
 
 window.addEventListener("scroll", () => {
-  const form = document.getElementById("recommendForm");
+  const scrollTop = window.scrollY;
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
 
-  const formTop = form.offsetTop;
-  const formHeight = form.offsetHeight;
-  const scrollY = window.scrollY + window.innerHeight;
+  const progress = scrollTop / docHeight;
 
-  const progress = Math.min(
-    Math.max((scrollY - formTop) / formHeight, 0),
-    1
-  );
-
-  progressFillScroll.style.width = (progress * 100) + "%";
+  progressFill.style.width = (progress * 100) + "%";
 });
 </script>
 
