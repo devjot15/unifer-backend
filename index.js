@@ -144,55 +144,81 @@ app.post("/recommend", async (req, res) => {
     weights[answers.priority_2] = 0.32;
     weights[answers.priority_3] = 0.18;
 
+    // --- COUNTRY NORMALIZATION BASE ---
+
+    const maxCost = Math.max(...countries.map(c => c.avg_cost_of_living_usd));
+    const minCost = Math.min(...countries.map(c => c.avg_cost_of_living_usd));
+    const maxWorkYears = Math.max(...countries.map(c => c.post_study_work_years));
+
+    function normalizeCost(cost) {
+      if (maxCost === minCost) return 1;
+      return 1 - ((cost - minCost) / (maxCost - minCost));
+    }
+
+    function normalizeWorkYears(years) {
+      if (maxWorkYears === 0) return 0;
+      return years / maxWorkYears;
+    }
+
     // 4️⃣ SCORE PATHWAYS
     const pathways = eligibleCourses.map(course => {
       const university = universities.find(u => u.id === course.university_id);
       const country = countries.find(c => c.id === university.country_id);
 
-      // COUNTRY SCORE (real intensity logic)
+      // --- COUNTRY SCORE CALCULATION ---
+
+      let costScore = normalizeCost(country.avg_cost_of_living_usd);
+      let workScore = normalizeWorkYears(country.post_study_work_years);
+      let prScore = country.pr_pathway_clarity_score;
+      let govScore = country.government_support_score;
+      let englishScore = country.english_primary_language ? 1 : 0;
 
       let countryComponents = [];
       let countryWeights = [];
 
-      let costMatch = answers.cost_of_living === country.cost_of_living_band ? 1 : 0;
-      countryComponents.push(costMatch);
+      // Cost always contributes
+      countryComponents.push(costScore);
       countryWeights.push(1);
 
-      if (answers.english_preference === "Yes") {
-        countryComponents.push(country.english_first_language ? 1 : 0);
-        countryWeights.push(1);
-      }
-      if (answers.english_preference === "Prefer but flexible") {
-        countryComponents.push(country.english_first_language ? 1 : 0.6);
-        countryWeights.push(1);
-      }
-
-      let workWeightMap = {
+      // Work permit weight
+      const workWeightMap = {
         "Very strongly (3 years and above)": 1,
         "Wouldn’t mind (less than 3 years and more than 1 year)": 0.6,
         "Not really (1 year or less)": 0.3
       };
       let workWeight = workWeightMap[answers.work_permit_importance] || 0;
-      countryComponents.push(workWeight * country.work_permit_level);
+      countryComponents.push(workWeight * workScore);
       countryWeights.push(workWeight);
 
-      let govWeightMap = {
-        "Very strongly": 1,
-        "Wouldn’t mind": 0.6,
-        "Don’t mind": 0.3
-      };
-      let govWeight = govWeightMap[answers.gov_support_importance] || 0;
-      countryComponents.push(govWeight * country.government_support_level);
-      countryWeights.push(govWeight);
-
-      let prWeightMap = {
+      // PR weight
+      const prWeightMap = {
         "Very strongly": 1,
         "Wouldn’t mind": 0.6,
         "Don’t care": 0.3
       };
       let prWeight = prWeightMap[answers.pr_importance] || 0;
-      countryComponents.push(prWeight * country.pr_opportunity_level);
+      countryComponents.push(prWeight * prScore);
       countryWeights.push(prWeight);
+
+      // Government support weight
+      const govWeightMap = {
+        "Very strongly": 1,
+        "Wouldn’t mind": 0.6,
+        "Don’t mind": 0.3
+      };
+      let govWeight = govWeightMap[answers.gov_support_importance] || 0;
+      countryComponents.push(govWeight * govScore);
+      countryWeights.push(govWeight);
+
+      // English preference
+      if (answers.english_preference === "Yes") {
+        countryComponents.push(englishScore);
+        countryWeights.push(1);
+      }
+      if (answers.english_preference === "Prefer but flexible") {
+        countryComponents.push(englishScore ? 1 : 0.6);
+        countryWeights.push(1);
+      }
 
       let countryScore =
         countryComponents.reduce((a, b) => a + b, 0) /
