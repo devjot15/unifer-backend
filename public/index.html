@@ -151,6 +151,18 @@ button:hover {
   position: relative;
 }
 
+.result-card.top-result {
+  border-left-color: #0B4F4C;
+  background: #fdfdfd;
+  transform: scale(1.02);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+.result-card.top-result strong {
+  color: #0B4F4C;
+  font-size: 18px;
+}
+
 .result-card::before {
   content: "";
   position: absolute;
@@ -450,19 +462,17 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     }
 
     data.forEach((item, index) => {
-      const explanationHtml = item.explanation && item.explanation.length > 0 
-        ? `<ul>${item.explanation.map(e => `<li>${e}</li>`).join("")}</ul>` 
-        : "";
-
       resultsDiv.innerHTML += `
-        <div class="result-card">
-          <strong>Recommended Pathway #${index + 1}</strong>
-          <hr style="border:none; border-top:1px solid #eee; margin:15px 0;">
+        <div class="result-card ${index === 0 ? 'top-result' : ''}">
+          <strong>
+            ${index === 0 ? 'Best Overall Match' : 'Recommended Pathway ' + (index + 1)}
+          </strong>
           <p><b>Country:</b> ${item.country}</p>
           <p><b>University:</b> ${item.university}</p>
           <p><b>Course:</b> ${item.course}</p>
-          <p><b>Why this fits you:</b></p>
-          ${explanationHtml}
+          <ul>
+            ${item.explanation.map(e => `<li>${e}</li>`).join("")}
+          </ul>
         </div>
       `;
     });
