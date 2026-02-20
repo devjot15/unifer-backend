@@ -56,19 +56,17 @@ body {
 }
 
 .progress-bar {
-  width: 100%;
-  height: 4px;
-  background: #f0f7f7;
-  border-radius: 2px;
-  overflow: hidden;
+  height: 6px;
+  background: #e6eeee;
+  border-radius: 4px;
+  margin-bottom: 40px;
 }
 
 .progress-fill {
-  width: 0%;
   height: 100%;
+  width: 25%;
   background: #0F7C78;
-  box-shadow: 0 0 10px rgba(15, 124, 120, 0.3);
-  transition: width 0.3s ease-out;
+  border-radius: 4px;
 }
 
 /* CONTAINER */
@@ -379,24 +377,19 @@ button:hover {
   </div>
 
 <script>
-// Update progress bar based on filled inputs
+// Initial progress set to 25% for Step 1
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelector(".progress-fill").style.width = "25%";
+});
+
+// Update progress bar based on scroll
 function updateProgress() {
-  const form = document.getElementById("recommendForm");
-  const selects = form.querySelectorAll("select");
-  let filledCount = 0;
-  
-  // In this specific form, all selects have a default value, 
-  // but we can track interaction or simply show progress based on the 4 steps
-  const sections = form.querySelectorAll(".section");
-  const totalSections = sections.length;
-  
-  // Simple heuristic: check how many sections have been "visited" or interacted with
-  // For now, let's implement a scroll-based or interaction-based progress
   window.addEventListener('scroll', () => {
     const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
     const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-    const scrolled = Math.min((winScroll / (height * 0.9)) * 100, 100);
-    document.querySelector(".progress-fill").style.width = scrolled + "%";
+    // Calculate progress between 25% and 100%
+    const scrolled = 25 + (winScroll / height) * 75;
+    document.querySelector(".progress-fill").style.width = Math.min(scrolled, 100) + "%";
   });
 }
 updateProgress();
