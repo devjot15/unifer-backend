@@ -94,7 +94,8 @@ app.get("/seed", async (req, res) => {
 
 app.post("/recommend", async (req, res) => {
   try {
-    console.log("BODY RECEIVED:", req.body);
+    console.log("======== NEW REQUEST ========");
+    console.log("BODY:", req.body);
     const answers = {
       level: "",
       duration: "",
