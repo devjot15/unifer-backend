@@ -672,18 +672,21 @@ form.addEventListener("submit", function(e) {
       card.className = "result-card";
       if (index === 0) card.classList.add("best-match");
 
-      var badge = index === 0 ? '<div class="match-badge">Best Overall Match</div>' : "";
-      var internshipText = item.internship_available ? "Included" : "None";
+      var badge = index === 0
+        ? '<div class="match-badge">Best Overall Match</div>'
+        : '<div class="match-badge">Recommended Pathway</div>';
 
-      card.innerHTML = badge +
-        '<div class="score-pill">Match Score: ' + Math.round(item.score) + '%</div>' +
-        '<h3>' + item.course_name + '</h3>' +
-        '<p><strong>' + item.university_name + '</strong>, ' + item.country_name + '</p>' +
-        '<div class="result-grid">' +
-          '<div class="result-item"><small>Tuition</small><div>' + item.tuition_band + '</div></div>' +
-          '<div class="result-item"><small>Duration</small><div>' + item.duration + '</div></div>' +
-          '<div class="result-item"><small>Field</small><div>' + item.field + '</div></div>' +
-          '<div class="result-item"><small>Internship</small><div>' + internshipText + '</div></div>' +
+      card.innerHTML =
+        badge +
+        '<h3>' + item.course + '</h3>' +
+        '<p><strong>' + item.university + '</strong>, ' + item.country + '</p>' +
+        '<div class="explanation-block">' +
+          '<p><strong>Why this fits you:</strong></p>' +
+          '<ul>' +
+            item.explanation.map(function(e) {
+              return '<li>' + e + '</li>';
+            }).join("") +
+          '</ul>' +
         '</div>';
 
       resultsDiv.appendChild(card);
