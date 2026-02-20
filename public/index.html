@@ -461,7 +461,18 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
     progressFill.style.width = "70%";
   }, 50);
 
-  resultsDiv.innerHTML = "Analyzing your preferences...";
+  const priority_1 = document.getElementById("priority_1").value;
+  const priority_2 = document.getElementById("priority_2").value;
+  const priority_3 = document.getElementById("priority_3").value;
+
+  if (
+    priority_1 === priority_2 ||
+    priority_1 === priority_3 ||
+    priority_2 === priority_3
+  ) {
+    alert("Please select unique priorities in decreasing order.");
+    return;
+  }
 
   try {
     const response = await fetch("/recommend", {
@@ -473,9 +484,9 @@ document.getElementById("recommendForm").addEventListener("submit", async functi
         tuition_band: document.getElementById("tuition_band").value,
         field: document.getElementById("field").value,
         gre_filter: document.getElementById("gre_filter").value,
-        priority_1: document.getElementById("priority_1").value,
-        priority_2: document.getElementById("priority_2").value,
-        priority_3: document.getElementById("priority_3").value,
+        priority_1: priority_1,
+        priority_2: priority_2,
+        priority_3: priority_3,
         cost_of_living: document.getElementById("cost_of_living").value,
         english_preference: document.getElementById("english_preference").value,
         work_permit_importance: document.getElementById("work_permit_importance").value,
