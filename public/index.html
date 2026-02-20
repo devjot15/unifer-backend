@@ -124,6 +124,26 @@ select:invalid {
   color: #999;
 }
 
+select.valid {
+  border-color: #0F7C78;
+  background: #ffffff;
+}
+
+select.invalid {
+  border-color: #d9534f;
+  background: #fff5f5;
+}
+
+.form-message {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 1.2em;
+  color: #d9534f;
+  margin-top: 20px;
+}
+
 /* BUTTON */
 
 button {
@@ -145,93 +165,23 @@ button:hover {
   transform: translateY(-1px);
 }
 
+button:disabled {
+  background: #a0c5c3;
+  cursor: not-allowed;
+}
+
 #submitBtn:disabled {
-  background: #ccc;
+  background: #a0c5c3;
   cursor: not-allowed;
   transform: none;
 }
 
 #submitBtn:disabled:hover {
-  background: #ccc;
+  background: #a0c5c3;
   transform: none;
 }
 
 /* RESULTS */
-
-.result-card {
-  background: #ffffff;
-  padding: 30px;
-  border-radius: 12px;
-  margin-top: 30px;
-  border: 1px solid #e5f0f0;
-  position: relative;
-}
-
-.result-card.top-result {
-  border: 2px solid #0F7C78;
-  background: #f7fbfb;
-  transform: scale(1.02);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-}
-
-.result-card.top-result strong {
-  color: #0B4F4C;
-  font-size: 18px;
-}
-
-.result-card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 5px;
-  background: #0F7C78;
-  border-radius: 12px 0 0 12px;
-}
-
-.result-card strong {
-  color: #0F7C78;
-  font-size: 15px;
-}
-
-.result-card ul {
-  margin-top: 15px;
-  padding-left: 20px;
-}
-
-.result-card li {
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: #444;
-}
-
-.footer {
-  text-align: center;
-  padding: 30px 0;
-  font-size: 13px;
-  color: #777;
-  margin-top: 60px;
-  border-top: 1px solid #e8eeee;
-}
-
-.form-message {
-  text-align: center;
-  margin-bottom: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  min-height: 1.2em;
-}
-
-.form-message.error {
-  color: #d93025;
-}
-
-.form-message.success {
-  color: #0F7C78;
-}
-
-/* MOBILE */
 
 @media (max-width: 768px) {
   .container {
@@ -642,8 +592,18 @@ window.addEventListener("scroll", () => {
 const form = document.getElementById("recommendForm");
 const submitBtn = document.getElementById("submitBtn");
 
-form.addEventListener("input", () => {
+form.addEventListener("input", (e) => {
   submitBtn.disabled = !form.checkValidity();
+  
+  if (e.target.tagName === 'SELECT') {
+    if (e.target.value) {
+      e.target.classList.add('valid');
+      e.target.classList.remove('invalid');
+    } else {
+      e.target.classList.remove('valid');
+      e.target.classList.add('invalid');
+    }
+  }
 });
 </script>
 
