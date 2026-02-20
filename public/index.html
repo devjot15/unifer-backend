@@ -4,30 +4,26 @@
   <title>Study Abroad Engine</title>
   <style>
 body {
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   margin: 0;
-  background: #f5f7f7;
-  color: #1e1e1e;
+  background: #f4f8f8;
+  color: #1a1a1a;
 }
 
 /* NAVBAR */
 
 .navbar {
   background: white;
-  padding: 15px 0;
-  border-bottom: 1px solid #e8eeee;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
+  padding: 20px 40px;
+  border-bottom: 1px solid #e6efef;
 }
 
 .nav-container {
   max-width: 1100px;
-  margin: 0 auto;
+  margin: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
 }
 
 .logo {
@@ -36,66 +32,72 @@ body {
 
 .brand-tagline {
   font-size: 14px;
-  color: #666;
+  color: #0F7C78;
   font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
-/* MAIN CONTAINER */
+/* CONTAINER */
 
 .container {
   max-width: 900px;
   margin: 40px auto;
   background: white;
-  padding: 40px;
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.05);
+  padding: 50px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.05);
 }
 
-/* HEADINGS */
+/* SECTIONS */
+
+.section {
+  margin-bottom: 50px;
+}
 
 h2 {
-  margin-top: 40px;
-  font-size: 18px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   color: #0F7C78;
-  border-left: 4px solid #0F7C78;
-  padding-left: 12px;
+  margin-bottom: 20px;
 }
-
-/* FORM */
 
 label {
   display: block;
   margin-top: 20px;
+  font-size: 13px;
   font-weight: 600;
-  font-size: 14px;
+  color: #333;
 }
 
 select {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   margin-top: 6px;
-  border-radius: 6px;
-  border: 1px solid #dcdcdc;
+  border-radius: 8px;
+  border: 1px solid #dce8e8;
   font-size: 14px;
+  background: #fafcfc;
   transition: 0.2s ease;
 }
 
 select:focus {
   border-color: #0F7C78;
+  background: white;
   outline: none;
 }
 
 /* BUTTON */
 
 button {
-  margin-top: 40px;
   width: 100%;
-  padding: 14px;
+  padding: 16px;
+  margin-top: 40px;
   background: #0F7C78;
   color: white;
-  font-weight: bold;
+  font-weight: 600;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 15px;
   cursor: pointer;
   transition: 0.2s ease;
@@ -103,47 +105,59 @@ button {
 
 button:hover {
   background: #0B4F4C;
+  transform: translateY(-1px);
 }
 
 /* RESULTS */
 
 .result-card {
   background: #ffffff;
-  padding: 25px;
-  border-radius: 8px;
-  margin-top: 25px;
-  border: 1px solid #e4eeee;
-  border-left: 5px solid #0F7C78;
+  padding: 30px;
+  border-radius: 12px;
+  margin-top: 30px;
+  border: 1px solid #e5f0f0;
+  position: relative;
+}
+
+.result-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 5px;
+  background: #0F7C78;
+  border-radius: 12px 0 0 12px;
 }
 
 .result-card strong {
-  font-size: 16px;
   color: #0F7C78;
+  font-size: 15px;
 }
 
 .result-card ul {
+  margin-top: 15px;
   padding-left: 20px;
-  margin-top: 10px;
 }
 
-.section {
-  margin-bottom: 50px;
-  padding-bottom: 30px;
-  border-bottom: 1px solid #f0f0f0;
+.result-card li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #444;
 }
 
-.section h2 {
-  margin-top: 0;
-}
+/* MOBILE */
 
 @media (max-width: 768px) {
   .container {
-    margin: 20px 15px;
+    margin: 20px;
     padding: 25px;
   }
 
-  .hero h1 {
-    font-size: 22px;
+  .nav-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 }
   </style>
