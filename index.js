@@ -151,42 +151,52 @@ app.post("/recommend", async (req, res) => {
 
       // COUNTRY SCORE (real intensity logic)
 
-      let costScore = 0;
-      if (answers.cost_of_living === country.cost_of_living_band) {
-        costScore = 1;
-      } else {
-        costScore = 0.4; // penalty if mismatch
-      }
+      let countryComponents = [];
+      let countryWeights = [];
 
-      let englishScore = 1;
+      let costMatch = answers.cost_of_living === country.cost_of_living_band ? 1 : 0;
+      countryComponents.push(costMatch);
+      countryWeights.push(1);
+
       if (answers.english_preference === "Yes") {
-        englishScore = country.english_first_language ? 1 : 0;
+        countryComponents.push(country.english_first_language ? 1 : 0);
+        countryWeights.push(1);
       }
       if (answers.english_preference === "Prefer but flexible") {
-        englishScore = country.english_first_language ? 1 : 0.6;
+        countryComponents.push(country.english_first_language ? 1 : 0.6);
+        countryWeights.push(1);
       }
 
-      let workWeight = 0;
-      if (answers.work_permit_importance === "Very strongly (3 years and above)") workWeight = 1;
-      if (answers.work_permit_importance === "Wouldn’t mind (less than 3 years and more than 1 year)") workWeight = 0.6;
-      if (answers.work_permit_importance === "Not really (1 year or less)") workWeight = 0.3;
+      let workWeightMap = {
+        "Very strongly (3 years and above)": 1,
+        "Wouldn’t mind (less than 3 years and more than 1 year)": 0.6,
+        "Not really (1 year or less)": 0.3
+      };
+      let workWeight = workWeightMap[answers.work_permit_importance] || 0;
+      countryComponents.push(workWeight * country.work_permit_level);
+      countryWeights.push(workWeight);
 
-      let prWeight = 0;
-      if (answers.pr_importance === "Very strongly") prWeight = 1;
-      if (answers.pr_importance === "Wouldn’t mind") prWeight = 0.6;
-      if (answers.pr_importance === "Don’t care") prWeight = 0.3;
+      let govWeightMap = {
+        "Very strongly": 1,
+        "Wouldn’t mind": 0.6,
+        "Don’t mind": 0.3
+      };
+      let govWeight = govWeightMap[answers.gov_support_importance] || 0;
+      countryComponents.push(govWeight * country.government_support_level);
+      countryWeights.push(govWeight);
 
-      let govWeight = 0;
-      if (answers.gov_support_importance === "Very strongly") govWeight = 1;
-      if (answers.gov_support_importance === "Wouldn’t mind") govWeight = 0.6;
-      if (answers.gov_support_importance === "Don’t mind") govWeight = 0.3;
+      let prWeightMap = {
+        "Very strongly": 1,
+        "Wouldn’t mind": 0.6,
+        "Don’t care": 0.3
+      };
+      let prWeight = prWeightMap[answers.pr_importance] || 0;
+      countryComponents.push(prWeight * country.pr_opportunity_level);
+      countryWeights.push(prWeight);
 
       let countryScore =
-        (costScore +
-         englishScore +
-         workWeight * country.work_permit_level +
-         govWeight * country.government_support_level +
-         prWeight * country.pr_opportunity_level) / 5;
+        countryComponents.reduce((a, b) => a + b, 0) /
+        (countryWeights.reduce((a, b) => a + b, 0) || 1);
 
       // COURSE SCORE (real intensity logic)
 
