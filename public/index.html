@@ -239,21 +239,24 @@ button:hover {
         <label>In your decision to study abroad which of the following is more important, select in decreasing order?</label>
 
         <label>Priority 1</label>
-        <select id="priority_1">
+        <select id="priority_1" required>
+          <option value="" disabled selected>Select Priority 1</option>
           <option>Course</option>
           <option>Country</option>
           <option>Institution</option>
         </select>
 
         <label>Priority 2</label>
-        <select id="priority_2">
+        <select id="priority_2" required>
+          <option value="" disabled selected>Select Priority 2</option>
           <option>Country</option>
           <option>Course</option>
           <option>Institution</option>
         </select>
 
         <label>Priority 3</label>
-        <select id="priority_3">
+        <select id="priority_3" required>
+          <option value="" disabled selected>Select Priority 3</option>
           <option>Institution</option>
           <option>Country</option>
           <option>Course</option>
@@ -263,35 +266,40 @@ button:hover {
       <div class="section">
         <h2>Step 2 — Country Selection</h2>
         <label>What is your preferred cost of living per year range?</label>
-        <select id="cost_of_living">
+        <select id="cost_of_living" required>
+          <option value="" disabled selected>Select cost range</option>
           <option>$0 - $20K</option>
           <option>$20K – $30K</option>
           <option>More than $30K</option>
         </select>
 
         <label>How does duration of post study work permit effect your decision?</label>
-        <select id="work_permit_importance">
+        <select id="work_permit_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Very strongly (3 years and above)</option>
           <option>Wouldn’t mind (less than 3 years and more than 1 year)</option>
           <option>Not really (1 year or less)</option>
         </select>
 
         <label>Do you want to prefer a country where english is the first language?</label>
-        <select id="english_preference">
+        <select id="english_preference" required>
+          <option value="" disabled selected>Select preference</option>
           <option>Yes</option>
           <option>Prefer but flexible</option>
           <option>No preference</option>
         </select>
 
         <label>How strongly does government support affect your decision?</label>
-        <select id="gov_support_importance">
+        <select id="gov_support_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Very strongly</option>
           <option>Wouldn’t mind</option>
           <option>Don’t mind</option>
         </select>
 
         <label>How strongly does opportunity to immigrate permanently affect your decision?</label>
-        <select id="pr_importance">
+        <select id="pr_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Very strongly</option>
           <option>Wouldn’t mind</option>
           <option>Don’t care</option>
@@ -301,13 +309,15 @@ button:hover {
       <div class="section">
         <h2>Step 3 — Course Selection</h2>
         <label>What level of program do you want to study?</label>
-        <select id="level">
+        <select id="level" required>
+          <option value="" disabled selected>Select program level</option>
           <option>UG</option>
           <option>PG</option>
         </select>
 
         <label>What will be ideal course duration for you?</label>
-        <select id="duration">
+        <select id="duration" required>
+          <option value="" disabled selected>Select duration</option>
           <option>3 years or less</option>
           <option>More than 3 years</option>
           <option>1 year or less</option>
@@ -315,14 +325,16 @@ button:hover {
         </select>
 
         <label>How strongly courses with internship as a part of the curriculum impact your decision?</label>
-        <select id="internship_importance">
+        <select id="internship_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Very strongly</option>
           <option>Wouldn’t mind</option>
           <option>Don’t care</option>
         </select>
 
         <label>Select a preferred filter for courses with respect to GRE or GMAT requirements?</label>
-        <select id="gre_filter">
+        <select id="gre_filter" required>
+          <option value="" disabled selected>Select filter</option>
           <option>Without GRE or GMAT</option>
           <option>Without GRE</option>
           <option>Without GMAT</option>
@@ -330,21 +342,24 @@ button:hover {
         </select>
 
         <label>How strongly scholarships or bursaries affect your decision?</label>
-        <select id="scholarship_importance">
+        <select id="scholarship_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Very strongly (more than 20% of tuition)</option>
           <option>Wouldn’t mind getting one (less than 20% of tuition or none)</option>
           <option>Don’t care</option>
         </select>
 
         <label>What is the amount of annual tuition fee which you think will be ideal for you?</label>
-        <select id="tuition_band">
+        <select id="tuition_band" required>
+          <option value="" disabled selected>Select tuition range</option>
           <option>Less than $12k</option>
           <option>$12k - $25k</option>
           <option>More than $25K</option>
         </select>
 
         <label>Please select the field which associates the most with the field of study you want to study?</label>
-        <select id="field">
+        <select id="field" required>
+          <option value="" disabled selected>Select field</option>
           <option>engineering & tech</option>
           <option>business, management and economics</option>
           <option>science & applied science</option>
@@ -361,28 +376,32 @@ button:hover {
       <div class="section" style="border-bottom: none; margin-bottom: 0;">
         <h2>Step 4 — University Selection</h2>
         <label>What is your preference for location of the campus?</label>
-        <select id="location_preference">
+        <select id="location_preference" required>
+          <option value="" disabled selected>Select location</option>
           <option>Main city</option>
           <option>Smaller cities</option>
           <option>Anywhere in the country</option>
         </select>
 
         <label>How strongly ranking affects your decision?</label>
-        <select id="ranking_importance">
+        <select id="ranking_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Only want to apply in top institutions</option>
           <option>Top and middle institutions are fine</option>
           <option>All institution irrespective of ranking</option>
         </select>
 
         <label>How does career services affect your decision?</label>
-        <select id="career_importance">
+        <select id="career_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Very strongly (placement driven institutions)</option>
           <option>Moderately (academics driven institutions)</option>
           <option>Not that much</option>
         </select>
 
         <label>How fast admission is a deciding factor?</label>
-        <select id="admission_speed_importance">
+        <select id="admission_speed_importance" required>
+          <option value="" disabled selected>Select importance</option>
           <option>Very strongly</option>
           <option>Not that much</option>
           <option>No</option>
