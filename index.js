@@ -244,39 +244,47 @@ app.post("/recommend", async (req, res) => {
 
       const explanation = [];
 
-      // COUNTRY EXPLANATION
-      if (country.pr_opportunity_level > 0.8) {
-        explanation.push("Strong permanent residency pathway");
+      // COUNTRY EXPLANATION (relative logic)
+
+      if (answers.pr_importance === "Very strongly") {
+        explanation.push("Permanent residency opportunity aligns with your priority");
       }
 
-      if (country.work_permit_level > 0.8) {
-        explanation.push("Strong post-study work permit duration");
+      if (answers.work_permit_importance.includes("Very strongly")) {
+        explanation.push("Post-study work duration supports your long-term plan");
       }
 
       if (answers.english_preference === "Yes" && country.english_first_language) {
-        explanation.push("English-speaking country match");
+        explanation.push("English-speaking country preference satisfied");
       }
 
       // COURSE EXPLANATION
-      if (course.internship_available && answers.internship_importance === "Very strongly") {
-        explanation.push("Includes internship as preferred");
+
+      if (course.internship_available && answers.internship_importance !== "Don’t care") {
+        explanation.push("Includes internship component as preferred");
       }
 
-      if (course.scholarship_level > 0.7 && answers.scholarship_importance.includes("Very strongly")) {
-        explanation.push("Strong scholarship availability");
+      if (answers.scholarship_importance.includes("Very strongly")) {
+        explanation.push("Scholarship availability considered in scoring");
       }
 
       // UNIVERSITY EXPLANATION
-      if (university.ranking_level > 0.8 && answers.ranking_importance.includes("top")) {
-        explanation.push("Highly ranked institution");
+
+      if (answers.ranking_importance.includes("top")) {
+        explanation.push("Institution ranking aligned with your preference");
       }
 
-      if (university.career_services_level > 0.8) {
-        explanation.push("Strong career services support");
+      if (answers.career_importance !== "Not that much") {
+        explanation.push("Career services strength influenced ranking");
       }
 
-      if (university.location_type === answers.location_preference) {
-        explanation.push("Matches preferred campus location");
+      if (answers.location_preference === university.location_type) {
+        explanation.push("Campus location matches your preference");
+      }
+
+      // SAFETY FALLBACK
+      if (explanation.length === 0) {
+        explanation.push("Balanced match across country, course, and institution factors");
       }
 
       return {
