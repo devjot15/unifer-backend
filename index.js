@@ -97,9 +97,6 @@ app.post("/recommend", async (req, res) => {
     console.log("======== NEW REQUEST ========");
     console.log("BODY:", req.body);
     const answers = req.body;
-    console.log("Tuition match test:",
-      answers.tuition_band === "$12k - $25k"
-    );
 
     // 1️⃣ Fetch all data
     const { data: countries } = await supabase.from("countries").select("*");
