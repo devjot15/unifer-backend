@@ -603,6 +603,15 @@ form.addEventListener("submit", function(e) {
   if (currentStep !== 4) return;
   if (!checkPriorities()) return;
 
+  const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
+
+  for (let input of hiddenInputs) {
+    if (!input.value) {
+      alert("Please complete all steps before running analysis.");
+      return;
+    }
+  }
+
   var resultsDiv = document.getElementById("results");
   progressFill.style.width = "70%";
 
