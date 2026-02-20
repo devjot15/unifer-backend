@@ -717,6 +717,10 @@ document.querySelectorAll(".option-group").forEach(group => {
         hiddenInput.value = card.dataset.value;
       }
 
+      if (fieldName === "level") {
+        updateDurationOptions();
+      }
+
       group.classList.remove("invalid");
       if (formMessage.textContent) {
         formMessage.textContent = "";
