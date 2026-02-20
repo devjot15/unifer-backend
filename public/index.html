@@ -51,11 +51,13 @@ body {
 }
 
 .progress-bar {
+  position: sticky;
+  top: 0;
   height: 6px;
   background: #e6eeee;
   border-radius: 4px;
   margin-bottom: 40px;
-  overflow: hidden;
+  z-index: 1000;
 }
 
 .progress-fill {
@@ -63,7 +65,7 @@ body {
   width: 0%;
   background: #0F7C78;
   border-radius: 4px;
-  transition: width 0.4s ease;
+  transition: width 0.2s ease;
 }
 
 /* CONTAINER */
