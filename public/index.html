@@ -471,6 +471,15 @@ updateProgress();
 document.getElementById("recommendForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
+  const selects = document.querySelectorAll("select");
+
+  for (let select of selects) {
+    if (!select.value) {
+      alert("Please complete all required fields.");
+      return;
+    }
+  }
+
   const resultsDiv = document.getElementById("results");
   const progressBar = document.querySelector(".progress-bar");
   const progressFill = document.querySelector(".progress-fill");
