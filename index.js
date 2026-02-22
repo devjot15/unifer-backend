@@ -103,6 +103,14 @@ app.post("/recommend", async (req, res) => {
     const { data: universities } = await supabase.from("universities").select("*");
     const { data: courses } = await supabase.from("courses").select("*");
 
+    const { data: rankingSystems } = await supabase
+      .from("ranking_systems")
+      .select("*");
+
+    const { data: universityRankings } = await supabase
+      .from("university_rankings")
+      .select("*");
+
     // 2️⃣ HARD COURSE ELIMINATION
     const eligibleCourses = courses.filter(course => {
       // Level
