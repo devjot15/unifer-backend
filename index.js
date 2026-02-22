@@ -178,6 +178,28 @@ app.post("/recommend", async (req, res) => {
       const university = universities.find(u => u.id === course.university_id);
       const country = countries.find(c => c.id === university.country_id);
 
+      // Get ranking entries for this university
+      const uniRankings = universityRankings.filter(r => r.university_id === university.id);
+
+      let rankingScores = [];
+
+      uniRankings.forEach(r => {
+        const system = rankingSystems.find(s => s.id === r.ranking_system_id);
+        if (!system) return;
+
+        const normalized = normalizeRank(r.rank_position, system.max_rank);
+        if (normalized !== null) rankingScores.push(normalized);
+      });
+
+      // Final ranking score = average of available rankings
+      let rankingScore = null;
+      if (rankingScores.length > 0) {
+        rankingScore =
+          rankingScores.reduce((a, b) => a + b, 0) / rankingScores.length;
+      } else {
+        rankingScore = 0.5; // neutral if no ranking data
+      }
+
       // --- COUNTRY SCORE CALCULATION ---
 
       let costScore = normalizeCost(country.avg_cost_of_living_usd);
