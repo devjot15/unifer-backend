@@ -160,6 +160,11 @@ app.post("/recommend", async (req, res) => {
       return years / maxWorkYears;
     }
 
+    function normalizeRank(rank, maxRank) {
+      if (!rank || !maxRank) return null;
+      return 1 - ((rank - 1) / (maxRank - 1));
+    }
+
     // 4️⃣ SCORE PATHWAYS
     const pathways = eligibleCourses.map(course => {
       const university = universities.find(u => u.id === course.university_id);
