@@ -200,6 +200,8 @@ app.post("/recommend", async (req, res) => {
         rankingScore = 0.5; // neutral if no ranking data
       }
 
+      console.log(university.name, rankingScore);
+
       // --- COUNTRY SCORE CALCULATION ---
 
       let costScore = normalizeCost(country.avg_cost_of_living_usd);
