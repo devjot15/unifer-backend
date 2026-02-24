@@ -185,7 +185,9 @@ app.post("/recommend", async (req, res) => {
     // 4️⃣ SCORE PATHWAYS
     const pathways = eligibleCourses.map(course => {
       const university = universities.find(u => u.id === course.university_id);
+      if (!university) return null;
       const country = countries.find(c => c.id === university.country_id);
+      if (!country) return null;
 
       // --- COUNTRY SCORE CALCULATION ---
 
@@ -384,6 +386,7 @@ app.post("/recommend", async (req, res) => {
 
     // 5️⃣ Sort & Return Top 5
     const top5 = pathways
+      .filter(p => p !== null)
       .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
       .slice(0, 5);
 
