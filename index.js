@@ -187,30 +187,6 @@ app.post("/recommend", async (req, res) => {
       const university = universities.find(u => u.id === course.university_id);
       const country = countries.find(c => c.id === university.country_id);
 
-      // Get ranking entries for this university
-      const uniRankings = universityRankings.filter(r => r.university_id === university.id);
-
-      let rankingScores = [];
-
-      uniRankings.forEach(r => {
-        const system = rankingSystems.find(s => s.id === r.ranking_system_id);
-        if (!system) return;
-
-        const normalized = normalizeRank(r.rank_position, system.max_rank);
-        if (normalized !== null) rankingScores.push(normalized);
-      });
-
-      // Final ranking score = average of available rankings
-      let rankingScore = null;
-      if (rankingScores.length > 0) {
-        rankingScore =
-          rankingScores.reduce((a, b) => a + b, 0) / rankingScores.length;
-      } else {
-        rankingScore = 0.5; // neutral if no ranking data
-      }
-
-      console.log(university.name, rankingScore);
-
       // --- COUNTRY SCORE CALCULATION ---
 
       let costScore = normalizeCost(country.avg_cost_of_living_usd);
@@ -297,10 +273,7 @@ app.post("/recommend", async (req, res) => {
         courseComponents.reduce((a, b) => a + b, 0) /
         (courseWeights.reduce((a, b) => a + b, 0) || 1);
 
-      // UNIVERSITY SCORE (real ranking intensity)
-
-      let uniComponents = [];
-      let uniWeights = [];
+      // UNIVERSITY SCORE
 
       let locationScore =
         answers.location_preference === "Anywhere in the country"
@@ -309,26 +282,12 @@ app.post("/recommend", async (req, res) => {
           ? 1
           : 0;
 
-      uniComponents.push(locationScore);
-      uniWeights.push(1);
-
-      let rankingWeightMap = {
-        "Only want to apply in top institutions": 1,
-        "Top and middle institutions are fine": 0.7,
-        "All institution irrespective of ranking": 0.4
-      };
-      let rankingWeight = rankingWeightMap[answers.ranking_importance] || 0;
-      uniComponents.push(rankingWeight * university.ranking_level);
-      uniWeights.push(rankingWeight);
-
       let careerWeightMap = {
         "Very strongly (placement driven institutions)": 1,
         "Moderately (academics driven institutions)": 0.6,
         "Not that much": 0.3
       };
       let careerWeight = careerWeightMap[answers.career_importance] || 0;
-      uniComponents.push(careerWeight * university.career_services_level);
-      uniWeights.push(careerWeight);
 
       let admissionWeightMap = {
         "Very strongly": 1,
@@ -336,12 +295,28 @@ app.post("/recommend", async (req, res) => {
         "No": 0.3
       };
       let admissionWeight = admissionWeightMap[answers.admission_speed_importance] || 0;
-      uniComponents.push(admissionWeight * university.admission_speed_level);
-      uniWeights.push(admissionWeight);
+      let admissionScore = admissionWeight * university.admission_speed_level;
+
+      const compositeRanking = rankingMap[university.id] || null;
+
+      // Ranking importance weight
+      let rankingWeight = 0;
+      if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
+      if (answers.ranking_importance === "Top and middle institutions are fine") rankingWeight = 0.7;
+      if (answers.ranking_importance === "All institution irrespective of ranking") rankingWeight = 0.4;
+
+      // If ranking exists, use it. If not, do NOT penalize.
+      let rankingScore = compositeRanking !== null
+        ? rankingWeight * compositeRanking
+        : rankingWeight * 0.5; // neutral fallback
 
       let universityScore =
-        uniComponents.reduce((a, b) => a + b, 0) /
-        (uniWeights.reduce((a, b) => a + b, 0) || 1);
+        (
+          locationScore +
+          rankingScore +
+          careerWeight * university.career_services_level +
+          admissionScore
+        ) / 4;
 
       // FINAL ADDITIVE SCORE
       let finalScore =
