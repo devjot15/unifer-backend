@@ -188,6 +188,14 @@ app.post("/recommend", async (req, res) => {
       return Math.max(0, Math.min(1, value));
     }
 
+    function computeFinalScore(weights, scores) {
+      return (
+        weights.Country * scores.country +
+        weights.Course * scores.course +
+        weights.Institution * scores.university
+      );
+    }
+
     // --- COUNTRY NORMALIZATION BASE ---
 
     const maxCost = Math.max(...countries.map(c => c.avg_cost_of_living_usd));
@@ -321,10 +329,11 @@ app.post("/recommend", async (req, res) => {
       universityScore = clamp(universityScore);
 
       // FINAL ADDITIVE SCORE
-      let finalScore =
-        (weights.Country * countryScore) +
-        (weights.Course * courseScore) +
-        (weights.Institution * universityScore);
+      let finalScore = computeFinalScore(weights, {
+        country: countryScore,
+        course: courseScore,
+        university: universityScore
+      });
 
       if (!isFinite(finalScore)) {
         finalScore = 0;
