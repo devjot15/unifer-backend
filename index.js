@@ -244,6 +244,7 @@ app.post("/recommend", async (req, res) => {
         costWeight + pswWeight + prWeight + govWeight + englishWeight;
 
       let countryScore = weightedSum / totalWeight;
+      countryScore = clamp(countryScore);
 
       // COURSE SCORE (real intensity logic)
 
@@ -271,6 +272,7 @@ app.post("/recommend", async (req, res) => {
       let courseScore =
         courseComponents.reduce((a, b) => a + b, 0) /
         (courseWeights.reduce((a, b) => a + b, 0) || 1);
+      courseScore = clamp(courseScore);
 
       // UNIVERSITY SCORE
 
@@ -316,6 +318,7 @@ app.post("/recommend", async (req, res) => {
           careerWeight * university.career_services_level +
           admissionScore
         ) / 4;
+      universityScore = clamp(universityScore);
 
       // FINAL ADDITIVE SCORE
       let finalScore =
