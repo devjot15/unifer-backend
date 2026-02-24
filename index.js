@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const axios = require("axios");
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
@@ -409,6 +410,51 @@ app.post("/recommend", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send("Recommendation failed");
+  }
+});
+
+app.post("/scrape-program", async (req, res) => {
+  try {
+    const { university_id, program_url } = req.body;
+
+    if (!university_id || !program_url) {
+      return res.status(400).json({ error: "Missing parameters" });
+    }
+
+    const response = await axios.get(program_url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0"
+      }
+    });
+
+    const html = response.data;
+
+    const { error } = await supabase
+      .from("ingestion.raw_program_pages")
+      .insert({
+        university_id,
+        source_url: program_url,
+        raw_html: html,
+        parse_status: "pending"
+      });
+
+    if (error) {
+      return res.status(500).json({ error });
+    }
+
+    res.json({ message: "Page scraped and stored successfully" });
+
+  } catch (err) {
+    console.error(err);
+
+    await supabase
+      .from("ingestion.scrape_logs")
+      .insert({
+        status: "failed",
+        error_message: err.message
+      });
+
+    res.status(500).json({ error: "Scraping failed" });
   }
 });
 
