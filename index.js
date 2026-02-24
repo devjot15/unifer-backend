@@ -166,11 +166,22 @@ app.post("/recommend", async (req, res) => {
     }
 
     // 3️⃣ MACRO WEIGHTS
-    const weights = { Country: 0, Course: 0, Institution: 0 };
+    function computeMacroWeights(p1, p2, p3) {
+      const base = {
+        1: 0.5,
+        2: 0.32,
+        3: 0.18
+      };
 
-    weights[answers.priority_1] = 0.50;
-    weights[answers.priority_2] = 0.32;
-    weights[answers.priority_3] = 0.18;
+      const weights = {};
+      weights[p1] = base[1];
+      weights[p2] = base[2];
+      weights[p3] = base[3];
+
+      return weights;
+    }
+
+    const weights = computeMacroWeights(answers.priority_1, answers.priority_2, answers.priority_3);
 
     // --- COUNTRY NORMALIZATION BASE ---
 
