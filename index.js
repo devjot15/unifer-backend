@@ -124,6 +124,11 @@ app.post("/recommend", async (req, res) => {
       rankingMap[r.id] = r.final_score;
     });
 
+    const countryMap = {};
+    countryData.forEach(c => {
+      countryMap[c.id] = c;
+    });
+
     // 2️⃣ HARD COURSE ELIMINATION
     const eligibleCourses = courses.filter(course => {
       // Level
