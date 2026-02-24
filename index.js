@@ -183,6 +183,11 @@ app.post("/recommend", async (req, res) => {
 
     const weights = computeMacroWeights(answers.priority_1, answers.priority_2, answers.priority_3);
 
+    function clamp(value) {
+      if (value == null || isNaN(value)) return 0;
+      return Math.max(0, Math.min(1, value));
+    }
+
     // --- COUNTRY NORMALIZATION BASE ---
 
     const maxCost = Math.max(...countries.map(c => c.avg_cost_of_living_usd));
