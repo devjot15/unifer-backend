@@ -217,16 +217,9 @@ app.post("/recommend", async (req, res) => {
       return 1 - ((rank - 1) / (maxRank - 1));
     }
 
-    // 4️⃣ SCORE PATHWAYS
-    const pathways = eligibleCourses.map(course => {
-      const university = universities.find(u => u.id === course.university_id);
-      if (!university) return null;
-      const country = countries.find(c => c.id === university.country_id);
-      if (!country) return null;
-
-      // --- COUNTRY SCORE CALCULATION ---
-
+    function computeCountryScore(country, answers, countryMap) {
       const c = countryMap[country.id];
+      if (!c) return 0;
 
       let costWeight = 1;
       let pswWeight = answers.work_permit_importance === "Very strongly (3 years and above)" ? 1 :
@@ -251,11 +244,10 @@ app.post("/recommend", async (req, res) => {
       let totalWeight =
         costWeight + pswWeight + prWeight + govWeight + englishWeight;
 
-      let countryScore = weightedSum / totalWeight;
-      countryScore = clamp(countryScore);
+      return clamp(weightedSum / totalWeight);
+    }
 
-      // COURSE SCORE (real intensity logic)
-
+    function computeCourseScore(course, answers) {
       let courseComponents = [];
       let courseWeights = [];
 
@@ -277,13 +269,13 @@ app.post("/recommend", async (req, res) => {
       courseComponents.push(scholarshipWeight * course.scholarship_level);
       courseWeights.push(scholarshipWeight);
 
-      let courseScore =
+      return clamp(
         courseComponents.reduce((a, b) => a + b, 0) /
-        (courseWeights.reduce((a, b) => a + b, 0) || 1);
-      courseScore = clamp(courseScore);
+        (courseWeights.reduce((a, b) => a + b, 0) || 1)
+      );
+    }
 
-      // UNIVERSITY SCORE
-
+    function computeUniversityScore(university, answers, rankingMap) {
       let locationScore =
         answers.location_preference === "Anywhere in the country"
           ? 1
@@ -308,25 +300,30 @@ app.post("/recommend", async (req, res) => {
 
       const compositeRanking = rankingMap[university.id] || null;
 
-      // Ranking importance weight
       let rankingWeight = 0;
       if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
       if (answers.ranking_importance === "Top and middle institutions are fine") rankingWeight = 0.7;
       if (answers.ranking_importance === "All institution irrespective of ranking") rankingWeight = 0.4;
 
-      // If ranking exists, use it. If not, do NOT penalize.
       let rankingScore = compositeRanking !== null
         ? rankingWeight * compositeRanking
-        : rankingWeight * 0.5; // neutral fallback
+        : rankingWeight * 0.5;
 
-      let universityScore =
-        (
-          locationScore +
-          rankingScore +
-          careerWeight * university.career_services_level +
-          admissionScore
-        ) / 4;
-      universityScore = clamp(universityScore);
+      return clamp(
+        (locationScore + rankingScore + careerWeight * university.career_services_level + admissionScore) / 4
+      );
+    }
+
+    // 4️⃣ SCORE PATHWAYS
+    const pathways = eligibleCourses.map(course => {
+      const university = universities.find(u => u.id === course.university_id);
+      if (!university) return null;
+      const country = countries.find(c => c.id === university.country_id);
+      if (!country) return null;
+
+      let countryScore = computeCountryScore(country, answers, countryMap);
+      let courseScore = computeCourseScore(course, answers);
+      let universityScore = computeUniversityScore(university, answers, rankingMap);
 
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
