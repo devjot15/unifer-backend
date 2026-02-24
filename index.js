@@ -150,6 +150,8 @@ app.post("/recommend", async (req, res) => {
       return true;
     });
 
+    console.log("Eligible courses count:", eligibleCourses.length);
+
     if (eligibleCourses.length === 0) {
       return res.json({ message: "No eligible courses found." });
     }
