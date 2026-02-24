@@ -296,7 +296,7 @@ app.post("/recommend", async (req, res) => {
         "No": 0.3
       };
       let admissionWeight = admissionWeightMap[answers.admission_speed_importance] || 0;
-      let admissionScore = admissionWeight * university.admission_speed_level;
+      let admissionScore = admissionWeight * university.admission_speed_score;
 
       const compositeRanking = rankingMap[university.id] || null;
 
@@ -310,7 +310,7 @@ app.post("/recommend", async (req, res) => {
         : rankingWeight * 0.5;
 
       return clamp(
-        (locationScore + rankingScore + careerWeight * university.career_services_level + admissionScore) / 4
+        (locationScore + rankingScore + careerWeight * university.career_services_score + admissionScore) / 4
       );
     }
 
