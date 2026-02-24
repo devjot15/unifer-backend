@@ -299,7 +299,6 @@ app.post("/recommend", async (req, res) => {
         "No": 0.3
       };
       let admissionWeight = admissionWeightMap[answers.admission_speed_importance] || 0;
-      let admissionScore = admissionWeight * admissionScoreRaw;
 
       const compositeRanking = rankingMap[university.id] ?? 0.5;
 
@@ -308,6 +307,8 @@ app.post("/recommend", async (req, res) => {
 
       let admissionSpeedScore =
         country.admission_speed_baseline * (1 - rankingPenalty);
+
+      let admissionScore = admissionWeight * admissionSpeedScore;
 
       let rankingWeight = 0;
       if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
