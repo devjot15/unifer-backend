@@ -111,6 +111,10 @@ app.post("/recommend", async (req, res) => {
       .from("university_rankings")
       .select("*");
 
+    const { data: countryData } = await supabase
+      .from("country_normalized")
+      .select("*");
+
     const { data: rankingData } = await supabase
       .from("university_composite_ranking")
       .select("id, final_score");
