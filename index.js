@@ -283,6 +283,9 @@ app.post("/recommend", async (req, res) => {
           ? 1
           : 0;
 
+      const careerScore = university.career_services_score ?? 0.5;
+      const admissionScoreRaw = university.admission_speed_score ?? 0.5;
+
       let careerWeightMap = {
         "Very strongly (placement driven institutions)": 1,
         "Moderately (academics driven institutions)": 0.6,
@@ -296,7 +299,7 @@ app.post("/recommend", async (req, res) => {
         "No": 0.3
       };
       let admissionWeight = admissionWeightMap[answers.admission_speed_importance] || 0;
-      let admissionScore = admissionWeight * university.admission_speed_score;
+      let admissionScore = admissionWeight * admissionScoreRaw;
 
       const compositeRanking = rankingMap[university.id] || null;
 
@@ -310,7 +313,7 @@ app.post("/recommend", async (req, res) => {
         : rankingWeight * 0.5;
 
       return clamp(
-        (locationScore + rankingScore + careerWeight * university.career_services_score + admissionScore) / 4
+        (locationScore + rankingScore + careerWeight * careerScore + admissionScore) / 4
       );
     }
 
