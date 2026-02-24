@@ -115,6 +115,11 @@ app.post("/recommend", async (req, res) => {
       .from("university_composite_ranking")
       .select("id, final_score");
 
+    const rankingMap = {};
+    rankingData.forEach(r => {
+      rankingMap[r.id] = r.final_score;
+    });
+
     // 2️⃣ HARD COURSE ELIMINATION
     const eligibleCourses = courses.filter(course => {
       // Level
