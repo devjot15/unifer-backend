@@ -275,7 +275,7 @@ app.post("/recommend", async (req, res) => {
       );
     }
 
-    function computeUniversityScore(university, answers, rankingMap) {
+    function computeUniversityScore(university, country, answers, rankingMap) {
       let locationScore =
         answers.location_preference === "Anywhere in the country"
           ? 1
@@ -301,16 +301,20 @@ app.post("/recommend", async (req, res) => {
       let admissionWeight = admissionWeightMap[answers.admission_speed_importance] || 0;
       let admissionScore = admissionWeight * admissionScoreRaw;
 
-      const compositeRanking = rankingMap[university.id] || null;
+      const compositeRanking = rankingMap[university.id] ?? 0.5;
+
+      let rankingPenalty = compositeRanking * 0.2;
+      // max 20% slowdown for top-ranked universities
+
+      let admissionSpeedScore =
+        country.admission_speed_baseline * (1 - rankingPenalty);
 
       let rankingWeight = 0;
       if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
       if (answers.ranking_importance === "Top and middle institutions are fine") rankingWeight = 0.7;
       if (answers.ranking_importance === "All institution irrespective of ranking") rankingWeight = 0.4;
 
-      let rankingScore = compositeRanking !== null
-        ? rankingWeight * compositeRanking
-        : rankingWeight * 0.5;
+      let rankingScore = rankingWeight * compositeRanking;
 
       return clamp(
         (locationScore + rankingScore + careerWeight * careerScore + admissionScore) / 4
@@ -326,7 +330,7 @@ app.post("/recommend", async (req, res) => {
 
       let countryScore = computeCountryScore(country, answers, countryMap);
       let courseScore = computeCourseScore(course, answers);
-      let universityScore = computeUniversityScore(university, answers, rankingMap);
+      let universityScore = computeUniversityScore(university, country, answers, rankingMap);
 
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
