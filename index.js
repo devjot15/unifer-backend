@@ -429,14 +429,18 @@ app.post("/scrape-program", async (req, res) => {
 
     const html = response.data;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("ingestion.raw_program_pages")
       .insert({
         university_id,
         source_url: program_url,
         raw_html: html,
         parse_status: "pending"
-      });
+      })
+      .select();
+
+    console.log("Insert result:", data);
+    console.log("Insert error:", error);
 
     if (error) {
       return res.status(500).json({ error });
