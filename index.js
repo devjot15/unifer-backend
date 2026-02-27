@@ -618,6 +618,8 @@ ${trimmedText}
 // PARSE BATCH
 // ----------------------
 
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 app.post("/parse-batch", async (req, res) => {
   const limit = req.body.limit || 5;
 
@@ -625,6 +627,7 @@ app.post("/parse-batch", async (req, res) => {
     await fetch("http://localhost:5000/parse-program", {
       method: "POST"
     });
+    await delay(2000);
   }
 
   res.json({ message: `${limit} programs processed` });
