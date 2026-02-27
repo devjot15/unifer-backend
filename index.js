@@ -528,7 +528,8 @@ Fields:
 - program_name
 - degree_level (UG or PG)
 - duration_years (numeric in years)
-- tuition_usd (numeric in USD)
+- tuition_amount (numeric)
+- tuition_currency (e.g. USD, CAD, GBP, EUR, AUD)
 - field_category
 - internship_available (true or false)
 - gre_required (true or false)
@@ -573,7 +574,7 @@ ${trimmedText}
     }
 
     // Basic validation
-    if (!parsed.program_name || !parsed.duration_years || !parsed.tuition_usd) {
+    if (!parsed.program_name || !parsed.duration_years || !parsed.tuition_amount) {
       await supabase
         .schema("ingestion")
         .from("raw_program_pages")
