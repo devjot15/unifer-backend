@@ -589,6 +589,16 @@ ${trimmedHtml}
   }
 });
 
+app.post("/parse-batch", async (req, res) => {
+  const { limit = 5 } = req.body;
+
+  for (let i = 0; i < limit; i++) {
+    await fetch("http://localhost:5000/parse-program", { method: "POST" });
+  }
+
+  res.json({ message: `${limit} programs processed` });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
