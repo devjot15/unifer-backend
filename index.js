@@ -469,6 +469,79 @@ app.post("/scrape-program", async (req, res) => {
   }
 });
 
+app.post("/parse-program", async (req, res) => {
+  try {
+    const { data: rawPages } = await supabase
+      .schema("ingestion")
+      .from("raw_program_pages")
+      .select("*")
+      .eq("parse_status", "pending")
+      .limit(1);
+
+    if (!rawPages || rawPages.length === 0) {
+      return res.json({ message: "No pending pages" });
+    }
+
+    const raw = rawPages[0];
+
+    const trimmedHtml = raw.raw_html.substring(0, 15000);
+
+    const prompt = `
+Extract the following fields from the HTML:
+
+Return STRICT JSON ONLY.
+
+Fields:
+- program_name
+- degree_level (UG or PG)
+- duration_years (numeric in years)
+- tuition_usd (numeric in USD)
+- field_category
+- internship_available (true/false)
+- gre_required (true/false)
+- gmat_required (true/false)
+- scholarship_available (true/false)
+
+HTML:
+${trimmedHtml}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You extract structured academic program data. Return valid JSON only." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+
+    const parsed = JSON.parse(aiResponse);
+
+    await supabase
+      .schema("ingestion")
+      .from("parsed_programs")
+      .insert({
+        university_id: raw.university_id,
+        ...parsed,
+        validation_status: "pending"
+      });
+
+    await supabase
+      .schema("ingestion")
+      .from("raw_program_pages")
+      .update({ parse_status: "parsed" })
+      .eq("id", raw.id);
+
+    res.json({ message: "Program parsed successfully" });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Parsing failed" });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
