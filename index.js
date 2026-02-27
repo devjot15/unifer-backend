@@ -579,12 +579,43 @@ ${trimmedText}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
+    // Fetch country for credit-based duration calculation
+    const { data: uniData } = await supabase
+      .schema("core")
+      .from("universities")
+      .select("country_id")
+      .eq("id", raw.university_id)
+      .limit(1);
+
+    let country = {};
+    if (uniData && uniData.length > 0) {
+      const { data: countryData } = await supabase
+        .schema("core")
+        .from("countries")
+        .select("*")
+        .eq("id", uniData[0].country_id)
+        .limit(1);
+
+      if (countryData && countryData.length > 0) {
+        country = countryData[0];
+      }
+    }
+
     // Duration normalization
     function convertToYears(value, unit) {
       if (!value || !unit) return null;
-      if (unit === "months") return value / 12;
-      if (unit === "years") return value;
-      return null;
+
+      let years = null;
+
+      if (unit.toLowerCase() === "months") {
+        years = value / 12;
+      } else if (unit.toLowerCase() === "years") {
+        years = value;
+      }
+
+      if (!years) return null;
+
+      return Math.round(years * 100) / 100;
     }
 
     let duration_years = null;
@@ -596,9 +627,11 @@ ${trimmedText}
         parsed.official_duration_unit
       );
       duration_confidence = "high";
-    } else if (parsed.total_credits_required) {
-      const creditsPerYear = 30;
-      duration_years = parsed.total_credits_required / creditsPerYear;
+    } else if (parsed.total_credits_required && country.credits_per_year) {
+      const years =
+        parsed.total_credits_required / country.credits_per_year;
+
+      duration_years = Math.round(years * 100) / 100;
       duration_confidence = "high";
     } else if (parsed.completion_time_value) {
       duration_years = convertToYears(
