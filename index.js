@@ -525,8 +525,11 @@ Return STRICT JSON only.
 Fields:
 - program_name
 - degree_level (UG or PG)
-- duration_value (numeric only)
-- duration_unit ("months" or "years")
+- official_duration_value (numeric only, if stated as official full-time duration)
+- official_duration_unit ("months" or "years")
+- total_credits_required (numeric only, if credit-based)
+- completion_time_value (numeric only, if stated as expected completion time)
+- completion_time_unit ("months" or "years")
 - tuition_raw_text (exact fee text from the page, e.g. "$12,500 CAD" or "£9,250")
 - field_category (must be exactly one of the following:
     engineering & tech,
@@ -577,11 +580,32 @@ ${trimmedText}
     }
 
     // Duration normalization
+    function convertToYears(value, unit) {
+      if (!value || !unit) return null;
+      if (unit === "months") return value / 12;
+      if (unit === "years") return value;
+      return null;
+    }
+
     let duration_years = null;
-    if (parsed.duration_unit === "months") {
-      duration_years = parsed.duration_value / 12;
-    } else if (parsed.duration_unit === "years") {
-      duration_years = parsed.duration_value;
+    let duration_confidence = "low";
+
+    if (parsed.official_duration_value) {
+      duration_years = convertToYears(
+        parsed.official_duration_value,
+        parsed.official_duration_unit
+      );
+      duration_confidence = "high";
+    } else if (parsed.total_credits_required) {
+      const creditsPerYear = 30;
+      duration_years = parsed.total_credits_required / creditsPerYear;
+      duration_confidence = "high";
+    } else if (parsed.completion_time_value) {
+      duration_years = convertToYears(
+        parsed.completion_time_value,
+        parsed.completion_time_unit
+      );
+      duration_confidence = "medium";
     }
 
     // Tuition parsing from raw text
@@ -626,8 +650,12 @@ ${trimmedText}
         tuition_raw_text: parsed.tuition_raw_text,
         tuition_amount,
         tuition_currency,
-        duration_value: parsed.duration_value,
-        duration_unit: parsed.duration_unit,
+        official_duration_value: parsed.official_duration_value,
+        official_duration_unit: parsed.official_duration_unit,
+        total_credits_required: parsed.total_credits_required,
+        completion_time_value: parsed.completion_time_value,
+        completion_time_unit: parsed.completion_time_unit,
+        duration_confidence,
         field_category: parsed.field_category,
         internship_available: parsed.internship_available,
         gre_required: parsed.gre_required,
