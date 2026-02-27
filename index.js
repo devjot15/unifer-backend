@@ -527,7 +527,8 @@ Return STRICT JSON only. No markdown. No explanation.
 Fields:
 - program_name
 - degree_level (UG or PG)
-- duration_years (numeric in years)
+- duration_value (numeric)
+- duration_unit (months or years)
 - tuition_amount (numeric)
 - tuition_currency (e.g. USD, CAD, GBP, EUR, AUD)
 - field_category
@@ -574,7 +575,7 @@ ${trimmedText}
     }
 
     // Basic validation
-    if (!parsed.program_name || !parsed.duration_years || !parsed.tuition_amount) {
+    if (!parsed.program_name || !parsed.duration_value || !parsed.tuition_amount) {
       await supabase
         .schema("ingestion")
         .from("raw_program_pages")
@@ -582,6 +583,15 @@ ${trimmedText}
         .eq("id", raw.id);
 
       return res.status(400).json({ error: "Missing critical fields" });
+    }
+
+    // Convert duration to years
+    let duration_years;
+
+    if (parsed.duration_unit === "months") {
+      duration_years = parsed.duration_value / 12;
+    } else {
+      duration_years = parsed.duration_value;
     }
 
     // Convert tuition to USD
@@ -610,6 +620,7 @@ ${trimmedText}
       .insert({
         university_id: raw.university_id,
         ...parsed,
+        duration_years,
         tuition_usd,
         validation_status: "pending"
       });
