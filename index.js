@@ -584,6 +584,18 @@ ${trimmedText}
       return res.status(400).json({ error: "Missing critical fields" });
     }
 
+    // Convert tuition to USD
+    const exchangeRates = {
+      CAD: 0.74,
+      GBP: 1.27,
+      AUD: 0.66,
+      EUR: 1.08,
+      USD: 1
+    };
+
+    const rate = exchangeRates[parsed.tuition_currency] || 1;
+    const tuition_usd = parsed.tuition_amount * rate;
+
     // Confidence score
     let confidence = 1;
     if (!parsed.field_category) confidence -= 0.1;
@@ -598,6 +610,7 @@ ${trimmedText}
       .insert({
         university_id: raw.university_id,
         ...parsed,
+        tuition_usd,
         validation_status: "pending"
       });
 
