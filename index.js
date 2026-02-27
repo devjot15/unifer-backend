@@ -430,7 +430,8 @@ app.post("/scrape-program", async (req, res) => {
     const html = response.data;
 
     const { data, error } = await supabase
-      .from("ingestion.raw_program_pages")
+      .schema("ingestion")
+      .from("raw_program_pages")
       .insert({
         university_id,
         source_url: program_url,
@@ -452,7 +453,8 @@ app.post("/scrape-program", async (req, res) => {
     console.error(err);
 
     await supabase
-      .from("ingestion.scrape_logs")
+      .schema("ingestion")
+      .from("scrape_logs")
       .insert({
         status: "failed",
         error_message: err.message
