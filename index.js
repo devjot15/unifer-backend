@@ -592,11 +592,17 @@ ${trimmedText}
   }
 });
 
+// ----------------------
+// PARSE BATCH
+// ----------------------
+
 app.post("/parse-batch", async (req, res) => {
-  const { limit = 5 } = req.body;
+  const limit = req.body.limit || 5;
 
   for (let i = 0; i < limit; i++) {
-    await fetch("http://localhost:5000/parse-program", { method: "POST" });
+    await fetch("http://localhost:5000/parse-program", {
+      method: "POST"
+    });
   }
 
   res.json({ message: `${limit} programs processed` });
