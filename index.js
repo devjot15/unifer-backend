@@ -499,7 +499,6 @@ app.post("/scrape-program", async (req, res) => {
 app.post("/parse-program", async (req, res) => {
   try {
 
-    // Fetch one pending page
     const { data: rawPages } = await supabase
       .schema("ingestion")
       .from("raw_program_pages")
@@ -513,25 +512,34 @@ app.post("/parse-program", async (req, res) => {
 
     const raw = rawPages[0];
 
-    // Clean HTML
     const $ = cheerio.load(raw.raw_html);
     $("script, style, noscript").remove();
     const cleanText = $("body").text().replace(/\s+/g, " ").trim();
     const trimmedText = cleanText.substring(0, 8000);
 
     const prompt = `
-Extract the following fields from the content.
+Extract the following fields.
 
-Return STRICT JSON only. No markdown. No explanation.
+Return STRICT JSON only.
 
 Fields:
 - program_name
 - degree_level (UG or PG)
-- duration_value (numeric)
-- duration_unit (months or years)
-- tuition_amount (numeric)
-- tuition_currency (e.g. USD, CAD, GBP, EUR, AUD)
-- field_category
+- duration_value (numeric only)
+- duration_unit ("months" or "years")
+- tuition_amount (numeric only)
+- tuition_currency (CAD, USD, GBP, AUD, EUR etc.)
+- field_category (must be exactly one of the following:
+    engineering & tech,
+    business, management and economics,
+    science & applied science,
+    medicine, health and life science,
+    social science & humanities,
+    arts, design & creative studies,
+    law, public policy & governance,
+    hospitality, tourism & service industry,
+    education & teaching,
+    agriculture, sustainability & environmental studies)
 - internship_available (true or false)
 - gre_required (true or false)
 - gmat_required (true or false)
@@ -550,10 +558,7 @@ ${trimmedText}
       temperature: 0
     });
 
-    let aiResponse = completion.choices[0].message.content;
-
-    // Clean markdown if present
-    aiResponse = aiResponse
+    let aiResponse = completion.choices[0].message.content
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
@@ -563,8 +568,6 @@ ${trimmedText}
     try {
       parsed = JSON.parse(aiResponse);
     } catch (err) {
-      console.error("JSON parse error:", err);
-
       await supabase
         .schema("ingestion")
         .from("raw_program_pages")
@@ -574,27 +577,15 @@ ${trimmedText}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
-    // Basic validation
-    if (!parsed.program_name || !parsed.duration_value || !parsed.tuition_amount) {
-      await supabase
-        .schema("ingestion")
-        .from("raw_program_pages")
-        .update({ parse_status: "failed" })
-        .eq("id", raw.id);
-
-      return res.status(400).json({ error: "Missing critical fields" });
-    }
-
-    // Convert duration to years
-    let duration_years;
-
+    // Duration normalization
+    let duration_years = null;
     if (parsed.duration_unit === "months") {
       duration_years = parsed.duration_value / 12;
-    } else {
+    } else if (parsed.duration_unit === "years") {
       duration_years = parsed.duration_value;
     }
 
-    // Convert tuition to USD
+    // Currency normalization
     const exchangeRates = {
       CAD: 0.74,
       GBP: 1.27,
@@ -606,30 +597,32 @@ ${trimmedText}
     const rate = exchangeRates[parsed.tuition_currency] || 1;
     const tuition_usd = parsed.tuition_amount * rate;
 
-    // Confidence score
-    let confidence = 1;
-    if (!parsed.field_category) confidence -= 0.1;
-    if (!parsed.internship_available) confidence -= 0.05;
-    if (!parsed.scholarship_available) confidence -= 0.05;
-    confidence = Math.max(confidence, 0.6);
-
     // Insert parsed data
     await supabase
       .schema("ingestion")
       .from("parsed_programs")
       .insert({
         university_id: raw.university_id,
-        ...parsed,
+        program_name: parsed.program_name,
+        degree_level: parsed.degree_level,
         duration_years,
         tuition_usd,
+        tuition_amount: parsed.tuition_amount,
+        tuition_currency: parsed.tuition_currency,
+        duration_value: parsed.duration_value,
+        duration_unit: parsed.duration_unit,
+        field_category: parsed.field_category,
+        internship_available: parsed.internship_available,
+        gre_required: parsed.gre_required,
+        gmat_required: parsed.gmat_required,
+        scholarship_available: parsed.scholarship_available,
         validation_status: "pending"
       });
 
-    // Update raw status
     await supabase
       .schema("ingestion")
       .from("raw_program_pages")
-      .update({ parse_status: "parsed", confidence_score: confidence })
+      .update({ parse_status: "parsed" })
       .eq("id", raw.id);
 
     res.json({ message: "Program parsed successfully" });
