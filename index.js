@@ -418,54 +418,76 @@ app.post("/recommend", async (req, res) => {
   }
 });
 
-// ----------------------
-// SCRAPE PROGRAM
-// ----------------------
+// --------------------------------------
+// SCRAPE PROGRAM PAGE
+// --------------------------------------
 
 app.post("/scrape-program", async (req, res) => {
   try {
     const { university_id, program_url } = req.body;
 
     if (!university_id || !program_url) {
-      return res.status(400).json({ error: "Missing parameters" });
+      return res.status(400).json({
+        error: "university_id and program_url are required"
+      });
     }
 
+    console.log("Scraping:", program_url);
+
+    // Fetch page
     const response = await axios.get(program_url, {
-      headers: { "User-Agent": "Mozilla/5.0" }
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)"
+      },
+      timeout: 15000
     });
 
     const html = response.data;
 
-    const { error } = await supabase
+    if (!html || html.length < 1000) {
+      return res.status(400).json({
+        error: "Page content too small or invalid"
+      });
+    }
+
+    // Insert raw HTML into ingestion schema
+    const { data, error } = await supabase
       .schema("ingestion")
       .from("raw_program_pages")
       .insert({
-        university_id,
+        university_id: university_id,
         source_url: program_url,
         raw_html: html,
         parse_status: "pending"
-      });
+      })
+      .select();
 
     if (error) {
-      console.error(error);
+      console.error("Insert error:", error);
       return res.status(500).json({ error });
     }
 
-    res.json({ message: "Page scraped and stored successfully" });
+    res.json({
+      message: "Program page scraped successfully",
+      inserted_id: data[0].id
+    });
 
   } catch (err) {
-    console.error(err);
+    console.error("Scrape failed:", err.message);
 
     await supabase
       .schema("ingestion")
       .from("scrape_logs")
       .insert({
-        university_id: req.body.university_id,
+        university_id: req.body.university_id || null,
         status: "failed",
         error_message: err.message
       });
 
-    res.status(500).json({ error: "Scraping failed" });
+    res.status(500).json({
+      error: "Scraping failed",
+      details: err.message
+    });
   }
 });
 
