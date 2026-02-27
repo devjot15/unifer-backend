@@ -547,6 +547,16 @@ ${trimmedHtml}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
+    if (!parsed.program_name || !parsed.duration_years || !parsed.tuition_usd) {
+      await supabase
+        .schema("ingestion")
+        .from("raw_program_pages")
+        .update({ parse_status: "failed" })
+        .eq("id", raw.id);
+
+      return res.status(400).json({ error: "Missing critical fields" });
+    }
+
     await supabase
       .schema("ingestion")
       .from("parsed_programs")
