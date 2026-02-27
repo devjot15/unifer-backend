@@ -595,7 +595,7 @@ ${trimmedText}
     };
 
     const rate = exchangeRates[parsed.tuition_currency] || 1;
-    const tuition_usd = parsed.tuition_amount * rate;
+    const tuition_usd = Math.round(parsed.tuition_amount * rate * 100) / 100;
 
     // Insert parsed data
     await supabase
