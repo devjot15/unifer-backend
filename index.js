@@ -418,6 +418,10 @@ app.post("/recommend", async (req, res) => {
   }
 });
 
+// ----------------------
+// SCRAPE PROGRAM
+// ----------------------
+
 app.post("/scrape-program", async (req, res) => {
   try {
     const { university_id, program_url } = req.body;
@@ -427,14 +431,12 @@ app.post("/scrape-program", async (req, res) => {
     }
 
     const response = await axios.get(program_url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
+      headers: { "User-Agent": "Mozilla/5.0" }
     });
 
     const html = response.data;
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .schema("ingestion")
       .from("raw_program_pages")
       .insert({
@@ -442,13 +444,10 @@ app.post("/scrape-program", async (req, res) => {
         source_url: program_url,
         raw_html: html,
         parse_status: "pending"
-      })
-      .select();
-
-    console.log("Insert result:", data);
-    console.log("Insert error:", error);
+      });
 
     if (error) {
+      console.error(error);
       return res.status(500).json({ error });
     }
 
@@ -461,6 +460,7 @@ app.post("/scrape-program", async (req, res) => {
       .schema("ingestion")
       .from("scrape_logs")
       .insert({
+        university_id: req.body.university_id,
         status: "failed",
         error_message: err.message
       });

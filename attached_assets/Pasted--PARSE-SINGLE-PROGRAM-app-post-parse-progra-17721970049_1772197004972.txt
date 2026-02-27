@@ -1,0 +1,122 @@
+// ----------------------
+// PARSE SINGLE PROGRAM
+// ----------------------
+
+app.post("/parse-program", async (req, res) => {
+  try {
+
+    // Fetch one pending page
+    const { data: rawPages } = await supabase
+      .schema("ingestion")
+      .from("raw_program_pages")
+      .select("*")
+      .eq("parse_status", "pending")
+      .limit(1);
+
+    if (!rawPages || rawPages.length === 0) {
+      return res.json({ message: "No pending pages" });
+    }
+
+    const raw = rawPages[0];
+
+    // Clean HTML
+    const $ = cheerio.load(raw.raw_html);
+    $("script, style, noscript").remove();
+    const cleanText = $("body").text().replace(/\s+/g, " ").trim();
+    const trimmedText = cleanText.substring(0, 8000);
+
+    const prompt = `
+Extract the following fields from the content.
+
+Return STRICT JSON only. No markdown. No explanation.
+
+Fields:
+- program_name
+- degree_level (UG or PG)
+- duration_years (numeric in years)
+- tuition_usd (numeric in USD)
+- field_category
+- internship_available (true or false)
+- gre_required (true or false)
+- gmat_required (true or false)
+- scholarship_available (true or false)
+
+Content:
+${trimmedText}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You extract structured academic program data. Return valid JSON only." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0
+    });
+
+    let aiResponse = completion.choices[0].message.content;
+
+    // Clean markdown if present
+    aiResponse = aiResponse
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(aiResponse);
+    } catch (err) {
+      console.error("JSON parse error:", err);
+
+      await supabase
+        .schema("ingestion")
+        .from("raw_program_pages")
+        .update({ parse_status: "failed" })
+        .eq("id", raw.id);
+
+      return res.status(400).json({ error: "Invalid JSON from AI" });
+    }
+
+    // Basic validation
+    if (!parsed.program_name || !parsed.duration_years || !parsed.tuition_usd) {
+      await supabase
+        .schema("ingestion")
+        .from("raw_program_pages")
+        .update({ parse_status: "failed" })
+        .eq("id", raw.id);
+
+      return res.status(400).json({ error: "Missing critical fields" });
+    }
+
+    // Confidence score
+    let confidence = 1;
+    if (!parsed.field_category) confidence -= 0.1;
+    if (!parsed.internship_available) confidence -= 0.05;
+    if (!parsed.scholarship_available) confidence -= 0.05;
+    confidence = Math.max(confidence, 0.6);
+
+    // Insert parsed data
+    await supabase
+      .schema("ingestion")
+      .from("parsed_programs")
+      .insert({
+        university_id: raw.university_id,
+        ...parsed,
+        validation_status: "pending"
+      });
+
+    // Update raw status
+    await supabase
+      .schema("ingestion")
+      .from("raw_program_pages")
+      .update({ parse_status: "parsed", confidence_score: confidence })
+      .eq("id", raw.id);
+
+    res.json({ message: "Program parsed successfully" });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Parsing failed" });
+  }
+});
