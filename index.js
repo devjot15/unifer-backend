@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
+const cheerio = require("cheerio");
 const { createClient } = require("@supabase/supabase-js");
 const OpenAI = require("openai");
 
