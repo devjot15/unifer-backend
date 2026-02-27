@@ -469,8 +469,14 @@ app.post("/scrape-program", async (req, res) => {
   }
 });
 
+// ----------------------
+// PARSE SINGLE PROGRAM
+// ----------------------
+
 app.post("/parse-program", async (req, res) => {
   try {
+
+    // Fetch one pending page
     const { data: rawPages } = await supabase
       .schema("ingestion")
       .from("raw_program_pages")
@@ -484,21 +490,16 @@ app.post("/parse-program", async (req, res) => {
 
     const raw = rawPages[0];
 
-    const cheerio = require("cheerio");
+    // Clean HTML
     const $ = cheerio.load(raw.raw_html);
-
-    // Remove scripts and styles
     $("script, style, noscript").remove();
-
     const cleanText = $("body").text().replace(/\s+/g, " ").trim();
-
-    // Limit size
-    const trimmedHtml = cleanText.substring(0, 8000);
+    const trimmedText = cleanText.substring(0, 8000);
 
     const prompt = `
-Extract the following fields from the HTML:
+Extract the following fields from the content.
 
-Return STRICT JSON ONLY.
+Return STRICT JSON only. No markdown. No explanation.
 
 Fields:
 - program_name
@@ -506,13 +507,13 @@ Fields:
 - duration_years (numeric in years)
 - tuition_usd (numeric in USD)
 - field_category
-- internship_available (true/false)
-- gre_required (true/false)
-- gmat_required (true/false)
-- scholarship_available (true/false)
+- internship_available (true or false)
+- gre_required (true or false)
+- gmat_required (true or false)
+- scholarship_available (true or false)
 
-HTML:
-${trimmedHtml}
+Content:
+${trimmedText}
 `;
 
     const completion = await openai.chat.completions.create({
@@ -526,10 +527,11 @@ ${trimmedHtml}
 
     let aiResponse = completion.choices[0].message.content;
 
-    // Remove markdown formatting if present
-    aiResponse = aiResponse.replace(/```json/g, "")
-                           .replace(/```/g, "")
-                           .trim();
+    // Clean markdown if present
+    aiResponse = aiResponse
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
 
     let parsed;
 
@@ -547,14 +549,7 @@ ${trimmedHtml}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
-    let confidence = 1;
-
-    if (!parsed.internship_available) confidence -= 0.05;
-    if (!parsed.scholarship_available) confidence -= 0.05;
-    if (!parsed.field_category) confidence -= 0.1;
-
-    confidence = Math.max(confidence, 0.6);
-
+    // Basic validation
     if (!parsed.program_name || !parsed.duration_years || !parsed.tuition_usd) {
       await supabase
         .schema("ingestion")
@@ -565,20 +560,28 @@ ${trimmedHtml}
       return res.status(400).json({ error: "Missing critical fields" });
     }
 
+    // Confidence score
+    let confidence = 1;
+    if (!parsed.field_category) confidence -= 0.1;
+    if (!parsed.internship_available) confidence -= 0.05;
+    if (!parsed.scholarship_available) confidence -= 0.05;
+    confidence = Math.max(confidence, 0.6);
+
+    // Insert parsed data
     await supabase
       .schema("ingestion")
       .from("parsed_programs")
       .insert({
         university_id: raw.university_id,
         ...parsed,
-        confidence_score: confidence,
         validation_status: "pending"
       });
 
+    // Update raw status
     await supabase
       .schema("ingestion")
       .from("raw_program_pages")
-      .update({ parse_status: "parsed" })
+      .update({ parse_status: "parsed", confidence_score: confidence })
       .eq("id", raw.id);
 
     res.json({ message: "Program parsed successfully" });
