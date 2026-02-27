@@ -527,8 +527,7 @@ Fields:
 - degree_level (UG or PG)
 - duration_value (numeric only)
 - duration_unit ("months" or "years")
-- tuition_amount (numeric only)
-- tuition_currency (CAD, USD, GBP, AUD, EUR etc.)
+- tuition_raw_text (exact fee text from the page, e.g. "$12,500 CAD" or "£9,250")
 - field_category (must be exactly one of the following:
     engineering & tech,
     business, management and economics,
@@ -585,6 +584,23 @@ ${trimmedText}
       duration_years = parsed.duration_value;
     }
 
+    // Tuition parsing from raw text
+    const rawFeeText = parsed.tuition_raw_text;
+
+    let tuition_amount = null;
+    let tuition_currency = null;
+
+    const match = rawFeeText.match(/([\$£€]|CAD|USD|AUD|GBP)?\s?([\d,]+(\.\d+)?)/i);
+
+    if (match) {
+      tuition_amount = parseFloat(match[2].replace(/,/g, ""));
+
+      if (rawFeeText.includes("CAD")) tuition_currency = "CAD";
+      else if (rawFeeText.includes("USD") || rawFeeText.includes("$")) tuition_currency = "USD";
+      else if (rawFeeText.includes("£")) tuition_currency = "GBP";
+      else if (rawFeeText.includes("€")) tuition_currency = "EUR";
+    }
+
     // Currency normalization
     const exchangeRates = {
       CAD: 0.74,
@@ -594,8 +610,8 @@ ${trimmedText}
       USD: 1
     };
 
-    const rate = exchangeRates[parsed.tuition_currency] || 1;
-    const tuition_usd = Math.round(parsed.tuition_amount * rate * 100) / 100;
+    const rate = exchangeRates[tuition_currency] || 1;
+    const tuition_usd = tuition_amount ? Math.round(tuition_amount * rate * 100) / 100 : null;
 
     // Insert parsed data
     await supabase
@@ -607,8 +623,9 @@ ${trimmedText}
         degree_level: parsed.degree_level,
         duration_years,
         tuition_usd,
-        tuition_amount: parsed.tuition_amount,
-        tuition_currency: parsed.tuition_currency,
+        tuition_raw_text: parsed.tuition_raw_text,
+        tuition_amount,
+        tuition_currency,
         duration_value: parsed.duration_value,
         duration_unit: parsed.duration_unit,
         field_category: parsed.field_category,
