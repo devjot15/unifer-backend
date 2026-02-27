@@ -525,9 +525,27 @@ ${trimmedHtml}
     });
 
     let aiResponse = completion.choices[0].message.content;
-    aiResponse = aiResponse.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
 
-    const parsed = JSON.parse(aiResponse);
+    // Remove markdown formatting if present
+    aiResponse = aiResponse.replace(/```json/g, "")
+                           .replace(/```/g, "")
+                           .trim();
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(aiResponse);
+    } catch (err) {
+      console.error("JSON parse error:", err);
+
+      await supabase
+        .schema("ingestion")
+        .from("raw_program_pages")
+        .update({ parse_status: "failed" })
+        .eq("id", raw.id);
+
+      return res.status(400).json({ error: "Invalid JSON from AI" });
+    }
 
     await supabase
       .schema("ingestion")
