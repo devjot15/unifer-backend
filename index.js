@@ -484,7 +484,16 @@ app.post("/parse-program", async (req, res) => {
 
     const raw = rawPages[0];
 
-    const trimmedHtml = raw.raw_html.substring(0, 15000);
+    const cheerio = require("cheerio");
+    const $ = cheerio.load(raw.raw_html);
+
+    // Remove scripts and styles
+    $("script, style, noscript").remove();
+
+    const cleanText = $("body").text().replace(/\s+/g, " ").trim();
+
+    // Limit size
+    const trimmedHtml = cleanText.substring(0, 8000);
 
     const prompt = `
 Extract the following fields from the HTML:
