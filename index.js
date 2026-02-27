@@ -547,6 +547,14 @@ ${trimmedHtml}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
+    let confidence = 1;
+
+    if (!parsed.internship_available) confidence -= 0.05;
+    if (!parsed.scholarship_available) confidence -= 0.05;
+    if (!parsed.field_category) confidence -= 0.1;
+
+    confidence = Math.max(confidence, 0.6);
+
     if (!parsed.program_name || !parsed.duration_years || !parsed.tuition_usd) {
       await supabase
         .schema("ingestion")
@@ -563,6 +571,7 @@ ${trimmedHtml}
       .insert({
         university_id: raw.university_id,
         ...parsed,
+        confidence_score: confidence,
         validation_status: "pending"
       });
 
