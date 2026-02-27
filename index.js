@@ -524,7 +524,8 @@ ${trimmedHtml}
       temperature: 0
     });
 
-    const aiResponse = completion.choices[0].message.content;
+    let aiResponse = completion.choices[0].message.content;
+    aiResponse = aiResponse.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
 
     const parsed = JSON.parse(aiResponse);
 
