@@ -22,7 +22,7 @@ app.get("/", (req, res) => {
 // Test route to fetch countries
 app.get("/countries", async (req, res) => {
   const { data, error } = await supabase
-    .from("countries")
+    .schema("core").from("countries")
     .select("*");
 
   if (error) {
@@ -35,9 +35,9 @@ app.get("/countries", async (req, res) => {
 app.get("/seed", async (req, res) => {
   try {
     // Clear existing data (order matters due to foreign keys)
-    await supabase.from("courses").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    await supabase.from("universities").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    await supabase.from("countries").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.schema("core").from("courses").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.schema("core").from("universities").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.schema("core").from("countries").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 
     const countriesData = [
       { name: "Canada", cost_of_living_band: "20-30K", work_permit_level: 0.9, english_first_language: true, government_support_level: 0.8, pr_opportunity_level: 0.9 },
@@ -47,13 +47,13 @@ app.get("/seed", async (req, res) => {
       { name: "Ireland", cost_of_living_band: "20-30K", work_permit_level: 0.8, english_first_language: true, government_support_level: 0.7, pr_opportunity_level: 0.6 }
     ];
 
-    const { data: countries, error: countriesError } = await supabase.from("countries").insert(countriesData).select();
+    const { data: countries, error: countriesError } = await supabase.schema("core").from("countries").insert(countriesData).select();
     if (countriesError) throw countriesError;
 
     for (let country of countries) {
       for (let i = 1; i <= 5; i++) {
         const { data: university, error: uniError } = await supabase
-          .from("universities")
+          .schema("core").from("universities")
           .insert({
             name: `${country.name} University ${i}`,
             country_id: country.id,
@@ -69,7 +69,7 @@ app.get("/seed", async (req, res) => {
         if (!university) continue;
 
         for (let j = 1; j <= 10; j++) {
-          const { error: courseError } = await supabase.from("courses").insert({
+          const { error: courseError } = await supabase.schema("core").from("courses").insert({
             name: `Course ${j}`,
             university_id: university.id,
             level: j % 2 === 0 ? "UG" : "PG",
@@ -100,16 +100,16 @@ app.post("/recommend", async (req, res) => {
     const answers = req.body;
 
     // 1️⃣ Fetch all data
-    const { data: countries } = await supabase.from("countries").select("*");
-    const { data: universities } = await supabase.from("universities").select("*");
-    const { data: courses } = await supabase.from("courses").select("*");
+    const { data: countries } = await supabase.schema("core").from("countries").select("*");
+    const { data: universities } = await supabase.schema("core").from("universities").select("*");
+    const { data: courses } = await supabase.schema("core").from("courses").select("*");
 
     const { data: rankingSystems } = await supabase
       .from("ranking_systems")
       .select("*");
 
     const { data: universityRankings } = await supabase
-      .from("university_rankings")
+      .schema("rankings").from("university_rankings")
       .select("*");
 
     const { data: countryData } = await supabase
