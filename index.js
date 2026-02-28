@@ -117,9 +117,17 @@ app.post("/recommend", async (req, res) => {
     const answers = req.body;
 
     // 1️⃣ Fetch all data
-    const { data: countries } = await supabase.schema("core").from("countries").select("*");
-    const { data: universities } = await supabase.schema("core").from("universities").select("*");
-    const { data: courses } = await supabase.schema("core").from("courses").select("*");
+    const { data: countries, error: cErr } = await supabase.schema("core").from("countries").select("*");
+    const { data: universities, error: uErr } = await supabase.schema("core").from("universities").select("*");
+    const { data: courses, error: coErr } = await supabase.schema("core").from("courses").select("*");
+
+    if (cErr) console.error("Countries fetch error:", cErr.message);
+    if (uErr) console.error("Universities fetch error:", uErr.message);
+    if (coErr) console.error("Courses fetch error:", coErr.message);
+
+    if (!countries || !universities || !courses) {
+      return res.status(500).json({ error: "Failed to fetch core data. The 'core' schema may not be exposed in Supabase API settings." });
+    }
 
     const { data: rankingSystems } = await supabase
       .from("ranking_systems")
@@ -139,14 +147,18 @@ app.post("/recommend", async (req, res) => {
       .select("id, final_score");
 
     const rankingMap = {};
-    rankingData.forEach(r => {
-      rankingMap[r.id] = r.final_score;
-    });
+    if (rankingData) {
+      rankingData.forEach(r => {
+        rankingMap[r.id] = r.final_score;
+      });
+    }
 
     const countryMap = {};
-    countryData.forEach(c => {
-      countryMap[c.id] = c;
-    });
+    if (countryData) {
+      countryData.forEach(c => {
+        countryMap[c.id] = c;
+      });
+    }
 
     // 2️⃣ HARD COURSE ELIMINATION
     const eligibleCourses = courses.filter(course => {
