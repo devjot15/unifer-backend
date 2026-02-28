@@ -590,27 +590,14 @@ ${trimmedText}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
-    // Fetch country for credit-based duration calculation
-    const { data: uniData } = await supabase
+    const { data: university } = await supabase
       .schema("core")
       .from("universities")
-      .select("country_id")
+      .select("*, countries(*)")
       .eq("id", raw.university_id)
-      .limit(1);
+      .single();
 
-    let country = {};
-    if (uniData && uniData.length > 0) {
-      const { data: countryData } = await supabase
-        .schema("core")
-        .from("countries")
-        .select("*")
-        .eq("id", uniData[0].country_id)
-        .limit(1);
-
-      if (countryData && countryData.length > 0) {
-        country = countryData[0];
-      }
-    }
+    const country = university.countries;
 
     // Duration normalization
     function convertToYears(value, unit) {
