@@ -590,19 +590,21 @@ ${trimmedText}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
-    const { data: university, error: uniError } = await supabase
-      .schema("core")
-      .from("universities")
-      .select("*, countries(*)")
-      .eq("id", raw.university_id)
-      .single();
+    let country = {};
+    try {
+      const { data: university } = await supabase
+        .schema("core")
+        .from("universities")
+        .select("*, countries(*)")
+        .eq("id", raw.university_id)
+        .single();
 
-    if (uniError || !university) {
-      console.error("University lookup failed:", uniError);
-      return res.status(400).json({ error: "University not found" });
+      if (university && university.countries) {
+        country = university.countries;
+      }
+    } catch (e) {
+      console.error("Country lookup skipped:", e.message);
     }
-
-    const country = university.countries || {};
 
     // Duration normalization
     function convertToYears(value, unit) {
