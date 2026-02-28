@@ -161,28 +161,47 @@ app.post("/recommend", async (req, res) => {
     }
 
     // 2️⃣ HARD COURSE ELIMINATION
+    // Numerical tuition bounds from user selection
+    const tuitionBounds = {
+      "Less than $12k":   { min: 0,     max: 12000 },
+      "$12k - $25k":      { min: 12000, max: 25000 },
+      "More than $25K":   { min: 25000, max: 999999 }
+    };
+    const tuitionRange = tuitionBounds[answers.tuition_band] || { min: 0, max: 999999 };
+
+    // Numerical duration bounds from user selection
+    const durationBounds = {
+      "1 year or less":    { min: 0,   max: 1 },
+      "More than 1 year":  { min: 1,   max: 99 },
+      "3 years or less":   { min: 0,   max: 3 },
+      "More than 3 years": { min: 3,   max: 99 }
+    };
+    const durationRange = durationBounds[answers.duration] || { min: 0, max: 99 };
+
     const eligibleCourses = courses.filter(course => {
-      // Level
-      if (course.level !== answers.level) return false;
+      // Degree level
+      if (course.degree_level !== answers.level) return false;
 
-      // Duration
-      if (course.duration_category !== answers.duration) return false;
+      // Duration — numerical comparison
+      if (course.duration_years == null) return false;
+      if (course.duration_years < durationRange.min ||
+          course.duration_years > durationRange.max) return false;
 
-      // Tuition band
-      if (course.tuition_band !== answers.tuition_band) return false;
+      // Tuition — numerical comparison
+      if (course.tuition_usd == null) return false;
+      if (course.tuition_usd < tuitionRange.min ||
+          course.tuition_usd > tuitionRange.max) return false;
 
       // Field
       if (course.field_category !== answers.field) return false;
 
-      // GRE/GMAT filter
+      // GRE/GMAT
       if (answers.gre_filter === "Without GRE or GMAT") {
         if (course.gre_required || course.gmat_required) return false;
       }
-
       if (answers.gre_filter === "Without GRE") {
         if (course.gre_required) return false;
       }
-
       if (answers.gre_filter === "Without GMAT") {
         if (course.gmat_required) return false;
       }
