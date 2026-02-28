@@ -591,6 +591,7 @@ ${trimmedText}
     }
 
     const { data: university, error: uniError } = await supabase
+      .schema("core")
       .from("universities")
       .select("*, countries(*)")
       .eq("id", raw.university_id)
