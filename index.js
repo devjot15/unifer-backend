@@ -75,9 +75,9 @@ app.get("/seed", async (req, res) => {
             name: `${country.name} University ${i}`,
             country_id: country.id,
             location_type: i % 2 === 0 ? "Main city" : "Smaller cities",
-            ranking_level: Math.random(),
-            career_services_level: Math.random(),
-            admission_speed_level: Math.random()
+            ranking_score: Math.random(),
+            career_services_score: 0.5,
+            admission_speed_score: 0.5
           })
           .select()
           .single();
