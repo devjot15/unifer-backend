@@ -401,45 +401,36 @@ app.post("/recommend", async (req, res) => {
 
       const explanation = [];
 
-      // COUNTRY EXPLANATION (relative logic)
+      if (countryScore >= 0.7) explanation.push("Strong country match based on your living and work preferences");
+      else if (countryScore >= 0.4) explanation.push("Moderate country alignment with your preferences");
 
-      if (answers.pr_importance === "Very strongly") {
-        explanation.push("Permanent residency opportunity aligns with your priority");
+      if (answers.pr_importance === "Very strongly" && country.pr_pathway_clarity_score >= 0.7) {
+        explanation.push("Strong permanent residency pathway available");
       }
 
-      if (answers.work_permit_importance.includes("Very strongly")) {
-        explanation.push("Post-study work duration supports your long-term plan");
+      if (answers.english_preference === "Yes" && country.english_primary_language) {
+        explanation.push("English-speaking country matches your preference");
       }
 
-      if (answers.english_preference === "Yes" && country.english_first_language) {
-        explanation.push("English-speaking country preference satisfied");
+      if (answers.work_permit_importance.includes("Very strongly") && country.post_study_work_years >= 3) {
+        explanation.push("Post-study work permit of 3+ years available");
       }
-
-      // COURSE EXPLANATION
 
       if (course.internship_available && answers.internship_importance !== "Don’t care") {
-        explanation.push("Includes internship component as preferred");
+        explanation.push("Includes internship as part of the curriculum");
       }
 
-      if (answers.scholarship_importance.includes("Very strongly")) {
-        explanation.push("Scholarship availability considered in scoring");
+      if (courseScore >= 0.7) explanation.push("Strong course alignment with your academic preferences");
+      else if (courseScore >= 0.4) explanation.push("Reasonable course fit based on your priorities");
+
+      if (universityScore >= 0.7) explanation.push("Institution scores well on ranking, location, and services");
+      else if (universityScore >= 0.4) explanation.push("Institution meets your core university preferences");
+
+      if (answers.location_preference !== "Anywhere in the country" &&
+          university.location_type === answers.location_preference) {
+        explanation.push("Campus location matches your " + answers.location_preference.toLowerCase() + " preference");
       }
 
-      // UNIVERSITY EXPLANATION
-
-      if (answers.ranking_importance.includes("top")) {
-        explanation.push("Institution ranking aligned with your preference");
-      }
-
-      if (answers.career_importance !== "Not that much") {
-        explanation.push("Career services strength influenced ranking");
-      }
-
-      if (answers.location_preference === university.location_type) {
-        explanation.push("Campus location matches your preference");
-      }
-
-      // SAFETY FALLBACK
       if (explanation.length === 0) {
         explanation.push("Balanced match across country, course, and institution factors");
       }
