@@ -732,6 +732,7 @@ document.querySelectorAll(".option-group").forEach(group => {
       validateAllFields();
       if (fieldName && fieldName.indexOf("priority") === 0) {
         checkPriorities();
+        updatePriorityOptions();
       }
     });
   });
