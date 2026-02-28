@@ -703,7 +703,9 @@ ${trimmedText}
     let tuition_amount = null;
     let tuition_currency = null;
 
-    const match = rawFeeText.match(/([\$£€]|CAD|USD|AUD|GBP)?\s?([\d,]+(\.\d+)?)/i);
+    const match = rawFeeText
+      ? rawFeeText.match(/([\$£€]|CAD|USD|AUD|GBP)?\s?([\d,]+(\.\d+)?)/i)
+      : null;
 
     if (match) {
       tuition_amount = parseFloat(match[2].replace(/,/g, ""));
