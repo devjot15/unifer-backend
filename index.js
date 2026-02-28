@@ -25,6 +25,17 @@ app.get("/", (req, res) => {
   res.send("Study Abroad Engine API running 🚀");
 });
 
+app.get("/test-core", async (req, res) => {
+  const { data, error } = await supabase
+    .schema("core")
+    .from("universities")
+    .select("id, name, countries(name)")
+    .limit(1);
+
+  if (error) return res.status(500).json({ error });
+  res.json({ message: "Core schema works", data });
+});
+
 // Test route to fetch countries
 app.get("/countries", async (req, res) => {
   const { data, error } = await supabase
