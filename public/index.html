@@ -880,6 +880,11 @@ form.addEventListener("submit", function(e) {
           '<div class="result-meta">' +
             item.university + ' \u2022 ' + item.country +
           '</div>' +
+          '<div class="result-meta" style="margin-top:6px; font-size:13px; color:#888;">' +
+            (item.duration ? '⏱ ' + item.duration + ' years' : '') +
+            (item.duration && item.tuition_usd ? ' &nbsp;|&nbsp; ' : '') +
+            (item.tuition_usd ? '💰 $' + item.tuition_usd.toLocaleString() + ' / yr (USD)' : '') +
+          '</div>' +
         '</div>' +
 
         '<div class="result-divider"></div>' +
