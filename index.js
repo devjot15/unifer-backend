@@ -525,11 +525,22 @@ Return STRICT JSON only.
 Fields:
 - program_name
 - degree_level (UG or PG)
-- official_duration_value (numeric only, if stated as official full-time duration)
-- official_duration_unit ("months" or "years")
-- total_credits_required (numeric only, if credit-based)
-- completion_time_value (numeric only, if stated as expected completion time)
-- completion_time_unit ("months" or "years")
+Extract ALL of the following if present.
+
+1. official_duration_value (numeric)
+2. official_duration_unit ("months" or "years")
+3. official_duration_text (exact text from page)
+4. total_credits_required (numeric)
+5. credit_system ("US", "UK", "ECTS", "AUS", etc.)
+6. completion_time_value (numeric)
+7. completion_time_unit ("months" or "years")
+
+IMPORTANT:
+- Official duration refers to advertised program length.
+- Completion time refers to average time students take.
+- If something is not clearly stated, return null.
+- Do not guess.
+
 - tuition_raw_text (exact fee text from the page, e.g. "$12,500 CAD" or "£9,250")
 - field_category (must be exactly one of the following:
     engineering & tech,
@@ -685,7 +696,9 @@ ${trimmedText}
         tuition_currency,
         official_duration_value: parsed.official_duration_value,
         official_duration_unit: parsed.official_duration_unit,
+        official_duration_text: parsed.official_duration_text,
         total_credits_required: parsed.total_credits_required,
+        credit_system: parsed.credit_system,
         completion_time_value: parsed.completion_time_value,
         completion_time_unit: parsed.completion_time_unit,
         duration_confidence,
