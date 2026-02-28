@@ -253,6 +253,16 @@ app.post("/recommend", async (req, res) => {
       if (!c) return 0;
 
       let costWeight = 1;
+
+      const costBandMap = {
+        "$0 - $20K": 20000,
+        "$20K - $30K": 25000,
+        "More than $30K": 35000
+      };
+      const userCostMidpoint = costBandMap[answers.cost_of_living] || 25000;
+      const maxCostRange = 35000;
+      const costAlignmentScore = 1 - Math.abs(c.avg_cost_of_living_usd - userCostMidpoint) / maxCostRange;
+
       let pswWeight = answers.work_permit_importance === "Very strongly (3 years and above)" ? 1 :
                       answers.work_permit_importance.includes("Wouldn’t mind") ? 0.6 : 0.3;
 
