@@ -840,7 +840,20 @@ form.addEventListener("submit", function(e) {
     resultsDiv.innerHTML = "";
 
     if (!Array.isArray(data) || data.length === 0) {
-      resultsDiv.innerHTML = '<p style="text-align:center;padding:40px;color:#666;">No courses found matching your filters. Try adjusting your preferences.</p>';
+      const msg = data && data.message ? data.message : "No courses found matching your filters.";
+      const suggestion = data && data.suggestion ? data.suggestion : "Try adjusting your tuition band, duration, or GRE filter.";
+      resultsDiv.innerHTML = `
+        <div style="text-align:center; padding:50px 20px; border:1px solid #e6eeee; border-radius:12px; margin-top:30px;">
+          <div style="font-size:18px; font-weight:600; color:#1a1a1a; margin-bottom:12px;">${msg}</div>
+          <div style="font-size:14px; color:#888;">${suggestion}</div>
+          <button type="button" onclick="location.reload()" style="margin-top:24px; width:auto; min-width:160px; background:#0F7C78; color:white; padding:12px 24px;">
+            Adjust Preferences
+          </button>
+        </div>
+      `;
+      form.style.display = "none";
+      var resetBtn = document.querySelector(".reset-btn");
+      if (resetBtn) resetBtn.style.display = "block";
       return;
     }
 
