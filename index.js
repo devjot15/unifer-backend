@@ -261,7 +261,10 @@ app.post("/recommend", async (req, res) => {
 
     function computeCountryScore(country, answers, countryMap) {
       const c = countryMap[country.id];
-      if (!c) return 0;
+      if (!c) {
+        console.warn("Country not found in countryMap:", country.id, country.name);
+        return 0;
+      }
 
       let costWeight = 1;
 
