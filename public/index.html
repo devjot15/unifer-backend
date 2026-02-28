@@ -798,6 +798,12 @@ form.addEventListener("submit", function(e) {
 
   var resultsDiv = document.getElementById("results");
   progressFill.style.width = "70%";
+  resultsDiv.innerHTML = `
+    <div style="text-align:center; padding: 60px 20px; color: #0F7C78;">
+      <div style="font-size:18px; font-weight:600; margin-bottom:12px;">Analysing your profile...</div>
+      <div style="font-size:14px; color:#888;">Running structured decision engine</div>
+    </div>
+  `;
 
   fetch("/recommend", {
     method: "POST",
