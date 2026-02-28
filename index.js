@@ -198,16 +198,27 @@ app.post("/recommend", async (req, res) => {
 
     // 3️⃣ MACRO WEIGHTS
     function computeMacroWeights(p1, p2, p3) {
-      const base = {
-        1: 0.5,
-        2: 0.32,
-        3: 0.18
+      const base = { 1: 0.50, 2: 0.32, 3: 0.18 };
+
+      const normalise = (val) => {
+        if (!val) return null;
+        const map = {
+          "country": "Country",
+          "course": "Course",
+          "institution": "Institution"
+        };
+        return map[val.toLowerCase()] || val;
       };
 
       const weights = {};
-      weights[p1] = base[1];
-      weights[p2] = base[2];
-      weights[p3] = base[3];
+      weights[normalise(p1)] = base[1];
+      weights[normalise(p2)] = base[2];
+      weights[normalise(p3)] = base[3];
+
+      const total = Object.values(weights).reduce((a, b) => a + b, 0);
+      if (Math.abs(total - 1.0) > 0.01) {
+        console.error("WEIGHT SUM ERROR:", total, weights);
+      }
 
       return weights;
     }
