@@ -344,12 +344,7 @@ app.post("/recommend", async (req, res) => {
 
       const compositeRanking = rankingMap[university.id] ?? 0.5;
 
-      let rankingPenalty = compositeRanking * 0.2;
-      // max 20% slowdown for top-ranked universities
-
-      let admissionSpeedScore =
-        country.admission_speed_baseline * (1 - rankingPenalty);
-
+      const admissionSpeedScore = university.admission_speed_score ?? 0.5;
       let admissionScore = admissionWeight * admissionSpeedScore;
 
       let rankingWeight = 0;
