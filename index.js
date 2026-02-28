@@ -260,7 +260,8 @@ app.post("/recommend", async (req, res) => {
                      answers.pr_importance === "Wouldn’t mind" ? 0.6 : 0.3;
 
       let govWeight = answers.gov_support_importance === "Very strongly" ? 1 :
-                      answers.gov_support_importance === "Wouldn’t mind" ? 0.6 : 0.3;
+                      answers.gov_support_importance === "Wouldn’t mind" ? 0.6 :
+                      answers.gov_support_importance === "Don’t mind" ? 0.3 : 0.3;
 
       let englishWeight = answers.english_preference === "Yes" ? 1 :
                           answers.english_preference === "Prefer but flexible" ? 0.6 : 0.3;
