@@ -652,6 +652,10 @@ ${trimmedText}
       duration_confidence = "medium";
     }
 
+    if (!duration_years) {
+      duration_confidence = "low";
+    }
+
     // Tuition parsing from raw text
     const rawFeeText = parsed.tuition_raw_text;
 
