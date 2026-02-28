@@ -623,6 +623,7 @@ function updateDurationOptions() {
 
   // Reset selection
   document.getElementById("duration").value = "";
+  formMessage.textContent = "Please reselect your preferred duration for the chosen level.";
   durationGroup.querySelectorAll(".option-card").forEach(function(card) {
     card.classList.remove("selected");
   });
