@@ -210,6 +210,14 @@ app.post("/recommend", async (req, res) => {
     });
 
     console.log("Eligible courses count:", eligibleCourses.length);
+    console.log("Total courses fetched:", courses ? courses.length : 0);
+    console.log("Sample course:", courses ? JSON.stringify(courses[0]) : "none");
+    console.log("Answers received:", JSON.stringify({
+      level: answers.level,
+      duration: answers.duration,
+      tuition_band: answers.tuition_band,
+      field: answers.field
+    }));
 
     if (eligibleCourses.length === 0) {
       return res.json({
