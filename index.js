@@ -354,9 +354,9 @@ app.post("/recommend", async (req, res) => {
 
       let rankingScore = rankingWeight * compositeRanking;
 
-      return clamp(
-        (locationScore + rankingScore + careerWeight * careerScore + admissionScore) / 4
-      );
+      const uniNumerator = locationScore + rankingScore + (careerWeight * careerScore) + admissionScore;
+      const uniDenominator = 1 + rankingWeight + careerWeight + admissionWeight;
+      return clamp(uniNumerator / (uniDenominator || 1));
     }
 
     // 4️⃣ SCORE PATHWAYS
