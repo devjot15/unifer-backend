@@ -302,7 +302,9 @@ app.post("/recommend", async (req, res) => {
       };
       const userCostMidpoint = costBandMap[answers.cost_of_living] || 25000;
       const maxCostRange = 35000;
-      const costAlignmentScore = 1 - Math.abs(c.avg_cost_of_living_usd - userCostMidpoint) / maxCostRange;
+      const costAlignmentScore = clamp(
+        1 - (c.cost_score != null ? (1 - c.cost_score) : 0.5)
+      );
 
       let pswWeight = answers.work_permit_importance === "Very strongly (3 years and above)" ? 1 :
                       answers.work_permit_importance.includes("Wouldn’t mind") ? 0.6 : 0.3;
