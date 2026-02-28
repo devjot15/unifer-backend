@@ -729,7 +729,8 @@ ${trimmedText}
     if (match) {
       tuition_amount = parseFloat(match[2].replace(/,/g, ""));
 
-      if (rawFeeText.includes("CAD")) tuition_currency = "CAD";
+      if (rawFeeText.includes("CAD") || rawFeeText.includes("CA$")) tuition_currency = "CAD";
+      else if (rawFeeText.includes("AUD")) tuition_currency = "AUD";
       else if (rawFeeText.includes("USD") || rawFeeText.includes("$")) tuition_currency = "USD";
       else if (rawFeeText.includes("£")) tuition_currency = "GBP";
       else if (rawFeeText.includes("€")) tuition_currency = "EUR";
