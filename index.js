@@ -193,7 +193,11 @@ app.post("/recommend", async (req, res) => {
     console.log("Eligible courses count:", eligibleCourses.length);
 
     if (eligibleCourses.length === 0) {
-      return res.json({ message: "No eligible courses found." });
+      return res.json({
+        empty: true,
+        message: "No courses matched your exact filters.",
+        suggestion: "Try adjusting your tuition band, duration, or GRE filter to see more results."
+      });
     }
 
     // 3️⃣ MACRO WEIGHTS
