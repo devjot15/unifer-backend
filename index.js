@@ -277,7 +277,7 @@ app.post("/recommend", async (req, res) => {
                           answers.english_preference === "Prefer but flexible" ? 0.6 : 0.3;
 
       let weightedSum =
-        costWeight * c.cost_score +
+        costWeight * Math.max(0, Math.min(1, costAlignmentScore)) +
         pswWeight * c.psw_score +
         prWeight * c.pr_pathway_clarity_score +
         govWeight * c.government_support_score +
