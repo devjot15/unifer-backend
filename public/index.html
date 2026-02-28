@@ -791,7 +791,7 @@ form.addEventListener("submit", function(e) {
 
   for (let input of hiddenInputs) {
     if (!input.value) {
-      alert("Please complete all steps before running analysis.");
+      formMessage.textContent = "Please complete all steps before running analysis.";
       return;
     }
   }
