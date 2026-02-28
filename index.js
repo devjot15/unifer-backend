@@ -448,7 +448,9 @@ app.post("/recommend", async (req, res) => {
         country: country.name,
         university: university.name,
         course: course.name,
-        finalScore,   // 🔥 ADD THIS
+        duration: course.duration_years ?? null,
+        tuition_usd: course.tuition_usd ?? null,
+        finalScore,
         explanation
       };
     });
