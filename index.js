@@ -629,6 +629,20 @@ ${trimmedText}
       return Math.round(years * 100) / 100;
     }
 
+    if (!parsed.credit_system && parsed.total_credits_required) {
+      if (country.name === "United States") {
+        parsed.credit_system = "US";
+      } else if (country.name === "Canada") {
+        parsed.credit_system = "US";
+      } else if (country.name === "United Kingdom") {
+        parsed.credit_system = "UK";
+      } else if (country.name === "Germany") {
+        parsed.credit_system = "ECTS";
+      } else if (country.name === "Australia") {
+        parsed.credit_system = "AUS";
+      }
+    }
+
     let duration_years = null;
     let duration_confidence = "low";
 
