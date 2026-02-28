@@ -590,14 +590,18 @@ ${trimmedText}
       return res.status(400).json({ error: "Invalid JSON from AI" });
     }
 
-    const { data: university } = await supabase
-      .schema("core")
+    const { data: university, error: uniError } = await supabase
       .from("universities")
       .select("*, countries(*)")
       .eq("id", raw.university_id)
       .single();
 
-    const country = university.countries;
+    if (uniError || !university) {
+      console.error("University lookup failed:", uniError);
+      return res.status(400).json({ error: "University not found" });
+    }
+
+    const country = university.countries || {};
 
     // Duration normalization
     function convertToYears(value, unit) {
