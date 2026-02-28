@@ -698,7 +698,7 @@ ${trimmedText}
         parsed.credit_system = "CAN";
       } else if (country.name === "United States") {
         parsed.credit_system = "US";
-      } else if (country.name === "United Kingdom") {
+      } else if (country.name === "United Kingdom" || country.name === "UK") {
         parsed.credit_system = "UK";
       } else if (country.name === "Germany") {
         parsed.credit_system = "ECTS";
