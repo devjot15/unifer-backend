@@ -887,6 +887,14 @@ form.addEventListener("submit", function(e) {
           '</div>' +
         '</div>' +
 
+        (item.scores ?
+          '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">' +
+            '<span style="font-size:12px; padding:4px 10px; border-radius:20px; background:#e6eeee; color:#0F7C78; font-weight:600;">Country ' + Math.round(item.scores.country * 100) + '%</span>' +
+            '<span style="font-size:12px; padding:4px 10px; border-radius:20px; background:#e6eeee; color:#0F7C78; font-weight:600;">Course ' + Math.round(item.scores.course * 100) + '%</span>' +
+            '<span style="font-size:12px; padding:4px 10px; border-radius:20px; background:#e6eeee; color:#0F7C78; font-weight:600;">Institution ' + Math.round(item.scores.university * 100) + '%</span>' +
+          '</div>'
+        : '') +
+
         '<div class="result-divider"></div>' +
 
         '<div class="result-explanation">' +
