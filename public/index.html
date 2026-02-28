@@ -727,7 +727,7 @@ document.querySelectorAll(".option-group").forEach(group => {
       }
 
       group.classList.remove("invalid");
-      if (formMessage.textContent) {
+      if (formMessage.textContent && fieldName !== "level") {
         formMessage.textContent = "";
       }
       validateAllFields();
