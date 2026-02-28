@@ -136,7 +136,7 @@ app.post("/recommend", async (req, res) => {
     const { data: rankingData } = await supabase
       .schema("rankings")
       .from("university_composite_ranking")
-      .select("*");
+      .select("id, final_score");
 
     const rankingMap = {};
     rankingData.forEach(r => {
