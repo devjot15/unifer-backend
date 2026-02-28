@@ -442,6 +442,11 @@ app.post("/recommend", async (req, res) => {
         duration: course.duration_years ?? null,
         tuition_usd: course.tuition_usd ?? null,
         finalScore,
+        scores: {
+          country: Math.round(countryScore * 100) / 100,
+          course: Math.round(courseScore * 100) / 100,
+          university: Math.round(universityScore * 100) / 100
+        },
         explanation
       };
     });
