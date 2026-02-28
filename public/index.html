@@ -737,6 +737,28 @@ document.querySelectorAll(".option-group").forEach(group => {
   });
 });
 
+function updatePriorityOptions() {
+  var p1 = document.getElementById("priority_1").value;
+  var p2 = document.getElementById("priority_2").value;
+  var p3 = document.getElementById("priority_3").value;
+  var selected = [p1, p2, p3].filter(Boolean);
+
+  ["priority_1", "priority_2", "priority_3"].forEach(function(name) {
+    var currentVal = document.getElementById(name).value;
+    var group = document.querySelector('.option-group[data-name="' + name + '"]');
+    group.querySelectorAll(".option-card").forEach(function(card) {
+      var val = card.dataset.value;
+      if (selected.includes(val) && val !== currentVal) {
+        card.style.opacity = "0.35";
+        card.style.pointerEvents = "none";
+      } else {
+        card.style.opacity = "1";
+        card.style.pointerEvents = "auto";
+      }
+    });
+  });
+}
+
 document.querySelectorAll(".next-btn").forEach(function(btn) {
   btn.addEventListener("click", function() {
     if (!validateCurrentStep()) return;
