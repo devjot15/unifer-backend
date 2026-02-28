@@ -697,7 +697,12 @@ function checkPriorities() {
 function validateAllFields() {
   var allValid = true;
   allGroups.forEach(function(group) {
-    if (!group.querySelector(".option-card.selected")) allValid = false;
+    var visibleCards = Array.from(group.querySelectorAll(".option-card")).filter(
+      function(c) { return c.style.display !== "none"; }
+    );
+    if (visibleCards.length > 0 && !group.querySelector(".option-card.selected")) {
+      allValid = false;
+    }
   });
   submitBtn.disabled = !allValid;
 }
