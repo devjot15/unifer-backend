@@ -159,9 +159,9 @@ app.post("/recommend", async (req, res) => {
     // 2️⃣ HARD COURSE ELIMINATION
     // Numerical tuition bounds from user selection
     const tuitionBounds = {
-      "Less than $12k":   { min: 0,     max: 12000 },
-      "$12k - $25k":      { min: 12000, max: 25000 },
-      "More than $25K":   { min: 25000, max: 999999 }
+      "Less than $12k":   { min: 0,      max: 11999 },
+      "$12k - $25k":      { min: 12000,  max: 25000 },
+      "More than $25K":   { min: 25001,  max: 999999 }
     };
     const tuitionRange = tuitionBounds[answers.tuition_band] || { min: 0, max: 999999 };
 
