@@ -823,16 +823,31 @@ ${trimmedText}
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 app.post("/parse-batch", async (req, res) => {
-  const limit = req.body.limit || 5;
+  const limit = req.body.limit || 10;
 
-  for (let i = 0; i < limit; i++) {
-    await fetch("http://localhost:5000/parse-program", {
-      method: "POST"
-    });
-    await delay(2000);
-  }
+  res.json({ message: `Starting background parse of up to ${limit} programs` });
 
-  res.json({ message: `${limit} programs processed` });
+  (async () => {
+    let success = 0;
+    let failed = 0;
+
+    for (let i = 0; i < limit; i++) {
+      try {
+        const response = await fetch("http://localhost:5000/parse-program", {
+          method: "POST"
+        });
+        const result = await response.json();
+        if (result.message === "No pending pages") break;
+        success++;
+      } catch (err) {
+        console.error("Batch parse error:", err.message);
+        failed++;
+      }
+      await delay(2000);
+    }
+
+    console.log(`Parse batch complete — success: ${success}, failed: ${failed}`);
+  })();
 });
 
 // ==============================
