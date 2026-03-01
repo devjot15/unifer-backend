@@ -351,9 +351,7 @@ app.post("/recommend", async (req, res) => {
         "Don’t care": 0.3
       };
       let scholarshipWeight = scholarshipWeightMap[answers.scholarship_importance] || 0;
-      const scholarshipScore = course.scholarship_level != null
-        ? course.scholarship_level
-        : (course.scholarship_available ? 0.8 : 0.2);
+      const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
       courseComponents.push(scholarshipWeight * scholarshipScore);
       courseWeights.push(scholarshipWeight);
 
