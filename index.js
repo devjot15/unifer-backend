@@ -590,7 +590,7 @@ app.post("/parse-program", async (req, res) => {
     const trimmedText = cleanText.substring(0, 8000);
 
     const prompt = `
-You are extracting structured data from a university program page.
+You are extracting structured data from a university graduate program page.
 Return STRICT JSON only. No markdown, no explanation, no extra text.
 
 FIELDS TO EXTRACT:
@@ -598,7 +598,13 @@ FIELDS TO EXTRACT:
 - program_name: Full official program name as stated on the page
 - degree_level: Must be exactly "UG" or "PG". Masters, PhD, Graduate Certificate, MBA = PG. Bachelor = UG.
 
-DURATION (extract ALL that apply):
+PROGRAM TYPE:
+- program_type: Must be exactly one of:
+    research — thesis-based, research-focused, leads to academic career. Keywords: thesis, dissertation, research, supervisor, lab
+    professional — coursework-based, industry-focused, no thesis. Keywords: coursework, capstone, project, industry, professional, applied
+    doctoral — any PhD or doctoral degree regardless of type
+
+DURATION:
 - official_duration_value: numeric value of advertised program length
 - official_duration_unit: "months" or "years"
 - official_duration_text: exact quoted text from page describing duration
@@ -608,7 +614,10 @@ DURATION (extract ALL that apply):
 - completion_time_unit: "months" or "years"
 
 TUITION:
-- tuition_raw_text: exact fee text from page including currency symbol and amount
+- tuition_raw_text: exact fee text for INTERNATIONAL students only.
+  Look specifically for: "international tuition", "international student fees", "international program fee".
+  If only domestic fees are shown, return null.
+  Never return domestic student fees.
 
 FIELD:
 - field_category: must be exactly one of:
@@ -625,7 +634,7 @@ FIELD:
 
 INTERNSHIP:
 - internship_available: true or false
-  Set TRUE if the page mentions ANY of the following words or phrases:
+  Set TRUE if the page mentions ANY of:
   internship, co-op, coop, practicum, fieldwork, field placement,
   field experience, work placement, work-integrated learning, industry project,
   clinical placement, clinical experience, experiential learning, applied project,
@@ -641,11 +650,30 @@ GRE / GMAT:
 
 SCHOLARSHIP:
 - scholarship_available: true or false
-  Set TRUE if the page mentions ANY of the following:
+  Set TRUE if the page mentions ANY of:
   scholarship, bursary, fellowship, funding, award, financial aid,
   graduate award, entrance award, merit award, assistantship,
   teaching assistantship, research assistantship, tuition waiver,
   stipend, funded position
+- scholarship_details: exact text describing scholarship or funding opportunity.
+  Include amounts if mentioned. Return null if none found.
+- funding_guaranteed: true or false
+  Set TRUE only if the page explicitly states all students are funded,
+  or funding is guaranteed. Common for research PhDs.
+  Set FALSE if funding is competitive, optional, or not mentioned.
+
+ENGLISH LANGUAGE REQUIREMENTS:
+- ielts_minimum: numeric minimum IELTS overall band score required (e.g. 6.5). Return null if not stated.
+- pte_minimum: numeric minimum PTE Academic score required (e.g. 63). Return null if not stated.
+- toefl_minimum: numeric minimum TOEFL iBT score required (e.g. 90). Return null if not stated.
+
+APPLICATION:
+- application_deadline_intl: the application deadline for international students.
+  Return exact text as stated on page (e.g. "January 15", "December 1", "Rolling admissions").
+  Return null if not found.
+- application_materials: array of strings listing required application documents.
+  Examples: ["CV", "Statement of Purpose", "3 Reference Letters", "Transcripts", "Writing Sample"]
+  Return empty array [] if not found.
 
 RULES:
 - Return null for anything not clearly stated on the page
