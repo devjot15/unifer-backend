@@ -123,8 +123,49 @@ app.post("/recommend", async (req, res) => {
     const { data: universities, error: uErr } = await supabase
       .from("universities").select("*");
 
-    const { data: courses, error: coErr } = await supabase
-      .from("courses").select("*");
+    const tuitionBounds = {
+      "Less than $12k":   { min: 0,      max: 11999 },
+      "$12k - $25k":      { min: 12000,  max: 25000 },
+      "More than $25K":   { min: 25001,  max: 999999 }
+    };
+    const tBand = tuitionBounds[answers.tuition_band] || { min: 0, max: 999999 };
+
+    const durationBounds = {
+      "1 year or less":    { min: 0,   max: 1 },
+      "More than 1 year":  { min: 1,   max: 99 },
+      "3 years or less":   { min: 0,   max: 3 },
+      "More than 3 years": { min: 3,   max: 99 }
+    };
+    const dBand = durationBounds[answers.duration] || { min: 0, max: 99 };
+
+    let courseQuery = supabase
+      .schema("core")
+      .from("courses")
+      .select("*")
+      .eq("degree_level", answers.level)
+      .eq("field_category", answers.field)
+      .gte("tuition_usd", tBand.min)
+      .lte("tuition_usd", tBand.max)
+      .gte("duration_years", dBand.min)
+      .lte("duration_years", dBand.max);
+
+    if (answers.gre_filter === "Without GRE or GMAT") {
+      courseQuery = courseQuery.eq("gre_required", false).eq("gmat_required", false);
+    } else if (answers.gre_filter === "Without GRE") {
+      courseQuery = courseQuery.eq("gre_required", false);
+    } else if (answers.gre_filter === "Without GMAT") {
+      courseQuery = courseQuery.eq("gmat_required", false);
+    }
+
+    if (answers.profile_gpa_percentage) {
+      courseQuery = courseQuery.or(`min_gpa_percentage.is.null,min_gpa_percentage.lte.${answers.profile_gpa_percentage}`);
+    }
+
+    if (answers.profile_backlogs && parseInt(answers.profile_backlogs) > 0) {
+      courseQuery = courseQuery.neq("accepts_backlogs", false);
+    }
+
+    const { data: courses, error: coErr } = await courseQuery;
 
     if (cErr) console.error("Countries fetch error:", cErr.message);
     if (uErr) console.error("Universities fetch error:", uErr.message);
@@ -156,64 +197,8 @@ app.post("/recommend", async (req, res) => {
       });
     }
 
-    // 2️⃣ HARD COURSE ELIMINATION
-    // Numerical tuition bounds from user selection
-    const tuitionBounds = {
-      "Less than $12k":   { min: 0,      max: 11999 },
-      "$12k - $25k":      { min: 12000,  max: 25000 },
-      "More than $25K":   { min: 25001,  max: 999999 }
-    };
-    const tuitionRange = tuitionBounds[answers.tuition_band] || { min: 0, max: 999999 };
-
-    // Numerical duration bounds from user selection
-    const durationBounds = {
-      "1 year or less":    { min: 0,   max: 1 },
-      "More than 1 year":  { min: 1,   max: 99 },
-      "3 years or less":   { min: 0,   max: 3 },
-      "More than 3 years": { min: 3,   max: 99 }
-    };
-    const durationRange = durationBounds[answers.duration] || { min: 0, max: 99 };
-
+    // 2️⃣ PROFILE ELIMINATION (remaining checks not done at DB level)
     const eligibleCourses = courses.filter(course => {
-      // Degree level
-      if (course.degree_level !== answers.level) return false;
-
-      // Duration — numerical comparison
-      if (course.duration_years == null) return false;
-      if (course.duration_years < durationRange.min ||
-          course.duration_years > durationRange.max) return false;
-
-      // Tuition — numerical comparison
-      if (course.tuition_usd == null) return false;
-      if (course.tuition_usd < tuitionRange.min ||
-          course.tuition_usd > tuitionRange.max) return false;
-
-      // Field
-      if (course.field_category !== answers.field) return false;
-
-      // GRE/GMAT
-      if (answers.gre_filter === "Without GRE or GMAT") {
-        if (course.gre_required || course.gmat_required) return false;
-      }
-      if (answers.gre_filter === "Without GRE") {
-        if (course.gre_required) return false;
-      }
-      if (answers.gre_filter === "Without GMAT") {
-        if (course.gmat_required) return false;
-      }
-
-      // PROFILE ELIMINATION
-
-      // GPA check
-      if (answers.profile_gpa_percentage && course.min_gpa_percentage) {
-        if (parseFloat(answers.profile_gpa_percentage) < course.min_gpa_percentage) return false;
-      }
-
-      // Backlogs check
-      if (answers.profile_backlogs && parseInt(answers.profile_backlogs) > 0) {
-        if (course.accepts_backlogs === false) return false;
-      }
-
       // Work experience check
       if (course.work_experience_required && course.work_experience_required > 0) {
         if (!answers.profile_work_experience ||
