@@ -930,8 +930,9 @@ app.post("/parse-batch", async (req, res) => {
         const result = await response.json();
         if (result.message === "No pending pages") break;
         success++;
+        console.log(`[parse-batch] ✓ ${success}/${limit} parsed`);
       } catch (err) {
-        console.error("Batch parse error:", err.message);
+        console.error(`[parse-batch] ✗ Error:`, err.message);
         failed++;
       }
       await delay(2000);
