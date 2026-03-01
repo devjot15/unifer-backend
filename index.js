@@ -590,7 +590,7 @@ app.post("/parse-program", async (req, res) => {
     const trimmedText = cleanText.substring(0, 8000);
 
     const prompt = `
-You are extracting structured data from a university graduate program page.
+You are extracting structured data from a university program page.
 Return STRICT JSON only. No markdown, no explanation, no extra text.
 
 FIELDS TO EXTRACT:
@@ -669,6 +669,24 @@ ENGLISH LANGUAGE REQUIREMENTS:
 - ielts_minimum: numeric minimum IELTS overall band score required (e.g. 6.5). Return null if not stated.
 - pte_minimum: numeric minimum PTE Academic score required (e.g. 63). Return null if not stated.
 - toefl_minimum: numeric minimum TOEFL iBT score required (e.g. 90). Return null if not stated.
+
+ACADEMIC REQUIREMENTS:
+- min_gpa_percentage: minimum academic average or GPA required for admission as a percentage (0-100).
+  Convert GPA to percentage if needed: 3.0/4.0 = 75%, 3.3/4.0 = 82%, 3.7/4.0 = 92%.
+  Return null if not stated.
+- accepts_backlogs: true or false
+  Set FALSE if the page explicitly states no backlogs, no failed courses, clean academic record required.
+  Set TRUE if backlogs are not mentioned or are acceptable.
+- work_experience_required: number of years of work experience required.
+  Return 0 if not required or not mentioned.
+  Common for MBA (2-5 years) and some professional masters.
+
+SUBJECT REQUIREMENTS (for UG programs):
+- subjects_required: array of subjects required at senior secondary / high school level.
+  Use only these values: ["Mathematics", "Physics", "Chemistry", "Biology", "Economics",
+  "Commerce", "Computer Science", "English", "Arts/Humanities"]
+  Example: ["Mathematics", "Physics"] for Engineering programs.
+  Return empty array [] if no specific subjects required or if this is a PG program.
 
 APPLICATION:
 - application_deadline_intl: the application deadline for international students.
@@ -910,6 +928,10 @@ ${trimmedText}
         application_materials: parsed.application_materials || [],
         scholarship_details: parsed.scholarship_details || null,
         funding_guaranteed: parsed.funding_guaranteed || false,
+        min_gpa_percentage: parsed.min_gpa_percentage || null,
+        accepts_backlogs: parsed.accepts_backlogs !== false,
+        work_experience_required: parsed.work_experience_required || 0,
+        subjects_required: parsed.subjects_required || [],
         validation_status: "pending"
       });
 
