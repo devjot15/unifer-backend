@@ -841,7 +841,24 @@ ${trimmedText}
     };
 
     const rate = exchangeRates[tuition_currency] || 1;
-    let tuition_usd = tuition_amount ? Math.round(tuition_amount * rate * 100) / 100 : null;
+    let tuition_usd = null;
+
+    if (tuition_amount) {
+      const rawLower = (rawFeeText || "").toLowerCase();
+
+      if (rawLower.includes("per credit") || rawLower.includes("per unit")) {
+        tuition_usd = null;
+      } else if (
+        rawLower.includes("per term") ||
+        rawLower.includes("per instalment") ||
+        rawLower.includes("per semester") ||
+        rawLower.includes("per quarter")
+      ) {
+        tuition_usd = Math.round(tuition_amount * 3 * rate * 100) / 100;
+      } else {
+        tuition_usd = Math.round(tuition_amount * rate * 100) / 100;
+      }
+    }
 
     // Fallback to university fee structure if tuition not found on page
     if (!tuition_usd && feeStructure) {
