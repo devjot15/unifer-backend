@@ -950,7 +950,7 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-  const optionalFields = ["profile_gre_score", "profile_gmat_score", "profile_english_score", "profile_subjects"];
+  const optionalFields = ["profile_subjects"];
 
   for (let input of hiddenInputs) {
     if (!input.value && !optionalFields.includes(input.id)) {
