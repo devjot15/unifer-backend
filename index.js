@@ -814,16 +814,17 @@ ${trimmedText}
 
     // Fallback to university fee structure if tuition not found on page
     if (!tuition_usd && feeStructure) {
+      const feeRate = exchangeRates[feeStructure.currency || 'USD'] || 1;
       if (feeStructure.fee_type === "per_instalment") {
         tuition_usd = Math.round(
-          feeStructure.international_fee * feeStructure.instalments_per_year * 100
+          feeStructure.international_fee * feeStructure.instalments_per_year * feeRate * 100
         ) / 100;
       } else if (feeStructure.fee_type === "per_credit" && feeStructure.credits_per_year) {
         tuition_usd = Math.round(
-          feeStructure.international_fee * feeStructure.credits_per_year * 100
+          feeStructure.international_fee * feeStructure.credits_per_year * feeRate * 100
         ) / 100;
       } else if (feeStructure.fee_type === "flat_annual") {
-        tuition_usd = feeStructure.international_fee;
+        tuition_usd = Math.round(feeStructure.international_fee * feeRate * 100) / 100;
       }
     }
 
