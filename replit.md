@@ -77,10 +77,15 @@ Preferred communication style: Simple, everyday language.
   - Cards use `flex-wrap` for groups with many options (e.g., 10 fields of study)
   - Field of study card labels shortened for display but `data-value` attributes preserve original values for backend compatibility
 - **2026-02-20 (earlier):**
-  - Converted single-page form into a **4-step wizard** with Next/Back navigation buttons
-  - Step 1: Define Your Priority, Step 2: Country Selection, Step 3: Course Selection, Step 4: University Selection
-  - Progress bar now tracks step completion (25% per step) instead of scroll position
+  - Converted single-page form into a **5-step wizard** with Next/Back navigation buttons
+  - Step 1: Your Profile, Step 2: Define Your Priority, Step 3: Country Selection, Step 4: Course Selection, Step 5: University Selection
+  - Progress bar now tracks step completion (20% per step)
   - Per-step validation: users must complete all fields before advancing
-  - Priority uniqueness validation on Step 1 (prevents duplicate priorities)
-  - Submit button ("Run Decision Analysis") only appears on Step 4 and is gated to that step
+  - Step 1 (Profile) collects: degree completed, GPA, backlogs, subjects (multi-select), English test & score (conditional visibility), GRE score, GMAT score, work experience
+  - Multi-select support for subjects option group (`.multi-select` class on `.option-group`)
+  - English score cards show/hide based on selected test type (IELTS/TOEFL/PTE/None classes)
+  - Optional profile fields (GRE score, GMAT score, English score, subjects) skip validation
+  - Priority uniqueness validation on Step 2 (prevents duplicate priorities)
+  - Submit button ("Run Decision Analysis") only appears on Step 5 and is gated to that step
+  - Profile data sent to `/recommend` endpoint: `profile_degree_completed`, `profile_gpa_percentage`, `profile_backlogs`, `profile_english_test`, `profile_english_score`, `profile_gre_score`, `profile_gmat_score`, `profile_work_experience`, `profile_subjects`
   - Added a "Start Again" button and a professional footer with UNIFER branding

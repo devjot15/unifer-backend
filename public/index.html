@@ -59,7 +59,7 @@ body {
 
 .step-progress-fill {
   height: 100%;
-  width: 25%;
+  width: 20%;
   background: #0F7C78;
   transition: width 0.4s ease;
 }
@@ -400,10 +400,109 @@ button:disabled {
       <input type="hidden" id="profile_subjects" name="profile_subjects">
       <div id="formMessage" class="form-message"></div>
 
-      <!-- Step 1 -->
-      <div class="form-step active" data-step="1">
+<!-- Step 1 — Profile -->
+<div class="form-step active" data-step="1">
+  <div class="section">
+    <h2>Step 1 — Your Profile</h2>
+
+    <label>What is the highest level of education you have completed?</label>
+    <div class="option-group" data-name="profile_degree_completed">
+      <div class="option-card" data-value="High School">High School</div>
+      <div class="option-card" data-value="Bachelor's">Bachelor's</div>
+      <div class="option-card" data-value="Master's">Master's</div>
+    </div>
+
+    <label>What is your academic percentage or grade average?</label>
+    <div class="option-group" data-name="profile_gpa_percentage">
+      <div class="option-card" data-value="55">Less than 60%</div>
+      <div class="option-card" data-value="65">60% - 70%</div>
+      <div class="option-card" data-value="75">70% - 80%</div>
+      <div class="option-card" data-value="85">80% - 90%</div>
+      <div class="option-card" data-value="92">Above 90%</div>
+    </div>
+
+    <label>How many backlogs or failed courses do you have?</label>
+    <div class="option-group" data-name="profile_backlogs">
+      <div class="option-card" data-value="0">None</div>
+      <div class="option-card" data-value="2">1 - 2</div>
+      <div class="option-card" data-value="4">3 - 5</div>
+      <div class="option-card" data-value="6">More than 5</div>
+    </div>
+
+    <label>Which subjects did you study at senior secondary level? (Select all that apply)</label>
+    <div class="option-group multi-select" data-name="profile_subjects">
+      <div class="option-card" data-value="Mathematics">Mathematics</div>
+      <div class="option-card" data-value="Physics">Physics</div>
+      <div class="option-card" data-value="Chemistry">Chemistry</div>
+      <div class="option-card" data-value="Biology">Biology</div>
+      <div class="option-card" data-value="Economics">Economics</div>
+      <div class="option-card" data-value="Commerce">Commerce</div>
+      <div class="option-card" data-value="Computer Science">Computer Science</div>
+      <div class="option-card" data-value="English">English</div>
+      <div class="option-card" data-value="Arts/Humanities">Arts/Humanities</div>
+    </div>
+
+    <label>Have you taken an English language test?</label>
+    <div class="option-group" data-name="profile_english_test">
+      <div class="option-card" data-value="IELTS">IELTS</div>
+      <div class="option-card" data-value="TOEFL">TOEFL</div>
+      <div class="option-card" data-value="PTE">PTE</div>
+      <div class="option-card" data-value="None">Not yet</div>
+    </div>
+
+    <label>What is your English test score?</label>
+    <div class="option-group" id="englishScoreGroup" data-name="profile_english_score">
+      <div class="option-card ielts-score" data-value="6.0">IELTS 6.0</div>
+      <div class="option-card ielts-score" data-value="6.5">IELTS 6.5</div>
+      <div class="option-card ielts-score" data-value="7.0">IELTS 7.0</div>
+      <div class="option-card ielts-score" data-value="7.5">IELTS 7.5+</div>
+      <div class="option-card toefl-score" data-value="80">TOEFL 80</div>
+      <div class="option-card toefl-score" data-value="90">TOEFL 90</div>
+      <div class="option-card toefl-score" data-value="100">TOEFL 100</div>
+      <div class="option-card toefl-score" data-value="110">TOEFL 110+</div>
+      <div class="option-card pte-score" data-value="58">PTE 58</div>
+      <div class="option-card pte-score" data-value="65">PTE 65</div>
+      <div class="option-card pte-score" data-value="72">PTE 72</div>
+      <div class="option-card pte-score" data-value="79">PTE 79+</div>
+      <div class="option-card no-score" data-value="0">N/A — Not taken yet</div>
+    </div>
+
+    <label>Do you have a GRE score?</label>
+    <div class="option-group" data-name="profile_gre_score">
+      <div class="option-card" data-value="290">GRE Below 300</div>
+      <div class="option-card" data-value="305">GRE 300 - 310</div>
+      <div class="option-card" data-value="315">GRE 310 - 320</div>
+      <div class="option-card" data-value="322">GRE 320+</div>
+      <div class="option-card" data-value="0">No GRE</div>
+    </div>
+
+    <label>Do you have a GMAT score?</label>
+    <div class="option-group" data-name="profile_gmat_score">
+      <div class="option-card" data-value="550">GMAT Below 600</div>
+      <div class="option-card" data-value="625">GMAT 600 - 650</div>
+      <div class="option-card" data-value="675">GMAT 650 - 700</div>
+      <div class="option-card" data-value="720">GMAT 700+</div>
+      <div class="option-card" data-value="0">No GMAT</div>
+    </div>
+
+    <label>How many years of work experience do you have?</label>
+    <div class="option-group" data-name="profile_work_experience">
+      <div class="option-card" data-value="0">None</div>
+      <div class="option-card" data-value="1">Less than 1 year</div>
+      <div class="option-card" data-value="2">1 - 2 years</div>
+      <div class="option-card" data-value="4">3 - 5 years</div>
+      <div class="option-card" data-value="6">5+ years</div>
+    </div>
+  </div>
+  <div class="nav-buttons">
+    <button type="button" class="next-btn">Next</button>
+  </div>
+</div>
+
+<!-- Step 2 — Priority -->
+<div class="form-step" data-step="2">
         <div class="section">
-          <h2>Step 1 — Define Your Priority</h2>
+          <h2>Step 2 — Define Your Priority</h2>
 
           <label>In your decision to study abroad which of the following is more important, select in decreasing order?</label>
 
@@ -429,14 +528,15 @@ button:disabled {
           </div>
         </div>
         <div class="nav-buttons">
+          <button type="button" class="prev-btn">Back</button>
           <button type="button" class="next-btn">Next</button>
         </div>
       </div>
 
-      <!-- Step 2 -->
-      <div class="form-step" data-step="2">
+      <!-- Step 3 -->
+      <div class="form-step" data-step="3">
         <div class="section">
-          <h2>Step 2 — Country Selection</h2>
+          <h2>Step 3 — Country Selection</h2>
           <label>What is your preferred cost of living per year range?</label>
           <div class="option-group" data-name="cost_of_living">
             <div class="option-card" data-value="$0 - $20K">$0 - $20K</div>
@@ -477,10 +577,10 @@ button:disabled {
         </div>
       </div>
 
-      <!-- Step 3 -->
-      <div class="form-step" data-step="3">
+      <!-- Step 4 -->
+      <div class="form-step" data-step="4">
         <div class="section">
-          <h2>Step 3 — Course Selection</h2>
+          <h2>Step 4 — Course Selection</h2>
           <label>What level of program do you want to study?</label>
           <div class="option-group" data-name="level">
             <div class="option-card" data-value="UG">UG</div>
@@ -556,10 +656,10 @@ button:disabled {
         </div>
       </div>
 
-      <!-- Step 4 -->
-      <div class="form-step" data-step="4">
+      <!-- Step 5 -->
+      <div class="form-step" data-step="5">
         <div class="section" style="border-bottom: none; margin-bottom: 0;">
-          <h2>Step 4 — University Selection</h2>
+          <h2>Step 5 — University Selection</h2>
           <label>What is your preference for location of the campus?</label>
           <div class="option-group" data-name="location_preference">
             <div class="option-card" data-value="Main city">Main city</div>
@@ -621,6 +721,16 @@ var submitBtn = document.getElementById("submitBtn");
 var formMessage = document.getElementById("formMessage");
 var allGroups = document.querySelectorAll(".option-group");
 
+var englishScoreGroup = document.getElementById("englishScoreGroup");
+if (englishScoreGroup) {
+  englishScoreGroup.querySelectorAll(".option-card").forEach(function(c) {
+    c.style.display = "none";
+  });
+  englishScoreGroup.querySelectorAll(".no-score").forEach(function(c) {
+    c.style.display = "";
+  });
+}
+
 function updateDurationOptions() {
   var level = getFieldValue("level");
   var durationGroup = document.getElementById("durationGroup");
@@ -660,7 +770,7 @@ function getFieldValue(fieldName) {
 function updateStep(step) {
   steps.forEach(function(s) { s.classList.remove("active"); });
   document.querySelector('[data-step="' + step + '"]').classList.add("active");
-  progressFill.style.width = (step * 25) + "%";
+  progressFill.style.width = (step * 20) + "%";
 }
 
 function validateCurrentStep() {
@@ -668,7 +778,15 @@ function validateCurrentStep() {
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
+  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects"];
   groupsInStep.forEach(function(group) {
+    if (group.classList.contains("multi-select")) return;
+    var groupName = group.dataset.name;
+    if (optionalGroupNames.indexOf(groupName) !== -1) return;
+    if (group.id === "englishScoreGroup") {
+      var testVal = document.getElementById("profile_english_test").value;
+      if (testVal === "None") return;
+    }
     var hasSelection = group.querySelector(".option-card.selected");
     if (!hasSelection) {
       group.classList.add("invalid");
@@ -678,7 +796,7 @@ function validateCurrentStep() {
     }
   });
 
-  if (currentStep === 1 && allFilled) {
+  if (currentStep === 2 && allFilled) {
     if (!checkPriorities()) return false;
   }
 
@@ -705,7 +823,15 @@ function checkPriorities() {
 
 function validateAllFields() {
   var allValid = true;
+  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects"];
   allGroups.forEach(function(group) {
+    if (group.classList.contains("multi-select")) return;
+    var groupName = group.dataset.name;
+    if (optionalGroupNames.indexOf(groupName) !== -1) return;
+    if (group.id === "englishScoreGroup") {
+      var testVal = document.getElementById("profile_english_test").value;
+      if (testVal === "None") return;
+    }
     var visibleCards = Array.from(group.querySelectorAll(".option-card")).filter(
       function(c) { return c.style.display !== "none"; }
     );
@@ -719,25 +845,49 @@ function validateAllFields() {
 document.querySelectorAll(".option-group").forEach(group => {
   const fieldName = group.dataset.name;
   const hiddenInput = document.getElementById(fieldName);
+  const isMultiSelect = group.classList.contains("multi-select");
 
   group.querySelectorAll(".option-card").forEach(card => {
     card.addEventListener("click", () => {
 
-      // Remove selection in this group
-      group.querySelectorAll(".option-card").forEach(c => {
-        c.classList.remove("selected");
-      });
-
-      // Select clicked
-      card.classList.add("selected");
-
-      // Set hidden input value
-      if (hiddenInput) {
-        hiddenInput.value = card.dataset.value;
+      if (isMultiSelect) {
+        card.classList.toggle("selected");
+        if (hiddenInput) {
+          const selected = Array.from(group.querySelectorAll(".option-card.selected"))
+            .map(c => c.dataset.value);
+          hiddenInput.value = selected.join(",");
+        }
+      } else {
+        group.querySelectorAll(".option-card").forEach(c => {
+          c.classList.remove("selected");
+        });
+        card.classList.add("selected");
+        if (hiddenInput) {
+          hiddenInput.value = card.dataset.value;
+        }
       }
 
       if (fieldName === "level") {
         updateDurationOptions();
+      }
+
+      if (fieldName === "profile_english_test") {
+        const test = card.dataset.value;
+        const scoreGroup = document.getElementById("englishScoreGroup");
+        scoreGroup.querySelectorAll(".option-card").forEach(c => {
+          c.classList.remove("selected");
+          c.style.display = "none";
+        });
+        document.getElementById("profile_english_score").value = "";
+        if (test === "IELTS") {
+          scoreGroup.querySelectorAll(".ielts-score").forEach(c => c.style.display = "");
+        } else if (test === "TOEFL") {
+          scoreGroup.querySelectorAll(".toefl-score").forEach(c => c.style.display = "");
+        } else if (test === "PTE") {
+          scoreGroup.querySelectorAll(".pte-score").forEach(c => c.style.display = "");
+        } else {
+          scoreGroup.querySelectorAll(".no-score").forEach(c => c.style.display = "");
+        }
       }
 
       group.classList.remove("invalid");
@@ -779,7 +929,7 @@ document.querySelectorAll(".next-btn").forEach(function(btn) {
   btn.addEventListener("click", function() {
     if (!validateCurrentStep()) return;
     formMessage.textContent = "";
-    if (currentStep < 4) {
+    if (currentStep < 5) {
       currentStep++;
       updateStep(currentStep);
     }
@@ -799,13 +949,14 @@ document.querySelectorAll(".prev-btn").forEach(function(btn) {
 form.addEventListener("submit", function(e) {
   e.preventDefault();
 
-  if (currentStep !== 4) return;
+  if (currentStep !== 5) return;
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
+  const optionalFields = ["profile_gre_score", "profile_gmat_score", "profile_english_score", "profile_subjects"];
 
   for (let input of hiddenInputs) {
-    if (!input.value) {
+    if (!input.value && !optionalFields.includes(input.id)) {
       formMessage.textContent = "Please complete all steps before running analysis.";
       return;
     }
@@ -845,7 +996,17 @@ form.addEventListener("submit", function(e) {
       location_preference: document.getElementById("location_preference").value,
       ranking_importance: document.getElementById("ranking_importance").value,
       career_importance: document.getElementById("career_importance").value,
-      admission_speed_importance: document.getElementById("admission_speed_importance").value
+      admission_speed_importance: document.getElementById("admission_speed_importance").value,
+
+      profile_degree_completed: document.getElementById("profile_degree_completed").value,
+      profile_gpa_percentage: document.getElementById("profile_gpa_percentage").value,
+      profile_backlogs: document.getElementById("profile_backlogs").value,
+      profile_english_test: document.getElementById("profile_english_test").value,
+      profile_english_score: document.getElementById("profile_english_score").value,
+      profile_gre_score: document.getElementById("profile_gre_score").value,
+      profile_gmat_score: document.getElementById("profile_gmat_score").value,
+      profile_work_experience: document.getElementById("profile_work_experience").value,
+      profile_subjects: document.getElementById("profile_subjects").value
     })
   })
   .then(function(response) { return response.json(); })
