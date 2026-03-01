@@ -568,26 +568,27 @@ app.post("/scrape-program", async (req, res) => {
 // PARSE SINGLE PROGRAM
 // ----------------------
 
-app.post("/parse-program", async (req, res) => {
+async function parseProgramPage(pageId) {
+  const { data: raw, error: fetchError } = await supabase
+    .schema("ingestion")
+    .from("raw_program_pages")
+    .select("*")
+    .eq("id", pageId)
+    .single();
+
+  if (fetchError || !raw) throw new Error("Page not found");
+
+  await supabase
+    .schema("ingestion")
+    .from("raw_program_pages")
+    .update({ parse_status: "processing" })
+    .eq("id", pageId);
+
   try {
-
-    const { data: rawPages } = await supabase
-      .schema("ingestion")
-      .from("raw_program_pages")
-      .select("*")
-      .eq("parse_status", "pending")
-      .limit(1);
-
-    if (!rawPages || rawPages.length === 0) {
-      return res.json({ message: "No pending pages" });
-    }
-
-    const raw = rawPages[0];
-
     const $ = cheerio.load(raw.raw_html);
-    $("script, style, noscript").remove();
-    const cleanText = $("body").text().replace(/\s+/g, " ").trim();
-    const trimmedText = cleanText.substring(0, 8000);
+    $("script, style, nav, footer, header").remove();
+    const text = $("body").text().replace(/\s+/g, " ").trim();
+    const trimmedText = text.substring(0, 12000);
 
     const prompt = `
 You are extracting structured data from a university program page.
@@ -707,241 +708,135 @@ ${trimmedText}
 `;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You extract structured academic program data. Return valid JSON only." },
-        { role: "user", content: prompt }
-      ],
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
       temperature: 0
     });
 
-    let aiResponse = completion.choices[0].message.content
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-
-    let parsed;
-
-    try {
-      parsed = JSON.parse(aiResponse);
-    } catch (err) {
-      await supabase
-        .schema("ingestion")
-        .from("raw_program_pages")
-        .update({ parse_status: "failed" })
-        .eq("id", raw.id);
-
-      return res.status(400).json({ error: "Invalid JSON from AI" });
-    }
-
-    let country = {};
-    try {
-      const { data: university } = await supabase
-        .schema("core")
-        .from("universities")
-        .select("*, countries(*)")
-        .eq("id", raw.university_id)
-        .single();
-
-      if (university && university.countries) {
-        country = university.countries;
-      }
-    } catch (e) {
-      console.error("Country lookup skipped:", e.message);
-    }
-
-    // Duration normalization
-    function convertToYears(value, unit) {
-      if (!value || !unit) return null;
-
-      let years = null;
-
-      if (unit.toLowerCase() === "months") {
-        years = value / 12;
-      } else if (unit.toLowerCase() === "years") {
-        years = value;
-      }
-
-      if (!years) return null;
-
-      return Math.round(years * 100) / 100;
-    }
-
-    // Deterministic credit system override
-    if (parsed.total_credits_required) {
-
-      if (country.name === "Canada") {
-        parsed.credit_system = "CAN";
-      } else if (country.name === "United States") {
-        parsed.credit_system = "US";
-      } else if (country.name === "United Kingdom" || country.name === "UK") {
-        parsed.credit_system = "UK";
-      } else if (country.name === "Germany") {
-        parsed.credit_system = "ECTS";
-      } else if (country.name === "Australia") {
-        parsed.credit_system = "AUS";
-      }
-
-    }
+    const content = completion.choices[0].message.content;
+    const parsed = JSON.parse(content.replace(/```json|```/g, "").trim());
 
     let duration_years = null;
-    let duration_confidence = "low";
-
-    if (parsed.official_duration_value) {
-      duration_years = convertToYears(
-        parsed.official_duration_value,
-        parsed.official_duration_unit
-      );
-      duration_confidence = "high";
-    } else if (parsed.total_credits_required && country.credits_per_year) {
-      const years =
-        parsed.total_credits_required / country.credits_per_year;
-
-      duration_years = Math.round(years * 100) / 100;
-      duration_confidence = "high";
-    } else if (parsed.completion_time_value) {
-      duration_years = convertToYears(
-        parsed.completion_time_value,
-        parsed.completion_time_unit
-      );
-      duration_confidence = "medium";
+    if (parsed.official_duration_value && parsed.official_duration_unit) {
+      duration_years = parsed.official_duration_unit === "months"
+        ? parsed.official_duration_value / 12
+        : parsed.official_duration_value;
     }
 
-    if (!duration_years) {
-      duration_confidence = "low";
+    const exchangeRates = { USD: 1, CAD: 0.74, GBP: 1.27, EUR: 1.08, AUD: 0.65 };
+    let tuition_usd = null;
+
+    if (parsed.tuition_raw_text) {
+      const match = parsed.tuition_raw_text.match(/[\d,]+\.?\d*/);
+      if (match) {
+        const amount = parseFloat(match[0].replace(/,/g, ""));
+        const rawLower = parsed.tuition_raw_text.toLowerCase();
+        const currency = parsed.tuition_raw_text.includes("CAD") ? "CAD"
+          : parsed.tuition_raw_text.includes("£") || parsed.tuition_raw_text.includes("GBP") ? "GBP"
+          : parsed.tuition_raw_text.includes("€") || parsed.tuition_raw_text.includes("EUR") ? "EUR"
+          : parsed.tuition_raw_text.includes("AUD") ? "AUD" : "USD";
+        const rate = exchangeRates[currency] || 1;
+
+        if (rawLower.includes("per credit") || rawLower.includes("per unit")) {
+          tuition_usd = null;
+        } else if (rawLower.includes("per term") || rawLower.includes("per instalment") || rawLower.includes("per semester")) {
+          tuition_usd = Math.round(amount * 3 * rate * 100) / 100;
+        } else {
+          tuition_usd = Math.round(amount * rate * 100) / 100;
+        }
+      }
     }
 
-    // Fetch university fee structure as fallback
-    let feeStructure = null;
-    try {
-      const { data: feeData } = await supabase
+    if (!tuition_usd) {
+      const degreeLevel = parsed.degree_level === "PG" ? "masters" : "undergraduate";
+      const { data: feeStructure } = await supabase
         .schema("ingestion")
         .from("university_fee_structure")
         .select("*")
         .eq("university_id", raw.university_id)
-        .eq("program_level", parsed.degree_level === "PG" ?
-          (parsed.program_name?.toLowerCase().includes("doctor") ||
-           parsed.program_name?.toLowerCase().includes("phd") ? "doctoral" : "masters")
-          : "undergraduate")
+        .eq("program_level", degreeLevel)
+        .is("program_name_pattern", null)
         .single();
-      feeStructure = feeData;
-    } catch(e) {
-      // No fee structure found — that's fine
-    }
 
-    // Tuition parsing from raw text
-    const rawFeeText = parsed.tuition_raw_text;
-
-    let tuition_amount = null;
-    let tuition_currency = null;
-
-    const match = rawFeeText
-      ? rawFeeText.match(/([\$£€]|CAD|USD|AUD|GBP)?\s?([\d,]+(\.\d+)?)/i)
-      : null;
-
-    if (match) {
-      tuition_amount = parseFloat(match[2].replace(/,/g, ""));
-
-      if (rawFeeText.includes("CAD") || rawFeeText.includes("CA$")) tuition_currency = "CAD";
-      else if (rawFeeText.includes("AUD")) tuition_currency = "AUD";
-      else if (rawFeeText.includes("USD") || rawFeeText.includes("$")) tuition_currency = "USD";
-      else if (rawFeeText.includes("£")) tuition_currency = "GBP";
-      else if (rawFeeText.includes("€")) tuition_currency = "EUR";
-    }
-
-    // Currency normalization
-    const exchangeRates = {
-      CAD: 0.74,
-      GBP: 1.27,
-      AUD: 0.66,
-      EUR: 1.08,
-      USD: 1
-    };
-
-    const rate = exchangeRates[tuition_currency] || 1;
-    let tuition_usd = null;
-
-    if (tuition_amount) {
-      const rawLower = (rawFeeText || "").toLowerCase();
-
-      if (rawLower.includes("per credit") || rawLower.includes("per unit")) {
-        tuition_usd = null;
-      } else if (
-        rawLower.includes("per term") ||
-        rawLower.includes("per instalment") ||
-        rawLower.includes("per semester") ||
-        rawLower.includes("per quarter")
-      ) {
-        tuition_usd = Math.round(tuition_amount * 3 * rate * 100) / 100;
-      } else {
-        tuition_usd = Math.round(tuition_amount * rate * 100) / 100;
+      if (feeStructure) {
+        const feeRate = exchangeRates[feeStructure.currency || "USD"] || 1;
+        if (feeStructure.fee_type === "per_instalment") {
+          tuition_usd = Math.round(feeStructure.international_fee * feeStructure.instalments_per_year * feeRate * 100) / 100;
+        } else if (feeStructure.fee_type === "flat_annual") {
+          tuition_usd = Math.round(feeStructure.international_fee * feeRate * 100) / 100;
+        }
       }
     }
 
-    // Fallback to university fee structure if tuition not found on page
-    if (!tuition_usd && feeStructure) {
-      const feeRate = exchangeRates[feeStructure.currency || 'USD'] || 1;
-      if (feeStructure.fee_type === "per_instalment") {
-        tuition_usd = Math.round(
-          feeStructure.international_fee * feeStructure.instalments_per_year * feeRate * 100
-        ) / 100;
-      } else if (feeStructure.fee_type === "per_credit" && feeStructure.credits_per_year) {
-        tuition_usd = Math.round(
-          feeStructure.international_fee * feeStructure.credits_per_year * feeRate * 100
-        ) / 100;
-      } else if (feeStructure.fee_type === "flat_annual") {
-        tuition_usd = Math.round(feeStructure.international_fee * feeRate * 100) / 100;
-      }
-    }
-
-    // Insert parsed data
-    await supabase
+    const { error: insertError } = await supabase
       .schema("ingestion")
       .from("parsed_programs")
-      .insert({
+      .upsert({
+        raw_page_id: raw.id,
         university_id: raw.university_id,
         program_name: parsed.program_name,
         degree_level: parsed.degree_level,
-        duration_years,
-        tuition_usd,
-        tuition_raw_text: parsed.tuition_raw_text,
-        tuition_amount,
-        tuition_currency,
-        official_duration_value: parsed.official_duration_value,
-        official_duration_unit: parsed.official_duration_unit,
-        official_duration_text: parsed.official_duration_text,
-        total_credits_required: parsed.total_credits_required,
-        credit_system: parsed.credit_system,
-        completion_time_value: parsed.completion_time_value,
-        completion_time_unit: parsed.completion_time_unit,
-        duration_confidence,
-        field_category: parsed.field_category,
-        internship_available: parsed.internship_available,
-        gre_required: parsed.gre_required,
-        gmat_required: parsed.gmat_required,
-        scholarship_available: parsed.scholarship_available,
         program_type: parsed.program_type || null,
+        duration_years,
+        duration_confidence: "high",
+        official_duration_text: parsed.official_duration_text || null,
+        tuition_usd,
+        tuition_raw_text: parsed.tuition_raw_text || null,
+        field_category: parsed.field_category || null,
+        internship_available: parsed.internship_available || false,
+        gre_required: parsed.gre_required || false,
+        gmat_required: parsed.gmat_required || false,
+        scholarship_available: parsed.scholarship_available || false,
+        scholarship_details: parsed.scholarship_details || null,
+        funding_guaranteed: parsed.funding_guaranteed || false,
         ielts_minimum: parsed.ielts_minimum || null,
         pte_minimum: parsed.pte_minimum || null,
         toefl_minimum: parsed.toefl_minimum || null,
         application_deadline_intl: parsed.application_deadline_intl || null,
         application_materials: parsed.application_materials || [],
-        scholarship_details: parsed.scholarship_details || null,
-        funding_guaranteed: parsed.funding_guaranteed || false,
         min_gpa_percentage: parsed.min_gpa_percentage || null,
         accepts_backlogs: parsed.accepts_backlogs !== false,
-        work_experience_required: parsed.work_experience_required || 0,
         subjects_required: parsed.subjects_required || [],
-        validation_status: "pending"
-      });
+        work_experience_required: parsed.work_experience_required || 0,
+        validation_status: "pending",
+        parse_status: "parsed"
+      }, { onConflict: "raw_page_id" });
+
+    if (insertError) throw new Error(insertError.message);
 
     await supabase
       .schema("ingestion")
       .from("raw_program_pages")
       .update({ parse_status: "parsed" })
-      .eq("id", raw.id);
+      .eq("id", pageId);
 
-    res.json({ message: "Program parsed successfully" });
+    return { success: true, program: parsed.program_name };
+
+  } catch (err) {
+    await supabase
+      .schema("ingestion")
+      .from("raw_program_pages")
+      .update({ parse_status: "failed" })
+      .eq("id", pageId);
+    throw err;
+  }
+}
+
+app.post("/parse-program", async (req, res) => {
+  try {
+    const { data: rawPages } = await supabase
+      .schema("ingestion")
+      .from("raw_program_pages")
+      .select("id")
+      .eq("parse_status", "pending")
+      .limit(1);
+
+    if (!rawPages || rawPages.length === 0) {
+      return res.json({ message: "No pending pages" });
+    }
+
+    const result = await parseProgramPage(rawPages[0].id);
+    res.json({ message: "Program parsed successfully", program: result.program });
 
   } catch (error) {
     console.error(error);
