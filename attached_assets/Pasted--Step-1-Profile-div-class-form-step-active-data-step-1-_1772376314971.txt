@@ -1,0 +1,101 @@
+<!-- Step 1 — Profile -->
+<div class="form-step active" data-step="1">
+  <div class="section">
+    <h2>Step 1 — Your Profile</h2>
+
+    <label>What is the highest level of education you have completed?</label>
+    <div class="option-group" data-name="profile_degree_completed">
+      <div class="option-card" data-value="High School">High School</div>
+      <div class="option-card" data-value="Bachelor's">Bachelor's</div>
+      <div class="option-card" data-value="Master's">Master's</div>
+    </div>
+
+    <label>What is your academic percentage or grade average?</label>
+    <div class="option-group" data-name="profile_gpa_percentage">
+      <div class="option-card" data-value="55">Less than 60%</div>
+      <div class="option-card" data-value="65">60% - 70%</div>
+      <div class="option-card" data-value="75">70% - 80%</div>
+      <div class="option-card" data-value="85">80% - 90%</div>
+      <div class="option-card" data-value="92">Above 90%</div>
+    </div>
+
+    <label>How many backlogs or failed courses do you have?</label>
+    <div class="option-group" data-name="profile_backlogs">
+      <div class="option-card" data-value="0">None</div>
+      <div class="option-card" data-value="2">1 - 2</div>
+      <div class="option-card" data-value="4">3 - 5</div>
+      <div class="option-card" data-value="6">More than 5</div>
+    </div>
+
+    <label>Which subjects did you study at senior secondary level? (Select all that apply)</label>
+    <div class="option-group multi-select" data-name="profile_subjects">
+      <div class="option-card" data-value="Mathematics">Mathematics</div>
+      <div class="option-card" data-value="Physics">Physics</div>
+      <div class="option-card" data-value="Chemistry">Chemistry</div>
+      <div class="option-card" data-value="Biology">Biology</div>
+      <div class="option-card" data-value="Economics">Economics</div>
+      <div class="option-card" data-value="Commerce">Commerce</div>
+      <div class="option-card" data-value="Computer Science">Computer Science</div>
+      <div class="option-card" data-value="English">English</div>
+      <div class="option-card" data-value="Arts/Humanities">Arts/Humanities</div>
+    </div>
+
+    <label>Have you taken an English language test?</label>
+    <div class="option-group" data-name="profile_english_test">
+      <div class="option-card" data-value="IELTS">IELTS</div>
+      <div class="option-card" data-value="TOEFL">TOEFL</div>
+      <div class="option-card" data-value="PTE">PTE</div>
+      <div class="option-card" data-value="None">Not yet</div>
+    </div>
+
+    <label>What is your English test score?</label>
+    <div class="option-group" id="englishScoreGroup" data-name="profile_english_score">
+      <div class="option-card ielts-score" data-value="6.0">IELTS 6.0</div>
+      <div class="option-card ielts-score" data-value="6.5">IELTS 6.5</div>
+      <div class="option-card ielts-score" data-value="7.0">IELTS 7.0</div>
+      <div class="option-card ielts-score" data-value="7.5">IELTS 7.5+</div>
+      <div class="option-card toefl-score" data-value="80">TOEFL 80</div>
+      <div class="option-card toefl-score" data-value="90">TOEFL 90</div>
+      <div class="option-card toefl-score" data-value="100">TOEFL 100</div>
+      <div class="option-card toefl-score" data-value="110">TOEFL 110+</div>
+      <div class="option-card pte-score" data-value="58">PTE 58</div>
+      <div class="option-card pte-score" data-value="65">PTE 65</div>
+      <div class="option-card pte-score" data-value="72">PTE 72</div>
+      <div class="option-card pte-score" data-value="79">PTE 79+</div>
+      <div class="option-card no-score" data-value="0">N/A — Not taken yet</div>
+    </div>
+
+    <label>Do you have a GRE score?</label>
+    <div class="option-group" data-name="profile_gre_score">
+      <div class="option-card" data-value="290">GRE Below 300</div>
+      <div class="option-card" data-value="305">GRE 300 - 310</div>
+      <div class="option-card" data-value="315">GRE 310 - 320</div>
+      <div class="option-card" data-value="322">GRE 320+</div>
+      <div class="option-card" data-value="0">No GRE</div>
+    </div>
+
+    <label>Do you have a GMAT score?</label>
+    <div class="option-group" data-name="profile_gmat_score">
+      <div class="option-card" data-value="550">GMAT Below 600</div>
+      <div class="option-card" data-value="625">GMAT 600 - 650</div>
+      <div class="option-card" data-value="675">GMAT 650 - 700</div>
+      <div class="option-card" data-value="720">GMAT 700+</div>
+      <div class="option-card" data-value="0">No GMAT</div>
+    </div>
+
+    <label>How many years of work experience do you have?</label>
+    <div class="option-group" data-name="profile_work_experience">
+      <div class="option-card" data-value="0">None</div>
+      <div class="option-card" data-value="1">Less than 1 year</div>
+      <div class="option-card" data-value="2">1 - 2 years</div>
+      <div class="option-card" data-value="4">3 - 5 years</div>
+      <div class="option-card" data-value="6">5+ years</div>
+    </div>
+  </div>
+  <div class="nav-buttons">
+    <button type="button" class="next-btn">Next</button>
+  </div>
+</div>
+
+<!-- Step 2 — Priority -->
+<div class="form-step" data-step="2">
