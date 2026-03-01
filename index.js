@@ -824,23 +824,21 @@ ${trimmedText}
 
 app.post("/parse-program", async (req, res) => {
   try {
-    const { data: rawPages } = await supabase
+    const { data: raw } = await supabase
       .schema("ingestion")
       .from("raw_program_pages")
       .select("id")
       .eq("parse_status", "pending")
-      .limit(1);
+      .order("scraped_at", { ascending: true })
+      .limit(1)
+      .single();
 
-    if (!rawPages || rawPages.length === 0) {
-      return res.json({ message: "No pending pages" });
-    }
+    if (!raw) return res.json({ message: "No pending pages" });
 
-    const result = await parseProgramPage(rawPages[0].id);
-    res.json({ message: "Program parsed successfully", program: result.program });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Parsing failed" });
+    const result = await parseProgramPage(raw.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
