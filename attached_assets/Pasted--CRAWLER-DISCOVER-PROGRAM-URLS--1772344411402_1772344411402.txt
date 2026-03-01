@@ -1,0 +1,174 @@
+// ==============================
+// CRAWLER — DISCOVER PROGRAM URLS
+// ==============================
+
+app.post("/crawl-university", async (req, res) => {
+  try {
+    const { university_id, directory_url } = req.body;
+
+    if (!university_id || !directory_url) {
+      return res.status(400).json({ error: "university_id and directory_url are required" });
+    }
+
+    console.log("Crawling directory:", directory_url);
+
+    const response = await axios.get(directory_url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+      timeout: 20000
+    });
+
+    const $ = cheerio.load(response.data);
+    const discovered = [];
+    const seen = new Set();
+
+    $("a[href]").each(function () {
+      const href = $(this).attr("href");
+      if (!href) return;
+
+      // Build absolute URL
+      let fullUrl;
+      try {
+        fullUrl = new URL(href, directory_url).toString();
+      } catch (e) {
+        return;
+      }
+
+      // UBC program page patterns
+      const isUBCProgram =
+        fullUrl.includes("grad.ubc.ca/prospective-students/graduate-degree-programs/") &&
+        fullUrl !== directory_url &&
+        !fullUrl.includes("#") &&
+        !seen.has(fullUrl);
+
+      if (isUBCProgram) {
+        seen.add(fullUrl);
+        discovered.push({
+          university_id,
+          program_url: fullUrl,
+          status: "pending"
+        });
+      }
+    });
+
+    console.log("Discovered URLs:", discovered.length);
+
+    if (discovered.length === 0) {
+      return res.json({ message: "No program URLs found", discovered: 0 });
+    }
+
+    // Insert into scrape_queue — ignore duplicates
+    const { data, error } = await supabase
+      .schema("ingestion")
+      .from("scrape_queue")
+      .upsert(discovered, { onConflict: "program_url" })
+      .select();
+
+    if (error) {
+      console.error("Queue insert error:", error);
+      return res.status(500).json({ error });
+    }
+
+    res.json({
+      message: "Crawl complete",
+      discovered: discovered.length,
+      queued: data ? data.length : 0
+    });
+
+  } catch (err) {
+    console.error("Crawl failed:", err.message);
+    res.status(500).json({ error: "Crawl failed", details: err.message });
+  }
+});
+
+// ==============================
+// PROCESS SCRAPE QUEUE
+// ==============================
+
+app.post("/process-queue", async (req, res) => {
+  try {
+    const limit = req.body.limit || 10;
+
+    // Fetch pending URLs from queue
+    const { data: queueItems, error: qErr } = await supabase
+      .schema("ingestion")
+      .from("scrape_queue")
+      .select("*")
+      .eq("status", "pending")
+      .limit(limit);
+
+    if (qErr) return res.status(500).json({ error: qErr });
+    if (!queueItems || queueItems.length === 0) {
+      return res.json({ message: "Queue is empty" });
+    }
+
+    console.log(`Processing ${queueItems.length} URLs from queue`);
+
+    const results = { success: 0, failed: 0, skipped: 0 };
+
+    for (const item of queueItems) {
+      try {
+        // Mark as processing
+        await supabase
+          .schema("ingestion")
+          .from("scrape_queue")
+          .update({ status: "processing" })
+          .eq("id", item.id);
+
+        // Scrape the page
+        const scrapeResponse = await axios.get(item.program_url, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+          timeout: 15000
+        });
+
+        const html = scrapeResponse.data;
+
+        if (!html || html.length < 500) {
+          await supabase.schema("ingestion").from("scrape_queue")
+            .update({ status: "failed", error_message: "Page too small" })
+            .eq("id", item.id);
+          results.failed++;
+          continue;
+        }
+
+        // Store raw HTML
+        await supabase
+          .schema("ingestion")
+          .from("raw_program_pages")
+          .upsert({
+            university_id: item.university_id,
+            source_url: item.program_url,
+            raw_html: html,
+            parse_status: "pending"
+          }, { onConflict: "source_url" });
+
+        // Mark queue item as done
+        await supabase
+          .schema("ingestion")
+          .from("scrape_queue")
+          .update({ status: "scraped", scraped_at: new Date().toISOString() })
+          .eq("id", item.id);
+
+        results.success++;
+        await delay(1500); // Respectful delay between requests
+
+      } catch (err) {
+        console.error("Failed to scrape:", item.program_url, err.message);
+        await supabase
+          .schema("ingestion")
+          .from("scrape_queue")
+          .update({ status: "failed", error_message: err.message })
+          .eq("id", item.id);
+        results.failed++;
+      }
+    }
+
+    res.json({
+      message: "Queue processing complete",
+      ...results
+    });
+
+  } catch (err) {
+    console.error("Queue processing error:", err.message);
+    res.status(500).json({ error: "Queue processing failed", details: err.message });
+  }
+});
