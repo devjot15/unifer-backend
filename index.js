@@ -628,9 +628,9 @@ IMPORTANT:
     education & teaching,
     agriculture, sustainability & environmental studies)
 - internship_available (true or false) — set true if the page mentions ANY of: internship, co-op, coop, practicum, fieldwork, field placement, work placement, work-integrated learning, industry project, clinical placement, experiential learning
-- gre_required (true or false)
-- gmat_required (true or false)
-- scholarship_available (true or false)
+- gre_required (true or false) — set true only if GRE is explicitly required, not just recommended
+- gmat_required (true or false) — set true only if GMAT is explicitly required, not just recommended
+- scholarship_available (true or false) — set true if any scholarship, bursary, fellowship, or funding opportunity is mentioned
 
 Content:
 ${trimmedText}
