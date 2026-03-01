@@ -118,10 +118,10 @@ app.post("/recommend", async (req, res) => {
 
     // 1️⃣ Fetch all data
     const { data: countries, error: cErr } = await supabase
-      .from("countries").select("*");
+      .schema("core").from("countries").select("*");
 
     const { data: universities, error: uErr } = await supabase
-      .from("universities").select("*");
+      .schema("core").from("universities").select("*");
 
     const tuitionBounds = {
       "Less than $12k":   { min: 0,      max: 11999 },
