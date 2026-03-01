@@ -1169,6 +1169,113 @@ app.post("/process-queue", async (req, res) => {
   }
 });
 
+// ==============================
+// MIGRATE PARSED → CORE
+// ==============================
+
+app.post("/migrate", async (req, res) => {
+  try {
+    const { data: parsed, error: pErr } = await supabase
+      .schema("ingestion")
+      .from("parsed_programs")
+      .select("*")
+      .eq("validation_status", "pending");
+
+    if (pErr) return res.status(500).json({ error: pErr });
+    if (!parsed || parsed.length === 0) {
+      return res.json({ message: "No programs to migrate" });
+    }
+
+    console.log(`Migrating ${parsed.length} programs to core.courses...`);
+
+    const exchangeRates = { CAD: 0.74, GBP: 1.27, AUD: 0.66, EUR: 1.08, USD: 1 };
+
+    let success = 0;
+    let failed = 0;
+
+    for (const p of parsed) {
+      try {
+        const { error: insertError } = await supabase
+          .schema("core")
+          .from("courses")
+          .insert({
+            name: p.program_name,
+            university_id: p.university_id,
+            degree_level: p.degree_level,
+            level: p.degree_level,
+            duration_years: p.duration_years,
+            tuition_usd: p.tuition_usd,
+            tuition_raw_text: p.tuition_raw_text,
+            field_category: p.field_category,
+            internship_available: p.internship_available || false,
+            gre_required: p.gre_required || false,
+            gmat_required: p.gmat_required || false,
+            scholarship_available: p.scholarship_available || false,
+            scholarship_details: p.scholarship_details,
+            funding_guaranteed: p.funding_guaranteed || false,
+            program_type: p.program_type,
+            ielts_minimum: p.ielts_minimum,
+            pte_minimum: p.pte_minimum,
+            toefl_minimum: p.toefl_minimum,
+            min_gpa_percentage: p.min_gpa_percentage,
+            accepts_backlogs: p.accepts_backlogs !== false,
+            work_experience_required: p.work_experience_required || 0,
+            subjects_required: p.subjects_required || [],
+            application_deadline_intl: p.application_deadline_intl,
+            application_materials: p.application_materials || []
+          });
+
+        if (insertError) {
+          console.error(`Migration failed for ${p.program_name}:`, insertError.message);
+          failed++;
+          continue;
+        }
+
+        await supabase
+          .schema("ingestion")
+          .from("parsed_programs")
+          .update({ validation_status: "migrated" })
+          .eq("id", p.id);
+
+        success++;
+      } catch (err) {
+        console.error(`Migration error for ${p.program_name}:`, err.message);
+        failed++;
+      }
+    }
+
+    const { data: overrides } = await supabase
+      .schema("ingestion")
+      .from("university_fee_structure")
+      .select("*")
+      .not("program_name_pattern", "is", null);
+
+    for (const override of overrides || []) {
+      const exchangeRate = exchangeRates[override.currency || "USD"] || 1;
+      const annualFee = Math.round(
+        override.international_fee * override.instalments_per_year * exchangeRate * 100
+      ) / 100;
+
+      await supabase
+        .schema("core")
+        .from("courses")
+        .update({
+          tuition_usd: annualFee,
+          data_quality: "international_rate_official"
+        })
+        .eq("university_id", override.university_id)
+        .ilike("name", override.program_name_pattern);
+    }
+
+    console.log(`Migration complete — success: ${success}, failed: ${failed}, overrides applied: ${(overrides || []).length}`);
+    res.json({ message: "Migration complete", success, failed, overrides_applied: (overrides || []).length });
+
+  } catch (err) {
+    console.error("Migration error:", err.message);
+    res.status(500).json({ error: "Migration failed", details: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
