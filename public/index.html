@@ -823,14 +823,11 @@ function checkPriorities() {
 
 function validateAllFields() {
   var allValid = true;
-  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects"];
   allGroups.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
-    var groupName = group.dataset.name;
-    if (optionalGroupNames.indexOf(groupName) !== -1) return;
     if (group.id === "englishScoreGroup") {
       var testVal = document.getElementById("profile_english_test").value;
-      if (testVal === "None") return;
+      if (!testVal || testVal === "None") return;
     }
     var visibleCards = Array.from(group.querySelectorAll(".option-card")).filter(
       function(c) { return c.style.display !== "none"; }
