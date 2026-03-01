@@ -258,8 +258,8 @@ app.post("/recommend", async (req, res) => {
     if (eligibleCourses.length === 0) {
       return res.json({
         empty: true,
-        message: "No courses matched your exact filters.",
-        suggestion: "Try adjusting your tuition band, duration, or GRE filter to see more results."
+        message: "No courses matched your profile and filters.",
+        suggestion: "Try adjusting your tuition band, duration, or English score — some programs may require a higher score than entered."
       });
     }
 
