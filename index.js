@@ -810,7 +810,22 @@ ${trimmedText}
     };
 
     const rate = exchangeRates[tuition_currency] || 1;
-    const tuition_usd = tuition_amount ? Math.round(tuition_amount * rate * 100) / 100 : null;
+    let tuition_usd = tuition_amount ? Math.round(tuition_amount * rate * 100) / 100 : null;
+
+    // Fallback to university fee structure if tuition not found on page
+    if (!tuition_usd && feeStructure) {
+      if (feeStructure.fee_type === "per_instalment") {
+        tuition_usd = Math.round(
+          feeStructure.international_fee * feeStructure.instalments_per_year * 100
+        ) / 100;
+      } else if (feeStructure.fee_type === "per_credit" && feeStructure.credits_per_year) {
+        tuition_usd = Math.round(
+          feeStructure.international_fee * feeStructure.credits_per_year * 100
+        ) / 100;
+      } else if (feeStructure.fee_type === "flat_annual") {
+        tuition_usd = feeStructure.international_fee;
+      }
+    }
 
     // Insert parsed data
     await supabase
