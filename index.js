@@ -762,6 +762,24 @@ ${trimmedText}
       duration_confidence = "low";
     }
 
+    // Fetch university fee structure as fallback
+    let feeStructure = null;
+    try {
+      const { data: feeData } = await supabase
+        .schema("ingestion")
+        .from("university_fee_structure")
+        .select("*")
+        .eq("university_id", raw.university_id)
+        .eq("program_level", parsed.degree_level === "PG" ?
+          (parsed.program_name?.toLowerCase().includes("doctor") ||
+           parsed.program_name?.toLowerCase().includes("phd") ? "doctoral" : "masters")
+          : "undergraduate")
+        .single();
+      feeStructure = feeData;
+    } catch(e) {
+      // No fee structure found — that's fine
+    }
+
     // Tuition parsing from raw text
     const rawFeeText = parsed.tuition_raw_text;
 
