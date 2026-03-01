@@ -905,10 +905,13 @@ app.post("/crawl-university", async (req, res) => {
         return;
       }
 
+      const basePattern = directory_url.replace(/\/$/, "");
       const isUBCProgram =
-        fullUrl.includes("grad.ubc.ca/prospective-students/graduate-degree-programs/") &&
+        fullUrl.startsWith(basePattern + "/") &&
         fullUrl !== directory_url &&
+        fullUrl !== basePattern &&
         !fullUrl.includes("#") &&
+        !fullUrl.includes("?") &&
         !seen.has(fullUrl);
 
       if (isUBCProgram) {
