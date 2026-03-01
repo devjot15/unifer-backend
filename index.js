@@ -615,9 +615,12 @@ DURATION:
 
 TUITION:
 - tuition_raw_text: exact fee text for INTERNATIONAL students only.
-  Look specifically for: "international tuition", "international student fees", "international program fee".
-  If only domestic fees are shown, return null.
+  Priority order:
+  1. Annual program fee (preferred)
+  2. Per-term or per-instalment fee — include the term "per term" or "per instalment" in the text
+  3. Per-credit fee — only if no other fee is available, include "per credit" in the text
   Never return domestic student fees.
+  If only domestic fees are shown, return null.
 
 FIELD:
 - field_category: must be exactly one of:
