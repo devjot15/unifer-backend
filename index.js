@@ -914,31 +914,45 @@ ${trimmedText}
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 app.post("/parse-batch", async (req, res) => {
-  const limit = req.body.limit || 10;
-
+  const limit = req.body.limit || 20;
   res.json({ message: `Starting background parse of up to ${limit} programs` });
 
   (async () => {
     let success = 0;
     let failed = 0;
+    let empty = 0;
 
     for (let i = 0; i < limit; i++) {
       try {
         const response = await fetch("http://localhost:5000/parse-program", {
-          method: "POST"
+          method: "POST",
+          signal: AbortSignal.timeout(30000)
         });
         const result = await response.json();
-        if (result.message === "No pending pages") break;
-        success++;
-        console.log(`[parse-batch] ✓ ${success}/${limit} parsed`);
+
+        if (result.message === "No pending pages") {
+          empty++;
+          break;
+        }
+
+        if (result.error) {
+          failed++;
+        } else {
+          success++;
+        }
       } catch (err) {
-        console.error(`[parse-batch] ✗ Error:`, err.message);
+        console.error(`Parse ${i + 1} failed:`, err.message);
         failed++;
       }
+
       await delay(2000);
+
+      if ((i + 1) % 10 === 0) {
+        console.log(`Parse progress: ${i + 1}/${limit} — success: ${success}, failed: ${failed}`);
+      }
     }
 
-    console.log(`Parse batch complete — success: ${success}, failed: ${failed}`);
+    console.log(`Parse batch complete — success: ${success}, failed: ${failed}, empty: ${empty}`);
   })();
 });
 
