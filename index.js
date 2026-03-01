@@ -852,44 +852,45 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 app.post("/parse-batch", async (req, res) => {
   const limit = req.body.limit || 20;
-  res.json({ message: `Starting background parse of up to ${limit} programs` });
+  const concurrency = req.body.concurrency || 5;
+
+  res.json({ message: `Starting parallel parse — limit: ${limit}, concurrency: ${concurrency}` });
 
   (async () => {
-    let success = 0;
-    let failed = 0;
-    let empty = 0;
+    const { data: pages } = await supabase
+      .schema("ingestion")
+      .from("raw_program_pages")
+      .select("id")
+      .eq("parse_status", "pending")
+      .limit(limit);
 
-    for (let i = 0; i < limit; i++) {
-      try {
-        const response = await fetch("http://localhost:5000/parse-program", {
-          method: "POST",
-          signal: AbortSignal.timeout(30000)
-        });
-        const result = await response.json();
-
-        if (result.message === "No pending pages") {
-          empty++;
-          break;
-        }
-
-        if (result.error) {
-          failed++;
-        } else {
-          success++;
-        }
-      } catch (err) {
-        console.error(`Parse ${i + 1} failed:`, err.message);
-        failed++;
-      }
-
-      await delay(2000);
-
-      if ((i + 1) % 10 === 0) {
-        console.log(`Parse progress: ${i + 1}/${limit} — success: ${success}, failed: ${failed}`);
-      }
+    if (!pages || pages.length === 0) {
+      console.log("No pending pages");
+      return;
     }
 
-    console.log(`Parse batch complete — success: ${success}, failed: ${failed}, empty: ${empty}`);
+    console.log(`Parsing ${pages.length} pages with concurrency ${concurrency}`);
+
+    let success = 0;
+    let failed = 0;
+
+    for (let i = 0; i < pages.length; i += concurrency) {
+      const chunk = pages.slice(i, i + concurrency);
+
+      await Promise.all(chunk.map(async (page) => {
+        try {
+          await parseProgramPage(page.id);
+          success++;
+        } catch (err) {
+          console.error(`Failed page ${page.id}:`, err.message);
+          failed++;
+        }
+      }));
+
+      console.log(`Progress: ${Math.min(i + concurrency, pages.length)}/${pages.length} — success: ${success}, failed: ${failed}`);
+    }
+
+    console.log(`Batch complete — success: ${success}, failed: ${failed}`);
   })();
 });
 
