@@ -202,6 +202,46 @@ app.post("/recommend", async (req, res) => {
         if (course.gmat_required) return false;
       }
 
+      // PROFILE ELIMINATION
+
+      // GPA check
+      if (answers.profile_gpa_percentage && course.min_gpa_percentage) {
+        if (parseFloat(answers.profile_gpa_percentage) < course.min_gpa_percentage) return false;
+      }
+
+      // Backlogs check
+      if (answers.profile_backlogs && parseInt(answers.profile_backlogs) > 0) {
+        if (course.accepts_backlogs === false) return false;
+      }
+
+      // Work experience check
+      if (course.work_experience_required && course.work_experience_required > 0) {
+        if (!answers.profile_work_experience ||
+            parseFloat(answers.profile_work_experience) < course.work_experience_required) return false;
+      }
+
+      // English score check
+      if (answers.profile_english_test && answers.profile_english_test !== "None") {
+        const score = parseFloat(answers.profile_english_score);
+        if (answers.profile_english_test === "IELTS" && course.ielts_minimum) {
+          if (score < course.ielts_minimum) return false;
+        }
+        if (answers.profile_english_test === "TOEFL" && course.toefl_minimum) {
+          if (score < course.toefl_minimum) return false;
+        }
+        if (answers.profile_english_test === "PTE" && course.pte_minimum) {
+          if (score < course.pte_minimum) return false;
+        }
+      }
+
+      // GRE/GMAT — if student has no score, eliminate programs that require it
+      if (!answers.profile_gre_score || parseFloat(answers.profile_gre_score) === 0) {
+        if (course.gre_required) return false;
+      }
+      if (!answers.profile_gmat_score || parseFloat(answers.profile_gmat_score) === 0) {
+        if (course.gmat_required) return false;
+      }
+
       return true;
     });
 
