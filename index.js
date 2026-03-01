@@ -592,31 +592,28 @@ app.post("/parse-program", async (req, res) => {
     const trimmedText = cleanText.substring(0, 8000);
 
     const prompt = `
-Extract the following fields.
+You are extracting structured data from a university program page.
+Return STRICT JSON only. No markdown, no explanation, no extra text.
 
-Return STRICT JSON only.
+FIELDS TO EXTRACT:
 
-Fields:
-- program_name
-- degree_level (UG or PG)
-Extract ALL of the following if present.
+- program_name: Full official program name as stated on the page
+- degree_level: Must be exactly "UG" or "PG". Masters, PhD, Graduate Certificate, MBA = PG. Bachelor = UG.
 
-1. official_duration_value (numeric)
-2. official_duration_unit ("months" or "years")
-3. official_duration_text (exact text from page)
-4. total_credits_required (numeric)
-5. credit_system ("US", "UK", "ECTS", "AUS", etc.)
-6. completion_time_value (numeric)
-7. completion_time_unit ("months" or "years")
+DURATION (extract ALL that apply):
+- official_duration_value: numeric value of advertised program length
+- official_duration_unit: "months" or "years"
+- official_duration_text: exact quoted text from page describing duration
+- total_credits_required: numeric credit count if stated
+- credit_system: "US", "UK", "ECTS", "AUS", "CAN"
+- completion_time_value: numeric value if average completion time is mentioned
+- completion_time_unit: "months" or "years"
 
-IMPORTANT:
-- Official duration refers to advertised program length.
-- Completion time refers to average time students take.
-- If something is not clearly stated, return null.
-- Do not guess.
+TUITION:
+- tuition_raw_text: exact fee text from page including currency symbol and amount
 
-- tuition_raw_text (exact fee text from the page, e.g. "$12,500 CAD" or "£9,250")
-- field_category (must be exactly one of the following:
+FIELD:
+- field_category: must be exactly one of:
     engineering & tech,
     business, management and economics,
     science & applied science,
@@ -626,11 +623,37 @@ IMPORTANT:
     law, public policy & governance,
     hospitality, tourism & service industry,
     education & teaching,
-    agriculture, sustainability & environmental studies)
-- internship_available (true or false) — set true if the page mentions ANY of: internship, co-op, coop, practicum, fieldwork, field placement, work placement, work-integrated learning, industry project, clinical placement, experiential learning
-- gre_required (true or false) — set true only if GRE is explicitly required, not just recommended
-- gmat_required (true or false) — set true only if GMAT is explicitly required, not just recommended
-- scholarship_available (true or false) — set true if any scholarship, bursary, fellowship, or funding opportunity is mentioned
+    agriculture, sustainability & environmental studies
+
+INTERNSHIP:
+- internship_available: true or false
+  Set TRUE if the page mentions ANY of the following words or phrases:
+  internship, co-op, coop, practicum, fieldwork, field placement,
+  field experience, work placement, work-integrated learning, industry project,
+  clinical placement, clinical experience, experiential learning, applied project,
+  community placement, industry internship, professional experience
+
+GRE / GMAT:
+- gre_required: true or false
+  Set TRUE if GRE is mentioned as required or strongly recommended for admission.
+  Set FALSE if GRE is optional, waived, not mentioned, or only recommended.
+- gmat_required: true or false
+  Set TRUE if GMAT is mentioned as required or strongly recommended for admission.
+  Set FALSE if GMAT is optional, waived, not mentioned, or only recommended.
+
+SCHOLARSHIP:
+- scholarship_available: true or false
+  Set TRUE if the page mentions ANY of the following:
+  scholarship, bursary, fellowship, funding, award, financial aid,
+  graduate award, entrance award, merit award, assistantship,
+  teaching assistantship, research assistantship, tuition waiver,
+  stipend, funded position
+
+RULES:
+- Return null for anything not clearly stated on the page
+- Do not guess or infer
+- Do not fabricate values
+- If a field is ambiguous, return null
 
 Content:
 ${trimmedText}
