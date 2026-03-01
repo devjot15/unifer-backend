@@ -882,6 +882,14 @@ ${trimmedText}
         gre_required: parsed.gre_required,
         gmat_required: parsed.gmat_required,
         scholarship_available: parsed.scholarship_available,
+        program_type: parsed.program_type || null,
+        ielts_minimum: parsed.ielts_minimum || null,
+        pte_minimum: parsed.pte_minimum || null,
+        toefl_minimum: parsed.toefl_minimum || null,
+        application_deadline_intl: parsed.application_deadline_intl || null,
+        application_materials: parsed.application_materials || [],
+        scholarship_details: parsed.scholarship_details || null,
+        funding_guaranteed: parsed.funding_guaranteed || false,
         validation_status: "pending"
       });
 
