@@ -993,10 +993,11 @@ app.post("/process-queue", async (req, res) => {
           .eq("id", item.id);
 
         results.success++;
+        console.log(`[queue] ✓ ${results.success}/${queueItems.length} scraped: ${item.program_url}`);
         await delay(1500);
 
       } catch (err) {
-        console.error("Failed to scrape:", item.program_url, err.message);
+        console.error(`[queue] ✗ Failed to scrape: ${item.program_url}`, err.message);
         await supabase
           .schema("ingestion")
           .from("scrape_queue")
