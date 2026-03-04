@@ -1420,6 +1420,22 @@ app.post("/ml/dropoff", async (req, res) => {
   }
 });
 
+app.post("/ml/save-profile", async (req, res) => {
+  try {
+    const { session_id, ...profile } = req.body;
+    
+    await supabase
+      .schema("ml")
+      .from("user_sessions")
+      .update(profile)
+      .eq("id", session_id);
+
+    res.json({ success: true });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/ml/recommendations", async (req, res) => {
   try {
     const { session_id, recommendations } = req.body;
