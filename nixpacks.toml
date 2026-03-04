@@ -1,8 +1,5 @@
 [phases.setup]
-nixPkgs = ["chromium", "nss", "freetype", "harfbuzz", "ca-certificates", "glib", "nssTools"]
+nixPkgs = ["nss", "freetype", "harfbuzz", "ca-certificates"]
 
 [phases.install]
-cmds = ["npm install"]
-
-[variables]
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+cmds = ["PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"]
