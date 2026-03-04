@@ -202,10 +202,10 @@ if (answers.gre_filter === "Without GRE or GMAT") {
   courseQuery = courseQuery.eq("gmat_required", false);
 }
 
-if (answers.profile_gpa_percentage) {
-  const gpa = parseFloat(answers.profile_gpa_percentage);
-  courseQuery = courseQuery.or(`min_gpa_percentage.is.null,min_gpa_percentage.lte.${gpa}`);
-}
+//if (answers.profile_gpa_percentage) {
+//const gpa = parseFloat(answers.profile_gpa_percentage);
+//courseQuery = courseQuery.or(`min_gpa_percentage.is.null,min_gpa_percentage.lte.${gpa}`);
+//}
 
 if (answers.profile_backlogs && parseInt(answers.profile_backlogs) > 0) {
   courseQuery = courseQuery.neq("accepts_backlogs", false);
