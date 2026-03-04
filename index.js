@@ -1356,6 +1356,95 @@ app.post("/migrate", async (req, res) => {
   }
 });
 
+// ==============================
+// ML TRACKING ROUTES
+// ==============================
+
+app.post("/ml/session", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .schema("ml")
+      .from("user_sessions")
+      .insert({ completed: false })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ session_id: data.id });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/ml/step-complete", async (req, res) => {
+  try {
+    const { session_id, step_number, time_spent_seconds, answers } = req.body;
+
+    await supabase
+      .schema("ml")
+      .from("question_events")
+      .insert({
+        session_id,
+        step_number,
+        time_spent_seconds
+      });
+
+    res.json({ success: true });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/ml/dropoff", async (req, res) => {
+  try {
+    const { session_id, dropped_at_step, time_spent_total_seconds } = req.body;
+
+    await supabase
+      .schema("ml")
+      .from("session_dropoffs")
+      .insert({
+        session_id,
+        dropped_at_step,
+        time_spent_total_seconds
+      });
+
+    await supabase
+      .schema("ml")
+      .from("user_sessions")
+      .update({ completed: false })
+      .eq("id", session_id);
+
+    res.json({ success: true });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/ml/recommendations", async (req, res) => {
+  try {
+    const { session_id, recommendations } = req.body;
+
+    const rows = recommendations.map((r, index) => ({
+      session_id,
+      course_id: r.course_id,
+      rank_shown: index + 1,
+      final_score: r.finalScore,
+      country_score: r.scores?.country,
+      course_score: r.scores?.course,
+      university_score: r.scores?.university
+    }));
+
+    await supabase
+      .schema("ml")
+      .from("recommendations_shown")
+      .insert(rows);
+
+    res.json({ success: true });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
