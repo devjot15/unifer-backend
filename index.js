@@ -11,7 +11,8 @@ async function fetchWithPuppeteer(url) {
   });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
     const html = await page.content();
     return html;
   } finally {
