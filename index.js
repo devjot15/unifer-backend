@@ -3,6 +3,23 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const puppeteer = require("puppeteer-core");
+
+async function fetchWithPuppeteer(url) {
+  const browser = await puppeteer.launch({
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true
+  });
+  try {
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    const html = await page.content();
+    return html;
+  } finally {
+    await browser.close();
+  }
+}
 const { createClient } = require("@supabase/supabase-js");
 const OpenAI = require("openai");
 
