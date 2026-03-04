@@ -1051,7 +1051,7 @@ app.post("/crawl-university", async (req, res) => {
           let $ = html ? cheerio.load(html) : null;
           const axiosLinks = $ ? $("a[href]").length : 0;
 
-          if (!html || axiosLinks < 10) {
+          if (!html || axiosLinks < 30) {
             console.log(`Axios got ${axiosLinks} links for ${dirUrl} — retrying with Puppeteer`);
             html = await fetchWithPuppeteer(dirUrl);
             $ = cheerio.load(html);
