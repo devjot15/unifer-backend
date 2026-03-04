@@ -7,7 +7,7 @@ const puppeteer = require("puppeteer-core");
 
 async function fetchWithPuppeteer(url) {
   const browser = await puppeteer.connect({
-    browserWSEndpoint: `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_TOKEN}`
+    browserWSEndpoint: `wss://chrome.browserless.io?token=2U5UENwcHnFsfxg065dfe159c7865e9aaf2ae16ccd0f026e2`
   });
   try {
     const page = await browser.newPage();
