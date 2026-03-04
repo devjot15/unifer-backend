@@ -1061,9 +1061,7 @@ app.post("/crawl-university", async (req, res) => {
               try { fullUrl = new URL(href, dirUrl).toString(); } catch(e) { return; }
               if (fullUrl.includes("#")) return;
               const isAccepted = acceptPatterns.some(pattern =>
-                fullUrl.startsWith(pattern + "/") ||
-                fullUrl.startsWith(pattern + "?") ||
-                fullUrl === pattern
+                fullUrl.startsWith(pattern)
               );
               if (isAccepted) axiosMatchCount++;
             });
@@ -1091,9 +1089,7 @@ app.post("/crawl-university", async (req, res) => {
 
             // Check if URL matches any of our accept patterns
             const isAccepted = acceptPatterns.some(pattern =>
-              fullUrl.startsWith(pattern + "/") ||
-              fullUrl.startsWith(pattern + "?") ||
-              fullUrl === pattern
+              fullUrl.startsWith(pattern)
             );
 
             if (!isAccepted) return;
