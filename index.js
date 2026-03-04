@@ -886,18 +886,25 @@ ${trimmedText}
 
 app.post("/parse-program", async (req, res) => {
   try {
-    const { data: raw } = await supabase
-      .schema("ingestion")
-      .from("raw_program_pages")
-      .select("id")
-      .eq("parse_status", "pending")
-      .order("scraped_at", { ascending: true })
-      .limit(1)
-      .single();
+    const pageId = req.body.page_id;
+    
+    let rawId;
+    if (pageId) {
+      rawId = pageId;
+    } else {
+      const { data: raw } = await supabase
+        .schema("ingestion")
+        .from("raw_program_pages")
+        .select("id")
+        .eq("parse_status", "pending")
+        .order("scraped_at", { ascending: true })
+        .limit(1)
+        .single();
+      if (!raw) return res.json({ message: "No pending pages" });
+      rawId = raw.id;
+    }
 
-    if (!raw) return res.json({ message: "No pending pages" });
-
-    const result = await parseProgramPage(raw.id);
+    const result = await parseProgramPage(rawId);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
