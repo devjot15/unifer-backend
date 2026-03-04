@@ -988,6 +988,7 @@ document.querySelectorAll(".next-btn").forEach(function(btn) {
   btn.addEventListener("click", function() {
     if (!validateCurrentStep()) return;
     formMessage.textContent = "";
+    trackStepComplete(currentStep, {});
     if (currentStep < 5) {
       currentStep++;
       updateStep(currentStep);
