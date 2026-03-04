@@ -1,0 +1,124 @@
+// Handle both single object (legacy) and array (multi-degree pages)
+const programList = Array.isArray(parsed) ? parsed : [parsed];
+
+for (const program of programList) {
+  let duration_years = null;
+  if (program.official_duration_value && program.official_duration_unit) {
+    duration_years = program.official_duration_unit === "months"
+      ? program.official_duration_value / 12
+      : program.official_duration_value;
+  }
+
+  const exchangeRates = { USD: 1, CAD: 0.74, GBP: 1.27, EUR: 1.08, AUD: 0.65 };
+  let tuition_usd = null;
+
+  if (program.tuition_raw_text) {
+    const match = program.tuition_raw_text.match(/[\d,]+\.?\d*/);
+    if (match) {
+      const amount = parseFloat(match[0].replace(/,/g, ""));
+      const rawLower = program.tuition_raw_text.toLowerCase();
+      const currency = program.tuition_raw_text.includes("CAD") ? "CAD"
+        : program.tuition_raw_text.includes("£") || program.tuition_raw_text.includes("GBP") ? "GBP"
+        : program.tuition_raw_text.includes("€") || program.tuition_raw_text.includes("EUR") ? "EUR"
+        : program.tuition_raw_text.includes("AUD") ? "AUD" : "USD";
+      const rate = exchangeRates[currency] || 1;
+
+      if (rawLower.includes("per credit") || rawLower.includes("per unit")) {
+        tuition_usd = null;
+      } else if (rawLower.includes("per term") || rawLower.includes("per instalment") || rawLower.includes("per semester")) {
+        tuition_usd = Math.round(amount * 3 * rate * 100) / 100;
+      } else {
+        tuition_usd = Math.round(amount * rate * 100) / 100;
+      }
+    }
+  }
+
+  if (!tuition_usd) {
+    const degreeLevel = program.degree_level === "PG" ? "masters" : "undergraduate";
+
+    // First try pattern match
+    const { data: feeStructures } = await supabase
+      .schema("ingestion")
+      .from("university_fee_structure")
+      .select("*")
+      .eq("university_id", raw.university_id)
+      .eq("program_level", degreeLevel)
+      .not("program_name_pattern", "is", null);
+
+    let matchedFee = null;
+    if (feeStructures && feeStructures.length > 0) {
+      for (const fee of feeStructures) {
+        const pattern = fee.program_name_pattern.replace(/%/g, "");
+        if (program.program_name.toLowerCase().includes(pattern.toLowerCase())) {
+          matchedFee = fee;
+          break;
+        }
+      }
+    }
+
+    // Fall back to default (null pattern)
+    if (!matchedFee) {
+      const { data: defaultFee } = await supabase
+        .schema("ingestion")
+        .from("university_fee_structure")
+        .select("*")
+        .eq("university_id", raw.university_id)
+        .eq("program_level", degreeLevel)
+        .is("program_name_pattern", null)
+        .single();
+      matchedFee = defaultFee;
+    }
+
+    if (matchedFee) {
+      const feeRate = exchangeRates[matchedFee.currency || "USD"] || 1;
+      if (matchedFee.fee_type === "per_instalment") {
+        tuition_usd = Math.round(matchedFee.international_fee * matchedFee.instalments_per_year * feeRate * 100) / 100;
+      } else if (matchedFee.fee_type === "flat_annual") {
+        tuition_usd = Math.round(matchedFee.international_fee * feeRate * 100) / 100;
+      }
+    }
+  }
+
+  const { error: insertError } = await supabase
+    .schema("ingestion")
+    .from("parsed_programs")
+    .upsert({
+      raw_page_id: raw.id,
+      university_id: raw.university_id,
+      program_name: program.program_name,
+      degree_level: program.degree_level,
+      program_type: program.program_type || null,
+      duration_years,
+      duration_confidence: "high",
+      official_duration_text: program.official_duration_text || null,
+      tuition_usd,
+      tuition_raw_text: program.tuition_raw_text || null,
+      field_category: program.field_category || null,
+      internship_available: program.internship_available || false,
+      gre_required: program.gre_required || false,
+      gmat_required: program.gmat_required || false,
+      scholarship_available: program.scholarship_available || false,
+      scholarship_details: program.scholarship_details || null,
+      funding_guaranteed: program.funding_guaranteed || false,
+      ielts_minimum: program.ielts_minimum || null,
+      pte_minimum: program.pte_minimum || null,
+      toefl_minimum: program.toefl_minimum || null,
+      application_deadline_intl: program.application_deadline_intl || null,
+      application_materials: program.application_materials || [],
+      min_gpa_percentage: program.min_gpa_percentage || null,
+      accepts_backlogs: program.accepts_backlogs !== false,
+      subjects_required: program.subjects_required || [],
+      work_experience_required: program.work_experience_required || 0,
+      validation_status: "pending",
+      parse_status: "parsed"
+    }, { onConflict: "raw_page_id,program_name" });
+
+  if (insertError) {
+    console.error("Insert error for", program.program_name, insertError.message);
+  }
+}
+
+await supabase
+  .schema("ingestion")
+  .from("raw_program_pages")
+  .update({ parse_status: "parsed" })
