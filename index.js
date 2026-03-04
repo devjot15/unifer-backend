@@ -1112,7 +1112,16 @@ app.post("/crawl-university", async (req, res) => {
             });
           });
 
-          console.log("Sample URLs found:", [...seen].slice(0, 10));
+          const allLinks = [];
+          $("a[href]").each(function() {
+            const href = $(this).attr("href");
+            if (!href) return;
+            try {
+              const full = new URL(href, dirUrl).toString();
+              if (full.includes("mcgill.ca") && !full.includes("#")) allLinks.push(full);
+            } catch(e) {}
+          });
+          console.log("All McGill links found:", [...new Set(allLinks)].slice(0, 30));
           console.log(`Crawled ${dirUrl} — found ${seen.size} unique URLs so far`);
           await new Promise(r => setTimeout(r, 500));
 
