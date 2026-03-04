@@ -783,6 +783,7 @@ ${trimmedText}
     const programList = Array.isArray(parsed) ? parsed : [parsed];
 
     for (const program of programList) {
+      if (!program.program_name) continue;
       let duration_years = null;
       if (program.official_duration_value && program.official_duration_unit) {
         duration_years = program.official_duration_unit === "months"
