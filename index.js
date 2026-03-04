@@ -6,9 +6,11 @@ const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
 
 async function fetchWithPuppeteer(url) {
+  const chromium = require("@sparticuz/chromium");
   const browser = await puppeteer.launch({
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
     headless: true
   });
   try {
