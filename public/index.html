@@ -1031,6 +1031,45 @@ form.addEventListener("submit", function(e) {
     </div>
   `;
 
+  // Save full profile to ML session
+  if (sessionId) {
+    fetch("/ml/save-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        degree_completed: document.getElementById("profile_degree_completed").value,
+        gpa_percentage: document.getElementById("profile_gpa_percentage").value,
+        backlogs: document.getElementById("profile_backlogs").value,
+        english_test: document.getElementById("profile_english_test").value,
+        english_score: document.getElementById("profile_english_score").value,
+        gre_score: document.getElementById("profile_gre_score").value,
+        gmat_score: document.getElementById("profile_gmat_score").value,
+        work_experience: document.getElementById("profile_work_experience").value,
+        priority_1: document.getElementById("priority_1").value,
+        priority_2: document.getElementById("priority_2").value,
+        priority_3: document.getElementById("priority_3").value,
+        cost_of_living: document.getElementById("cost_of_living").value,
+        work_permit_importance: document.getElementById("work_permit_importance").value,
+        english_preference: document.getElementById("english_preference").value,
+        pr_importance: document.getElementById("pr_importance").value,
+        gov_support_importance: document.getElementById("gov_support_importance").value,
+        level: document.getElementById("level").value,
+        duration: document.getElementById("duration").value,
+        tuition_band: document.getElementById("tuition_band").value,
+        field: document.getElementById("field").value,
+        internship_importance: document.getElementById("internship_importance").value,
+        scholarship_importance: document.getElementById("scholarship_importance").value,
+        location_preference: document.getElementById("location_preference").value,
+        ranking_importance: document.getElementById("ranking_importance").value,
+        career_importance: document.getElementById("career_importance").value,
+        admission_speed_importance: document.getElementById("admission_speed_importance").value,
+        total_form_time_seconds: (Date.now() - formStartTime) / 1000,
+        completed: true
+      })
+    }).catch(e => {});
+  }
+
   fetch("/recommend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
