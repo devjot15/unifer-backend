@@ -1037,12 +1037,25 @@ app.post("/crawl-university", async (req, res) => {
         visitedDirectories.add(dirUrl);
 
         try {
-          const response = await axios.get(dirUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-            timeout: 20000
-          });
+          let html;
+          try {
+            const response = await axios.get(dirUrl, {
+              headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+              timeout: 20000
+            });
+            html = response.data;
+          } catch(e) {
+            html = null;
+          }
 
-          const $ = cheerio.load(response.data);
+          let $ = html ? cheerio.load(html) : null;
+          const axiosLinks = $ ? $("a[href]").length : 0;
+
+          if (!html || axiosLinks < 10) {
+            console.log(`Axios got ${axiosLinks} links for ${dirUrl} — retrying with Puppeteer`);
+            html = await fetchWithPuppeteer(dirUrl);
+            $ = cheerio.load(html);
+          }
 
           $("a[href]").each(function () {
             const href = $(this).attr("href");
