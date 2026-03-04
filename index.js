@@ -613,7 +613,7 @@ async function parseProgramPage(pageId) {
     const $ = cheerio.load(raw.raw_html);
     $("script, style, nav, footer, header").remove();
     const text = $("body").text().replace(/\s+/g, " ").trim();
-    const trimmedText = text.substring(0, 12000);
+    const trimmedText = text.substring(0, 6000);
 
     const prompt = `
 You are extracting structured data from a university program page.
