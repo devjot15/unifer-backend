@@ -667,7 +667,9 @@ PROGRAM TYPE:
     doctoral — any PhD or doctoral degree regardless of type
 
 DURATION:
-- official_duration_value: numeric value of advertised program length
+- official_duration_value: numeric value of advertised program length. 
+  Convert word-based numbers to digits: "one"=1, "two"=2, "three"=3, "four"=4, "five"=5.
+  Look for patterns like "X years of funding" or "X-year program" as duration signals.
 - official_duration_unit: "months" or "years"
 - official_duration_text: exact quoted text from page describing duration
 - total_credits_required: numeric credit count if stated
