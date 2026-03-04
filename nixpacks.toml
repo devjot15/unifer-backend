@@ -1,5 +1,0 @@
-[phases.setup]
-nixPkgs = ["nss", "freetype", "harfbuzz", "ca-certificates"]
-
-[phases.install]
-cmds = ["PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"]
