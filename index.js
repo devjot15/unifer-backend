@@ -1112,6 +1112,7 @@ app.post("/crawl-university", async (req, res) => {
             });
           });
 
+          console.log("Sample URLs found:", [...seen].slice(0, 10));
           console.log(`Crawled ${dirUrl} — found ${seen.size} unique URLs so far`);
           await new Promise(r => setTimeout(r, 500));
 
