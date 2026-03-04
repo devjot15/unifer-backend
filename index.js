@@ -6,23 +6,8 @@ const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
 
 async function fetchWithPuppeteer(url) {
-  const { execSync } = require("child_process");
-  let executablePath;
-  try {
-    executablePath = execSync("find /nix -name chromium -type f 2>/dev/null | head -1").toString().trim();
-    if (!executablePath) {
-      executablePath = execSync("which chromium || which chromium-browser 2>/dev/null").toString().trim();
-    }
-  } catch(e) {
-    executablePath = null;
-  }
-  console.log("Using Chromium at:", executablePath);
-  if (!executablePath) throw new Error("Chromium not found on system");
-  
-  const browser = await puppeteer.launch({
-    executablePath,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    headless: true
+  const browser = await puppeteer.connect({
+    browserWSEndpoint: `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_TOKEN}`
   });
   try {
     const page = await browser.newPage();
