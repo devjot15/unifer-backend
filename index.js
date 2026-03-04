@@ -6,11 +6,17 @@ const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
 
 async function fetchWithPuppeteer(url) {
-  const chromium = require("@sparticuz/chromium");
+  const { execSync } = require("child_process");
+  let executablePath;
+  try {
+    executablePath = execSync("which chromium || which chromium-browser || which google-chrome").toString().trim();
+  } catch(e) {
+    executablePath = "/run/current-system/sw/bin/chromium";
+  }
+  console.log("Using Chromium at:", executablePath);
   const browser = await puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
+    executablePath,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     headless: true
   });
   try {
