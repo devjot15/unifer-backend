@@ -110,6 +110,22 @@ app.get("/seed", async (req, res) => {
   }
 });
 
+app.get("/debug-courses", async (req, res) => {
+  const { data, error } = await supabase
+    .schema("core")
+    .from("courses")
+    .select("id, name, degree_level, field_category, tuition_usd, duration_years")
+    .eq("degree_level", "PG")
+    .eq("field_category", "engineering & tech")
+    .gte("tuition_usd", 25001)
+    .lte("tuition_usd", 999999)
+    .gte("duration_years", 1)
+    .lte("duration_years", 99)
+    .limit(5);
+  
+  res.json({ count: data?.length, error: error?.message, sample: data });
+});
+
 app.post("/recommend", async (req, res) => {
   try {
     console.log("======== NEW REQUEST ========");
