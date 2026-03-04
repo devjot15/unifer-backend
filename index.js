@@ -619,6 +619,11 @@ async function parseProgramPage(pageId) {
 You are extracting structured data from a university program page.
 Return STRICT JSON only. No markdown, no explanation, no extra text.
 
+IMPORTANT: Many pages list MULTIPLE degrees (e.g. MA, MSc, PhD in the same subject area).
+You MUST return an ARRAY of program objects — one object per distinct degree.
+Even if only one degree is found, return it as a single-element array.
+Example: [{"program_name": "Master of Science", ...}, {"program_name": "Doctor of Philosophy", ...}]
+
 FIELDS TO EXTRACT:
 
 - program_name: Full official program name as stated on the page
