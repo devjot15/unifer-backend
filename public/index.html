@@ -714,6 +714,68 @@ button:disabled {
 
   <script>
 var currentStep = 1;
+// ML Tracking
+var sessionId = null;
+var stepStartTime = Date.now();
+var formStartTime = Date.now();
+var questionTimings = {};
+
+async function createSession() {
+  try {
+    const res = await fetch("/ml/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    sessionId = data.session_id;
+  } catch(e) {
+    console.log("Session tracking failed", e);
+  }
+}
+
+async function trackStepComplete(stepNumber, answers) {
+  if (!sessionId) return;
+  try {
+    await fetch("/ml/step-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        step_number: stepNumber,
+        time_spent_seconds: (Date.now() - stepStartTime) / 1000,
+        answers
+      })
+    });
+  } catch(e) {}
+  stepStartTime = Date.now();
+}
+
+async function trackDropoff(stepNumber) {
+  if (!sessionId) return;
+  try {
+    await fetch("/ml/dropoff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        dropped_at_step: stepNumber,
+        time_spent_total_seconds: (Date.now() - formStartTime) / 1000
+      })
+    });
+  } catch(e) {}
+}
+
+// Start session immediately
+createSession();
+
+// Track tab/browser close as dropoff
+window.addEventListener("beforeunload", function() {
+  if (currentStep < 5) {
+    trackDropoff(currentStep);
+  }
+});
+
 var steps = document.querySelectorAll(".form-step");
 var progressFill = document.querySelector(".step-progress-fill");
 var form = document.getElementById("recommendForm");
