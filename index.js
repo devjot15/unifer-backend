@@ -923,54 +923,100 @@ app.post("/parse-batch", async (req, res) => {
 
 app.post("/crawl-university", async (req, res) => {
   try {
-    const { university_id, directory_url } = req.body;
+    const { university_id, directory_url, directory_urls, url_patterns, depth = 1 } = req.body;
 
-    if (!university_id || !directory_url) {
-      return res.status(400).json({ error: "university_id and directory_url are required" });
+    if (!university_id) {
+      return res.status(400).json({ error: "university_id is required" });
     }
 
-    console.log("Crawling directory:", directory_url);
+    // Support single or multiple directory URLs
+    const startUrls = directory_urls || (directory_url ? [directory_url] : null);
+    if (!startUrls || startUrls.length === 0) {
+      return res.status(400).json({ error: "directory_url or directory_urls array is required" });
+    }
 
-    const response = await axios.get(directory_url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-      timeout: 20000
+    // Build URL acceptance patterns
+    // If url_patterns provided, use those. Otherwise derive from start URLs.
+    const acceptPatterns = url_patterns || startUrls.map(u => {
+      const parsed = new URL(u);
+      return parsed.origin + parsed.pathname.replace(/\/$/, "");
     });
 
-    const $ = cheerio.load(response.data);
+    console.log("Crawling directories:", startUrls);
+    console.log("Accept patterns:", acceptPatterns);
+
     const discovered = [];
     const seen = new Set();
+    const toVisit = [...startUrls];
+    const visitedDirectories = new Set();
 
-    $("a[href]").each(function () {
-      const href = $(this).attr("href");
-      if (!href) return;
+    // BFS up to specified depth
+    for (let d = 0; d < depth; d++) {
+      const currentBatch = [...toVisit];
+      toVisit.length = 0;
 
-      let fullUrl;
-      try {
-        fullUrl = new URL(href, directory_url).toString();
-      } catch (e) {
-        return;
+      for (const dirUrl of currentBatch) {
+        if (visitedDirectories.has(dirUrl)) continue;
+        visitedDirectories.add(dirUrl);
+
+        try {
+          const response = await axios.get(dirUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+            timeout: 20000
+          });
+
+          const $ = cheerio.load(response.data);
+
+          $("a[href]").each(function () {
+            const href = $(this).attr("href");
+            if (!href) return;
+
+            let fullUrl;
+            try {
+              fullUrl = new URL(href, dirUrl).toString();
+            } catch (e) {
+              return;
+            }
+
+            // Skip anchors, query strings, and already seen
+            if (fullUrl.includes("#") || seen.has(fullUrl)) return;
+
+            // Check if URL matches any of our accept patterns
+            const isAccepted = acceptPatterns.some(pattern =>
+              fullUrl.startsWith(pattern + "/") ||
+              fullUrl.startsWith(pattern + "?") ||
+              fullUrl === pattern
+            );
+
+            if (!isAccepted) return;
+
+            // Skip the directory URLs themselves
+            if (startUrls.includes(fullUrl) || visitedDirectories.has(fullUrl)) return;
+
+            seen.add(fullUrl);
+
+            // If depth > 1, also queue this URL for further crawling
+            if (d < depth - 1) {
+              toVisit.push(fullUrl);
+            }
+
+            discovered.push({
+              university_id,
+              program_url: fullUrl,
+              status: "pending"
+            });
+          });
+
+          console.log(`Crawled ${dirUrl} — found ${seen.size} unique URLs so far`);
+          await new Promise(r => setTimeout(r, 500));
+
+        } catch (err) {
+          console.error(`Failed to crawl ${dirUrl}:`, err.message);
+        }
       }
+    }
 
-      const basePattern = directory_url.replace(/\/$/, "");
-      const isUBCProgram =
-        fullUrl.startsWith(basePattern + "/") &&
-        fullUrl !== directory_url &&
-        fullUrl !== basePattern &&
-        !fullUrl.includes("#") &&
-        !fullUrl.includes("?") &&
-        !seen.has(fullUrl);
-
-      if (isUBCProgram) {
-        seen.add(fullUrl);
-        discovered.push({
-          university_id,
-          program_url: fullUrl,
-          status: "pending"
-        });
-      }
-    });
-
-    console.log("Discovered URLs:", discovered.length);
+    console.log("Total discovered URLs:", discovered.length);
 
     if (discovered.length === 0) {
       return res.json({ message: "No program URLs found", discovered: 0 });
