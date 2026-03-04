@@ -1049,10 +1049,27 @@ app.post("/crawl-university", async (req, res) => {
           }
 
           let $ = html ? cheerio.load(html) : null;
-          const axiosLinks = $ ? $("a[href]").length : 0;
 
-          if (!html || axiosLinks < 30) {
-            console.log(`Axios got ${axiosLinks} links for ${dirUrl} — retrying with Puppeteer`);
+          // Count matching URLs from axios
+          let axiosMatchCount = 0;
+          if ($) {
+            $("a[href]").each(function() {
+              const href = $(this).attr("href");
+              if (!href) return;
+              let fullUrl;
+              try { fullUrl = new URL(href, dirUrl).toString(); } catch(e) { return; }
+              if (fullUrl.includes("#")) return;
+              const isAccepted = acceptPatterns.some(pattern =>
+                fullUrl.startsWith(pattern + "/") ||
+                fullUrl.startsWith(pattern + "?") ||
+                fullUrl === pattern
+              );
+              if (isAccepted) axiosMatchCount++;
+            });
+          }
+
+          if (!html || axiosMatchCount < 30) {
+            console.log(`Axios found only ${axiosMatchCount} matching links for ${dirUrl} — retrying with Puppeteer`);
             html = await fetchWithPuppeteer(dirUrl);
             $ = cheerio.load(html);
           }
