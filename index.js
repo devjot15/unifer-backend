@@ -642,10 +642,28 @@ async function parseProgramPage(pageId) {
     .eq("id", pageId);
 
   try {
+    // IMPROVED (targeted extraction)
     const $ = cheerio.load(raw.raw_html);
-    $("script, style, nav, footer, header").remove();
-    const text = $("body").text().replace(/\s+/g, " ").trim();
-    const trimmedText = text.substring(0, 12000);
+    $("script, style, nav, footer, header, aside, .menu, .sidebar, .navigation, .breadcrumb, .cookie, .banner, .advertisement").remove();
+
+    // Prioritise main content areas
+    const mainSelectors = ["main", "article", ".content", "#content", ".program-content", ".page-content", ".main-content", "[role='main']"];
+    let contentText = "";
+
+    for (const selector of mainSelectors) {
+      const el = $(selector);
+      if (el.length && el.text().trim().length > 500) {
+        contentText = el.text().replace(/\s+/g, " ").trim();
+        break;
+      }
+    }
+
+    // Fallback to full body if no main content found
+    if (!contentText) {
+      contentText = $("body").text().replace(/\s+/g, " ").trim();
+    }
+
+    const trimmedText = contentText.substring(0, 12000);
 
     const prompt = `
 You are extracting structured data from a university program page.
