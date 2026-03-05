@@ -2201,13 +2201,14 @@ setInterval(async () => {
 console.log("Background worker started — polling every 3 minutes");
 
 app.get("/test-page", async (req, res) => {
-  const response = await axios.get("https://www.grad.ubc.ca/prospective-students/graduate-degree-programs/master-of-arts-english", {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" }
+  const html = await fetchWithPuppeteer("https://you.ubc.ca/programs/");
+  const $ = cheerio.load(html);
+  const links = [];
+  $("a[href]").each(function() {
+    const href = $(this).attr("href");
+    if (href && href.includes("ubc.ca")) links.push(href);
   });
-  const $ = cheerio.load(response.data);
-  $("script, style, nav, footer, header, aside, .menu, .sidebar, .navigation, .breadcrumb").remove();
-  const text = $("main, article, .content, #content, [role='main']").first().text().replace(/\s+/g, " ").trim();
-  res.send(text.substring(0, 3000));
+  res.json([...new Set(links)].slice(0, 50));
 });
 
 const PORT = process.env.PORT || 5000;
