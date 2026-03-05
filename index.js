@@ -1787,7 +1787,69 @@ async function updateJobStatus(jobId, status, errorMessage = null) {
 
 async function crawlDirectory(universityId, dirUrl, depth = 1) {
   const parsedBase = new URL(dirUrl);
-  const acceptPattern = parsedBase.origin + parsedBase.pathname.replace(/\/$/, "");
+  const baseDomain = parsedBase.hostname;
+
+  const PROGRAM_URL_SIGNALS = [
+    "program", "degree", "graduate", "master", "phd", "doctoral",
+    "course", "faculty", "school", "department", "study", "academic",
+    "msc", "mba", "med", "llm", "meng", "certificate", "diploma"
+  ];
+
+  const SKIP_URL_SIGNALS = [
+    "news", "event", "blog", "contact", "about", "login", "apply",
+    "alumni", "giving", "donate", "campus", "map", "directory",
+    "privacy", "accessibility", "copyright", "sitemap", "search",
+    "career", "job", "staff", "faculty-staff", "research-staff"
+  ];
+
+  function isProgramUrl(url) {
+    const path = url.toLowerCase();
+    const hasProgram = PROGRAM_URL_SIGNALS.some(s => path.includes(s));
+    const shouldSkip = SKIP_URL_SIGNALS.some(s => path.includes(s));
+    return hasProgram && !shouldSkip;
+  }
+
+  async function fetchPage(url) {
+    let html = null;
+
+    try {
+      const res = await axios.get(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+        timeout: 20000
+      });
+      html = res.data;
+    } catch (e) {
+      html = null;
+    }
+
+    let needsPuppeteer = false;
+
+    if (!html || html.length < 5000) {
+      needsPuppeteer = true;
+    } else {
+      const $test = cheerio.load(html);
+      const linkCount = $test("a[href]").length;
+      if (linkCount < 5) needsPuppeteer = true;
+    }
+
+    if (needsPuppeteer) {
+      console.log(`[crawl] Auto-switching to Puppeteer for: ${url} (axios html: ${html?.length || 0} chars)`);
+      try {
+        html = await Promise.race([
+          fetchWithPuppeteer(url),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Puppeteer timeout")), 45000)
+          )
+        ]);
+      } catch (e) {
+        console.error(`[crawl] Puppeteer failed for ${url}:`, e.message);
+        return null;
+      }
+    }
+
+    return html;
+  }
+
   const discovered = [];
   const seen = new Set();
   const toVisit = [dirUrl];
@@ -1801,57 +1863,46 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
       if (visited.has(url)) continue;
       visited.add(url);
 
-      try {
-        let html;
+      const html = await fetchPage(url);
+      if (!html) continue;
+
+      const $ = cheerio.load(html);
+      let foundOnPage = 0;
+
+      $("a[href]").each(function () {
+        const href = $(this).attr("href");
+        if (!href) return;
+
+        let full;
         try {
-          const res = await axios.get(url, {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-            timeout: 20000
-          });
-          html = res.data;
-        } catch (e) { html = null; }
+          full = new URL(href, url).toString();
+        } catch (e) { return; }
 
-        let axiosCount = 0;
-        if (html) {
-          const $test = cheerio.load(html);
-          $test("a[href]").each(function () {
-            const href = $test(this).attr("href");
-            if (!href) return;
-            try {
-              const full = new URL(href, url).toString();
-              if (full.startsWith(acceptPattern)) axiosCount++;
-            } catch (e) {}
-          });
-        }
+        let fullHostname;
+        try {
+          fullHostname = new URL(full).hostname;
+        } catch (e) { return; }
 
-        if (!html || axiosCount < 10) {
-          console.log(`[crawl] Axios thin (${axiosCount} links), using Puppeteer for: ${url}`);
-          try {
-            html = await fetchWithPuppeteer(url);
-          } catch (e) {
-            console.error(`[crawl] Puppeteer failed: ${e.message}`);
-            continue;
-          }
-        }
+        if (fullHostname !== baseDomain) return;
 
-        const $ = cheerio.load(html);
-        $("a[href]").each(function () {
-          const href = $(this).attr("href");
-          if (!href) return;
-          let full;
-          try { full = new URL(href, url).toString(); } catch (e) { return; }
-          if (full.includes("#") || seen.has(full)) return;
-          if (!full.startsWith(acceptPattern)) return;
-          if (toVisit.includes(full) || visited.has(full)) return;
-          seen.add(full);
-          if (d < depth - 1) toVisit.push(full);
-          discovered.push({ university_id: universityId, program_url: full, status: "pending" });
+        if (full.includes("#") || seen.has(full)) return;
+
+        if (!isProgramUrl(full)) return;
+
+        seen.add(full);
+        foundOnPage++;
+
+        if (d < depth - 1) toVisit.push(full);
+
+        discovered.push({
+          university_id: universityId,
+          program_url: full,
+          status: "pending"
         });
+      });
 
-        await new Promise(r => setTimeout(r, 500));
-      } catch (e) {
-        console.error(`[crawl] Failed: ${url}`, e.message);
-      }
+      console.log(`[crawl] ${url} → found ${foundOnPage} program URLs`);
+      await new Promise(r => setTimeout(r, 500));
     }
   }
 
