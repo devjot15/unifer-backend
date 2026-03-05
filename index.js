@@ -688,6 +688,8 @@ PROGRAM TYPE:
 DURATION:
 - official_duration_value: numeric value of advertised program length. 
   Convert word-based numbers to digits: "one"=1, "two"=2, "three"=3, "four"=4, "five"=5.
+  For ranges like "one or two years", "two to three years", "1-2 years" — always take the AVERAGE value.
+  So "one or two years" = 1.5, "two to three years" = 2.5, "1-2 years" = 1.5.
   Look for patterns like "X years of funding" or "X-year program" as duration signals.
 - official_duration_unit: "months" or "years"
 - official_duration_text: exact quoted text from page describing duration
