@@ -673,7 +673,7 @@ DURATION:
   Look for patterns like "X years of funding" or "X-year program" as duration signals.
 - official_duration_unit: "months" or "years"
 - official_duration_text: exact quoted text from page describing duration
-- total_credits_required: numeric credit count if stated
+- total_credits_required: numeric credit count if stated. Look carefully for patterns like "(45 credits)", "45-credit program", "requires 45 credits", or credits mentioned in program title links on the page.
 - credit_system: "US", "UK", "ECTS", "AUS", "CAN"
 - completion_time_value: numeric value if average completion time is mentioned
 - completion_time_unit: "months" or "years"
