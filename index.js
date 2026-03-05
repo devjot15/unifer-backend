@@ -1898,7 +1898,12 @@ async function scrapeQueueForUniversity(universityId) {
           } catch (e) { html = null; }
 
           if (!html || html.length < 500) {
-            html = await fetchWithPuppeteer(item.program_url);
+            html = await Promise.race([
+              fetchWithPuppeteer(item.program_url),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Puppeteer timeout after 45s")), 45000)
+              )
+            ]);
           }
 
           if (!html || html.length < 500) {
