@@ -2180,6 +2180,16 @@ app.get("/worker/status", (req, res) => {
 setInterval(runWorker, 3 * 60 * 1000);
 console.log("Background worker started — polling every 3 minutes");
 
+app.get("/test-page", async (req, res) => {
+  const response = await axios.get("https://www.grad.ubc.ca/prospective-students/graduate-degree-programs/master-of-arts-english", {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" }
+  });
+  const $ = cheerio.load(response.data);
+  $("script, style, nav, footer, header, aside, .menu, .sidebar, .navigation, .breadcrumb").remove();
+  const text = $("main, article, .content, #content, [role='main']").first().text().replace(/\s+/g, " ").trim();
+  res.send(text.substring(0, 3000));
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
