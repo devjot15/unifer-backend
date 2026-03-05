@@ -817,7 +817,10 @@ ${trimmedText}
       }
 
       if (!tuition_usd) {
-        const degreeLevel = program.degree_level === "PG" ? "masters" : "undergraduate";
+        const isdoctoral = program.program_name?.toLowerCase().includes("doctor") || 
+                       program.program_type?.toLowerCase() === "doctoral";
+        const degreeLevel = program.degree_level === "UG" ? "undergraduate" : 
+                            isdoctoral ? "doctoral" : "masters";
 
         // First try pattern match
         const { data: feeStructures } = await supabase
