@@ -5,10 +5,10 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
 
+const browserWSEndpoint = `wss://chrome.browserless.io?token=2U5UENwcHnFsfxg065dfe159c7865e9aaf2ae16ccd0f026e2`;
+
 async function fetchWithPuppeteer(url) {
-  const browser = await puppeteer.connect({
-    browserWSEndpoint: `wss://chrome.browserless.io?token=2U5UENwcHnFsfxg065dfe159c7865e9aaf2ae16ccd0f026e2`
-  });
+  const browser = await puppeteer.connect({ browserWSEndpoint });
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -1203,14 +1203,34 @@ app.post("/process-queue", async (req, res) => {
           timeout: 15000
         });
 
-        const html = scrapeResponse.data;
+        let html = scrapeResponse.data;
 
         if (!html || html.length < 500) {
-          await supabase.schema("ingestion").from("scrape_queue")
-            .update({ status: "failed", error_message: "Page too small" })
-            .eq("id", item.id);
-          results.failed++;
-          continue;
+          console.log(`[queue] Axios got small page, trying Browserless for: ${item.program_url}`);
+          try {
+            const browser = await puppeteer.connect({ browserWSEndpoint });
+            const page = await browser.newPage();
+            await page.goto(item.program_url, { waitUntil: "domcontentloaded", timeout: 30000 });
+            await new Promise(r => setTimeout(r, 3000));
+            html = await page.content();
+            await browser.disconnect();
+            console.log(`[queue] Browserless got ${html.length} chars for: ${item.program_url}`);
+          } catch (bErr) {
+            console.error(`[queue] Browserless also failed: ${bErr.message}`);
+            await supabase.schema("ingestion").from("scrape_queue")
+              .update({ status: "failed", error_message: `Browserless failed: ${bErr.message}` })
+              .eq("id", item.id);
+            results.failed++;
+            continue;
+          }
+
+          if (!html || html.length < 500) {
+            await supabase.schema("ingestion").from("scrape_queue")
+              .update({ status: "failed", error_message: "Page too small even after Browserless" })
+              .eq("id", item.id);
+            results.failed++;
+            continue;
+          }
         }
 
         await supabase
