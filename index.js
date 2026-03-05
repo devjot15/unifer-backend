@@ -1167,13 +1167,19 @@ app.post("/crawl-university", async (req, res) => {
 app.post("/process-queue", async (req, res) => {
   try {
     const limit = req.body.limit || 10;
+    const university_id = req.body.university_id;
 
-    const { data: queueItems, error: qErr } = await supabase
+    let query = supabase
       .schema("ingestion")
       .from("scrape_queue")
       .select("*")
-      .eq("status", "pending")
-      .limit(limit);
+      .eq("status", "pending");
+
+    if (university_id) {
+      query = query.eq("university_id", university_id);
+    }
+
+    const { data: queueItems, error: qErr } = await query.limit(limit);
 
     if (qErr) return res.status(500).json({ error: qErr });
     if (!queueItems || queueItems.length === 0) {
