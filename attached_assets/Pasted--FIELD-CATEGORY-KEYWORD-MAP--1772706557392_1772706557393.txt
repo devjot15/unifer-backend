@@ -1,0 +1,597 @@
+// ============================================================
+// FIELD CATEGORY KEYWORD MAP
+// ============================================================
+const FIELD_CATEGORY_KEYWORDS = {
+"engineering & tech": [
+"engineer", "engineering", "software", "computer science", "computing",
+"electrical", "mechanical", "civil", "chemical", "biomedical", "aerospace",
+"robotics", "automation", "data science", "artificial intelligence", "machine learning",
+"cybersecurity", "network", "telecommunications", "materials", "nanotechnology",
+"systems", "industrial", "manufacturing", "petroleum", "mining", "structural",
+"information technology", "information systems", "digital", "technology"
+],
+"business, management and economics": [
+"business", "management", "economics", "finance", "accounting", "mba",
+"marketing", "commerce", "entrepreneurship", "administration", "supply chain","logistics", "operations", "human resources", "organizational", "leadership",
+"strategy", "analytics", "fintech", "banking", "investment", "taxation",
+"development studies", "international business", "project management"
+],
+"science & applied science": [
+"physics", "chemistry", "mathematics", "statistics", "biology", "biochemistry",
+"molecular", "genetics", "neuroscience", "astronomy", "astrophysics", "geology",
+"geography", "oceanography", "meteorology", "applied science", "biophysics",
+"computational", "quantitative", "photonics", "optics", "nuclear"
+],
+"medicine, health and life science": [
+"medicine", "medical", "health", "nursing", "pharmacy", "dentistry", "dental",
+"physiotherapy", "occupational therapy", "rehabilitation", "public health",
+"epidemiology", "nutrition", "dietetics", "speech", "audiology", "oncology",
+"cardiology", "psychiatry", "clinical", "healthcare", "life science",
+"biomedical science", "pathology", "microbiology", "immunology", "virology",
+"global health", "mental health", "kinesiology", "exercise science"
+],
+"social science & humanities": [
+"psychology", "sociology", "anthropology", "political science", "history",
+"philosophy", "linguistics", "literature", "english", "french", "languages",
+"communication", "media", "journalism", "social work", "criminology",
+"international relations", "cultural studies", "religious studies", "theology",
+"jewish", "islamic", "gender studies", "indigenous", "archaeology",
+"information studies", "library", "archives", "knowledge management",
+"cognitive science", "counselling", "social science"
+],
+"arts, design & creative studies": [
+"art", "arts", "design", "architecture", "music", "fine art", "visual",
+"photography", "film", "cinema", "theatre", "drama", "dance", "creative writing",
+"digital media", "game design", "animation", "fashion", "interior design",
+"urban design", "landscape", "graphic", "studio", "performing arts",
+"conducting", "composition", "musicology"
+],
+"law, public policy & governance": [
+"law", "legal", "juris", "policy", "governance", "public administration",
+"public policy", "regulation", "compliance", "international law", "human rights",
+"constitutional", "criminal law", "civil law", "tax law", "environmental law",
+"j.d", "ll.m", "bcl"
+],
+"hospitality, tourism & service industry": [
+"hospitality", "tourism", "hotel", "travel", "events management",
+"food service", "culinary", "recreation", "leisure", "resort", "casino",
+"service management"
+],
+"education & teaching": [
+"education", "teaching", "pedagogy", "curriculum", "learning", "instruction","educational", "teacher", "school psychology", "applied child psychology",
+"higher education", "adult education", "special education", "literacy",
+"immersion", "early childhood"
+],
+"agriculture, sustainability & environmental studies": [
+"agriculture", "agricultural", "environmental", "sustainability", "ecology",
+"forestry", "natural resources", "conservation", "climate", "energy",
+"renewable", "water", "soil", "plant science", "animal science", "food science",
+"agronomy", "horticulture", "wildlife", "fisheries", "marine", "clean energy"
+]
+};
+function autoAssignFieldCategory(programName) {
+if (!programName) return null;
+const lower = programName.toLowerCase();
+let bestMatch = null;
+let bestScore = 0;
+for (const [category, keywords] of Object.entries(FIELD_CATEGORY_KEYWORDS)) {
+let score = 0;
+for (const keyword of keywords) {
+if (lower.includes(keyword.toLowerCase())) {
+// Longer keyword matches = higher confidence
+score += keyword.length;
+}
+}
+if (score > bestScore) {
+bestScore = score;
+bestMatch = category;
+}
+}
+// Only assign if we have a reasonable match (score > 4 = at least one meaningful keyword)
+return bestScore > 4 ? bestMatch : null;
+}
+// ============================================================
+// SMART URL PATTERN DISCOVERY
+// ============================================================
+const COMMON_DIRECTORY_PATTERNS = [
+"/graduate/programs",
+"/graduate-programs",
+"/grad/programs",
+"/programs/graduate",
+"/future-students/graduate-degree-programs","/prospective-students/graduate-degree-programs",
+"/admissions/graduate",
+"/academics/graduate",
+"/study/graduate",
+"/programs",
+"/courses",
+"/faculties"
+];
+async function discoverDirectoryUrls(baseUrl) {
+// Try common patterns and return first one that works
+for (const pattern of COMMON_DIRECTORY_PATTERNS) {
+const testUrl = baseUrl.replace(/\/$/, "") + pattern;
+try {
+const response = await axios.get(testUrl, {
+headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+timeout: 10000,
+validateStatus: (status) => status < 404
+});
+if (response.status === 200 && response.data.length > 2000) {
+console.log(`[discovery] Found directory at: ${testUrl}`);
+return [testUrl];
+}
+} catch (e) {
+// try next
+}
+}
+return null;
+}
+// ============================================================
+// CORE WORKER FUNCTION
+// ============================================================
+let workerRunning = false;
+async function runWorker() {
+if (workerRunning) {
+console.log("[worker] Already running, skipping");
+return;
+}
+workerRunning = true;
+console.log("[worker] Starting job check...");
+try {
+// Pick next queued jobconst { data: job, error } = await supabase
+.schema("ingestion")
+.from("university_jobs")
+.select("*, core.universities(name, country_id)")
+.eq("status", "queued")
+.order("created_at", { ascending: true })
+.limit(1)
+.single();
+if (error || !job) {
+console.log("[worker] No queued jobs found");
+workerRunning = false;
+return;
+}
+console.log(`[worker] Processing job for university_id: ${job.university_id}`);
+// ---- STEP 1: CRAWL ----
+await updateJobStatus(job.id, "crawling");
+let directoryUrls = job.directory_urls;
+// If no directory URLs provided, try auto-discovery
+if (!directoryUrls || directoryUrls.length === 0) {
+const { data: uni } = await supabase
+.schema("core")
+.from("universities")
+.select("website_url")
+.eq("id", job.university_id)
+.single();
+if (uni?.website_url) {
+directoryUrls = await discoverDirectoryUrls(uni.website_url);
+}
+if (!directoryUrls) {
+await updateJobStatus(job.id, "failed", "Could not discover directory URLs");
+workerRunning = false;
+return;
+}
+}
+// Run crawl for each directory URL
+let totalDiscovered = 0;
+for (const dirUrl of directoryUrls) {
+try {
+const crawlResult = await crawlDirectory(job.university_id, dirUrl, job.crawl_depth);totalDiscovered += crawlResult;
+console.log(`[worker] Crawled ${dirUrl} — discovered ${crawlResult} URLs`);
+} catch (e) {
+console.error(`[worker] Crawl failed for ${dirUrl}:`, e.message);
+}
+}
+await supabase.schema("ingestion").from("university_jobs")
+.update({ urls_discovered: totalDiscovered })
+.eq("id", job.id);
+if (totalDiscovered === 0) {
+await updateJobStatus(job.id, "failed", "No URLs discovered during crawl");
+workerRunning = false;
+return;
+}
+// ---- STEP 2: SCRAPE ----
+await updateJobStatus(job.id, "scraping");
+const scrapeResult = await scrapeQueueForUniversity(job.university_id);
+await supabase.schema("ingestion").from("university_jobs")
+.update({ urls_scraped: scrapeResult })
+.eq("id", job.id);
+console.log(`[worker] Scraped ${scrapeResult} pages`);
+// ---- STEP 3: PARSE ----
+await updateJobStatus(job.id, "parsing");
+const parseResult = await parsePagesForUniversity(job.university_id);
+await supabase.schema("ingestion").from("university_jobs")
+.update({ urls_parsed: parseResult })
+.eq("id", job.id);
+console.log(`[worker] Parsed ${parseResult} pages`);
+// ---- STEP 4: AUTO-FIX field_category nulls ----
+await updateJobStatus(job.id, "fixing");
+const fixResult = await autoFixFieldCategories(job.university_id);
+console.log(`[worker] Auto-fixed ${fixResult} field categories`);
+// ---- STEP 5: COUNT READY PROGRAMS ----
+const { count } = await supabase
+.schema("ingestion")
+.from("parsed_programs").select("*", { count: "exact", head: true })
+.eq("university_id", job.university_id)
+.eq("validation_status", "pending")
+.not("duration_years", "is", null)
+.not("field_category", "is", null);
+await supabase.schema("ingestion").from("university_jobs")
+.update({
+status: "ready_for_review",
+programs_ready: count || 0,
+completed_at: new Date().toISOString()
+})
+.eq("id", job.id);
+console.log(`[worker] Job complete — ${count} programs ready for review`);
+} catch (err) {
+console.error("[worker] Unexpected error:", err.message);
+}
+workerRunning = false;
+}
+// ---- Helper: Update job status ----
+async function updateJobStatus(jobId, status, errorMessage = null) {
+const update = { status };
+if (status === "crawling") update.started_at = new Date().toISOString();
+if (errorMessage) update.error_message = errorMessage;
+await supabase.schema("ingestion").from("university_jobs").update(update).eq("id", jobId);
+}
+// ---- Helper: Crawl directory and queue URLs ----
+async function crawlDirectory(universityId, dirUrl, depth = 1) {
+const parsedBase = new URL(dirUrl);
+const acceptPattern = parsedBase.origin + parsedBase.pathname.replace(/\/$/, "");
+const discovered = [];
+const seen = new Set();
+const toVisit = [dirUrl];
+const visited = new Set();
+for (let d = 0; d < depth; d++) {
+const batch = [...toVisit];
+toVisit.length = 0;
+for (const url of batch) {
+if (visited.has(url)) continue;visited.add(url);
+try {
+let html;
+try {
+const res = await axios.get(url, {
+headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+timeout: 20000
+});
+html = res.data;
+} catch (e) { html = null; }
+// Count matching links from axios
+let axiosCount = 0;
+if (html) {
+const $test = cheerio.load(html);
+$test("a[href]").each(function () {
+const href = $test(this).attr("href");
+if (!href) return;
+try {
+const full = new URL(href, url).toString();
+if (full.startsWith(acceptPattern)) axiosCount++;
+} catch (e) {}
+});
+}
+// Use Puppeteer if axios result is thin
+if (!html || axiosCount < 10) {
+console.log(`[crawl] Axios thin (${axiosCount} links), using Puppeteer for: ${url}`
+try {
+html = await fetchWithPuppeteer(url);
+} catch (e) {
+console.error(`[crawl] Puppeteer failed: ${e.message}`);
+continue;
+}
+}
+const $ = cheerio.load(html);
+$("a[href]").each(function () {
+const href = $(this).attr("href");
+if (!href) return;
+let full;
+try { full = new URL(href, url).toString(); } catch (e) { return; }
+if (full.includes("#") || seen.has(full)) return;
+if (!full.startsWith(acceptPattern)) return;
+if (toVisit.includes(full) || visited.has(full)) return;
+seen.add(full);if (d < depth - 1) toVisit.push(full);
+discovered.push({ university_id: universityId, program_url: full, status: "pending"
+});
+await new Promise(r => setTimeout(r, 500));
+} catch (e) {
+console.error(`[crawl] Failed: ${url}`, e.message);
+}
+}
+}
+if (discovered.length === 0) return 0;
+const { data } = await supabase
+.schema("ingestion")
+.from("scrape_queue")
+.upsert(discovered, { onConflict: "program_url" })
+.select();
+return data ? data.length : 0;
+}
+// ---- Helper: Scrape all pending queue items for a university ----
+async function scrapeQueueForUniversity(universityId) {
+const CONCURRENCY = 5;
+let totalScraped = 0;
+while (true) {
+const { data: items } = await supabase
+.schema("ingestion")
+.from("scrape_queue")
+.select("*")
+.eq("university_id", universityId)
+.eq("status", "pending")
+.limit(50);
+if (!items || items.length === 0) break;
+for (let i = 0; i < items.length; i += CONCURRENCY) {
+const chunk = items.slice(i, i + CONCURRENCY);
+await Promise.all(chunk.map(async (item) => {
+try {
+await supabase.schema("ingestion").from("scrape_queue")
+.update({ status: "processing" }).eq("id", item.id);
+let html;
+try {const res = await axios.get(item.program_url, {
+headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+timeout: 15000
+});
+html = res.data;
+} catch (e) { html = null; }
+if (!html || html.length < 500) {
+html = await fetchWithPuppeteer(item.program_url);
+}
+if (!html || html.length < 500) {
+await supabase.schema("ingestion").from("scrape_queue")
+.update({ status: "failed", error_message: "Page too small" }).eq("id", item.id
+return;
+}
+await supabase.schema("ingestion").from("raw_program_pages")
+.upsert({
+university_id: item.university_id,
+source_url: item.program_url,
+raw_html: html,
+parse_status: "pending"
+}, { onConflict: "source_url" });
+await supabase.schema("ingestion").from("scrape_queue")
+.update({ status: "scraped", scraped_at: new Date().toISOString() }).eq("id", ite
+totalScraped++;
+} catch (e) {
+await supabase.schema("ingestion").from("scrape_queue")
+.update({ status: "failed", error_message: e.message }).eq("id", item.id);
+}
+}));
+await new Promise(r => setTimeout(r, 1000));
+}
+}
+return totalScraped;
+}
+// ---- Helper: Parse all pending pages for a university ----
+async function parsePagesForUniversity(universityId) {
+const CONCURRENCY = 5;
+let totalParsed = 0;
+while (true) {const { data: pages } = await supabase
+.schema("ingestion")
+.from("raw_program_pages")
+.select("id")
+.eq("university_id", universityId)
+.eq("parse_status", "pending")
+.limit(50);
+if (!pages || pages.length === 0) break;
+for (let i = 0; i < pages.length; i += CONCURRENCY) {
+const chunk = pages.slice(i, i + CONCURRENCY);
+await Promise.all(chunk.map(async (page) => {
+try {
+await parseProgramPage(page.id);
+totalParsed++;
+} catch (e) {
+console.error(`[parse] Failed page ${page.id}:`, e.message);
+}
+}));
+}
+}
+return totalParsed;
+}
+// ---- Helper: Auto-fix null field_category using keyword map ----
+async function autoFixFieldCategories(universityId) {
+const { data: programs } = await supabase
+.schema("ingestion")
+.from("parsed_programs")
+.select("id, program_name")
+.eq("university_id", universityId)
+.is("field_category", null)
+.eq("validation_status", "pending");
+if (!programs || programs.length === 0) return 0;
+let fixed = 0;
+for (const p of programs) {
+const assigned = autoAssignFieldCategory(p.program_name);
+if (assigned) {
+await supabase.schema("ingestion").from("parsed_programs")
+.update({ field_category: assigned })
+.eq("id", p.id);
+fixed++;
+console.log(`[fix] "${p.program_name}" → "${assigned}"`);} else {
+console.log(`[fix] Could not assign category for: "${p.program_name}"`);
+}
+}
+return fixed;
+}
+// ============================================================
+// WORKER ROUTES
+// ============================================================
+// Add a university to the job queue
+app.post("/worker/add-job", async (req, res) => {
+try {
+const { university_id, directory_urls, crawl_depth = 1 } = req.body;
+if (!university_id) {
+return res.status(400).json({ error: "university_id is required" });
+}
+// Check university exists
+const { data: uni } = await supabase
+.schema("core")
+.from("universities")
+.select("id, name")
+.eq("id", university_id)
+.single();
+if (!uni) return res.status(404).json({ error: "University not found" });
+const { data, error } = await supabase
+.schema("ingestion")
+.from("university_jobs")
+.insert({
+university_id,
+directory_urls: directory_urls || [],
+crawl_depth,
+status: "queued"
+})
+.select()
+.single();
+if (error) throw error;
+res.json({
+message: `Job queued for ${uni.name}`,job_id: data.id
+});
+} catch (err) {
+res.status(500).json({ error: err.message });
+}
+});
+// Check all job statuses
+app.get("/worker/jobs", async (req, res) => {
+try {
+const { data } = await supabase
+.schema("ingestion")
+.from("university_jobs")
+.select("id, university_id, status, urls_discovered, urls_scraped, urls_parsed, program
+.order("created_at", { ascending: false });
+res.json(data);
+} catch (err) {
+res.status(500).json({ error: err.message });
+}
+});
+// Check programs ready for review for a university
+app.get("/worker/review/:university_id", async (req, res) => {
+try {
+const { university_id } = req.params;
+const { data: summary } = await supabase
+.schema("ingestion")
+.from("parsed_programs")
+.select("program_type, field_category, degree_level")
+.eq("university_id", university_id)
+.eq("validation_status", "pending")
+.not("duration_years", "is", null)
+.not("field_category", "is", null);
+if (!summary) return res.json({ message: "No programs ready" });
+// Group by program_type
+const grouped = summary.reduce((acc, p) => {
+acc[p.program_type] = (acc[p.program_type] || 0) + 1;
+return acc;
+}, {});
+// Null field category count
+const { count: nullFields } = await supabase.schema("ingestion")
+.from("parsed_programs")
+.select("*", { count: "exact", head: true })
+.eq("university_id", university_id)
+.eq("validation_status", "pending")
+.is("field_category", null);
+res.json({
+total_ready: summary.length,
+by_program_type: grouped,
+null_field_category: nullFields || 0,
+message: nullFields > 0
+? `${nullFields} programs still have null field_category — inspect before migrating`
+: "Ready to migrate"
+});
+} catch (err) {
+res.status(500).json({ error: err.message });
+}
+});
+// Manual migration trigger (after review)
+app.post("/worker/migrate/:university_id", async (req, res) => {
+try {
+const { university_id } = req.params;
+const { data: programs, error } = await supabase
+.schema("ingestion")
+.from("parsed_programs")
+.select("*")
+.eq("university_id", university_id)
+.eq("validation_status", "pending")
+.not("duration_years", "is", null)
+.not("field_category", "is", null);
+if (error) throw error;
+if (!programs || programs.length === 0) {
+return res.json({ message: "No programs to migrate" });
+}
+let success = 0;
+let failed = 0;
+let skipped = 0;
+for (const p of programs) {
+try {
+const { error: insertError } = await supabase.schema("core")
+.from("courses")
+.insert({
+name: p.program_name,
+university_id: p.university_id,
+degree_level: p.degree_level,
+duration_years: p.duration_years,
+tuition_usd: p.tuition_usd,
+field_category: p.field_category,
+internship_available: p.internship_available || false,
+gre_required: p.gre_required || false,
+gmat_required: p.gmat_required || false,
+scholarship_available: p.scholarship_available || false,
+scholarship_details: p.scholarship_details || null,
+funding_guaranteed: p.funding_guaranteed || false,
+program_type: p.program_type || null,
+duration_confidence: p.duration_confidence || "high",
+ielts_minimum: p.ielts_minimum || null,
+pte_minimum: p.pte_minimum || null,
+toefl_minimum: p.toefl_minimum || null,
+min_gpa_percentage: p.min_gpa_percentage || null,
+accepts_backlogs: p.accepts_backlogs !== false,
+work_experience_required: p.work_experience_required || 0,
+subjects_required: p.subjects_required || [],
+application_deadline_intl: p.application_deadline_intl || null,
+application_materials: p.application_materials || [],
+source_parsed_id: p.id,
+migrated_at: new Date().toISOString(),
+data_quality: "parsed"
+});
+if (insertError) {
+if (insertError.code === "23505") {
+skipped++; // duplicate
+} else {
+console.error(`Migration failed for ${p.program_name}:`, insertError.message);
+failed++;
+}
+continue;
+}
+await supabase.schema("ingestion").from("parsed_programs")
+.update({ validation_status: "migrated" }).eq("id", p.id);
+success++;
+} catch (err) {
+console.error(`Migration error for ${p.program_name}:`, err.message);failed++;
+}
+}
+// Update job status to migrated
+await supabase.schema("ingestion").from("university_jobs")
+.update({ status: "migrated" })
+.eq("university_id", university_id)
+.eq("status", "ready_for_review");
+res.json({
+message: "Migration complete",
+success,
+failed,
+skipped
+});
+} catch (err) {
+res.status(500).json({ error: err.message });
+}
+});
+// Manually trigger worker (for testing)
+app.post("/worker/run", async (req, res) => {
+res.json({ message: "Worker triggered" });
+runWorker();
+});
+// Worker status
+app.get("/worker/status", (req, res) => {
+res.json({ running: workerRunning });
+});
+// ============================================================
+// START BACKGROUND WORKER — runs every 3 minutes
+// ============================================================
+setInterval(runWorker, 3 * 60 * 1000);
+console.log("Background worker started — polling every 3 minutes");
+
