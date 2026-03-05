@@ -663,6 +663,30 @@ async function parseProgramPage(pageId) {
       contentText = $("body").text().replace(/\s+/g, " ").trim();
     }
 
+    // If content is still very long, prioritise sections likely to contain program details
+    if (contentText.length > 15000) {
+      const durationKeywords = ["duration", "year", "month", "length", "program length", 
+        "completion", "credit", "tuition", "fee", "admission", "requirement", "ielts", 
+        "toefl", "gpa", "deadline"];
+      
+      // Split into paragraphs and score each by keyword density
+      const paragraphs = contentText.split(/\n+/);
+      const scored = paragraphs.map(p => {
+        const lower = p.toLowerCase();
+        const score = durationKeywords.filter(k => lower.includes(k)).length;
+        return { text: p, score };
+      });
+      
+      // Take top scoring paragraphs first, then fill remaining space
+      const topParagraphs = scored
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 30)
+        .map(p => p.text)
+        .join(" ");
+      
+      contentText = topParagraphs;
+    }
+
     const trimmedText = contentText.substring(0, 12000);
 
     const prompt = `
