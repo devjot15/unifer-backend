@@ -895,7 +895,7 @@ ${trimmedText}
           official_duration_text: program.official_duration_text || null,
           tuition_usd,
           tuition_raw_text: program.tuition_raw_text || null,
-          field_category: program.field_category || null,
+          field_category: VALID_FIELD_CATEGORIES.includes(program.field_category) ? program.field_category : null,
           internship_available: program.internship_available || false,
           gre_required: program.gre_required || false,
           gmat_required: program.gmat_required || false,
@@ -1578,6 +1578,8 @@ const FIELD_CATEGORY_KEYWORDS = {
     "agronomy", "horticulture", "wildlife", "fisheries", "marine", "clean energy"
   ]
 };
+
+const VALID_FIELD_CATEGORIES = Object.keys(FIELD_CATEGORY_KEYWORDS);
 
 function autoAssignFieldCategory(programName) {
   if (!programName) return null;
