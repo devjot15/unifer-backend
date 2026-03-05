@@ -1579,7 +1579,18 @@ const FIELD_CATEGORY_KEYWORDS = {
   ]
 };
 
-const VALID_FIELD_CATEGORIES = Object.keys(FIELD_CATEGORY_KEYWORDS);
+const VALID_FIELD_CATEGORIES = [
+  "engineering & tech",
+  "business, management and economics",
+  "science & applied science",
+  "medicine, health and life science",
+  "social science & humanities",
+  "arts, design & creative studies",
+  "law, public policy & governance",
+  "hospitality, tourism & service industry",
+  "education & teaching",
+  "agriculture, sustainability & environmental studies"
+];
 
 function autoAssignFieldCategory(programName) {
   if (!programName) return null;
