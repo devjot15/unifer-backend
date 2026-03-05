@@ -2184,7 +2184,15 @@ app.get("/worker/status", (req, res) => {
 // ============================================================
 // START BACKGROUND WORKER — runs every 3 minutes
 // ============================================================
-setInterval(runWorker, 3 * 60 * 1000);
+setInterval(async () => {
+  // Reset any jobs stuck in processing states for over 2 hours
+  await supabase.schema("ingestion").from("university_jobs")
+    .update({ status: "queued", error_message: "Reset after timeout" })
+    .in("status", ["crawling", "scraping", "parsing", "fixing"])
+    .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+
+  runWorker();
+}, 3 * 60 * 1000);
 console.log("Background worker started — polling every 3 minutes");
 
 app.get("/test-page", async (req, res) => {
