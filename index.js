@@ -791,11 +791,16 @@ Content:
 ${trimmedText}
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0
-    });
+    const completion = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("OpenAI timeout after 60s")), 60000)
+      )
+    ]);
 
     const content = completion.choices[0].message.content;
     const parsed = JSON.parse(content.replace(/```json|```/g, "").trim());
