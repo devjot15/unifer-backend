@@ -569,7 +569,7 @@ app.post("/scrape-program", async (req, res) => {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)"
       },
-      timeout: 15000
+      timeout: 30000
     });
 
     const html = response.data;
@@ -1221,7 +1221,7 @@ app.post("/process-queue", async (req, res) => {
 
         const scrapeResponse = await axios.get(item.program_url, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-          timeout: 15000
+          timeout: 30000
         });
 
         let html = scrapeResponse.data;
@@ -1887,7 +1887,7 @@ async function scrapeQueueForUniversity(universityId) {
           try {
             const res = await axios.get(item.program_url, {
               headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-              timeout: 15000
+              timeout: 30000
             });
             html = res.data;
           } catch (e) { html = null; }
