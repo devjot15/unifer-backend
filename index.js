@@ -792,81 +792,74 @@ ${trimmedText}
           : program.official_duration_value;
       }
 
-      // Fallback: calculate duration from credits if still null
+      // Fallback: calculate from credits using university's credits_per_year
       if (!duration_years && program.total_credits_required) {
-        duration_years = Math.ceil(program.total_credits_required / 30);
-      }
-
-      const exchangeRates = { USD: 1, CAD: 0.74, GBP: 1.27, EUR: 1.08, AUD: 0.65 };
-      let tuition_usd = null;
-
-      if (program.tuition_raw_text) {
-        const match = program.tuition_raw_text.match(/[\d,]+\.?\d*/);
-        if (match) {
-          const amount = parseFloat(match[0].replace(/,/g, ""));
-          const rawLower = program.tuition_raw_text.toLowerCase();
-          const currency = program.tuition_raw_text.includes("CAD") ? "CAD"
-            : program.tuition_raw_text.includes("£") || program.tuition_raw_text.includes("GBP") ? "GBP"
-            : program.tuition_raw_text.includes("€") || program.tuition_raw_text.includes("EUR") ? "EUR"
-            : program.tuition_raw_text.includes("AUD") ? "AUD" : "USD";
-          const rate = exchangeRates[currency] || 1;
-
-          if (rawLower.includes("per credit") || rawLower.includes("per unit")) {
-            tuition_usd = null;
-          } else if (rawLower.includes("per term") || rawLower.includes("per instalment") || rawLower.includes("per semester")) {
-            tuition_usd = Math.round(amount * 3 * rate * 100) / 100;
-          } else {
-            tuition_usd = Math.round(amount * rate * 100) / 100;
-          }
+        const { data: uni } = await supabase
+          .schema("core")
+          .from("universities")
+          .select("credits_per_year")
+          .eq("id", raw.university_id)
+          .single();
+        if (uni?.credits_per_year) {
+          duration_years = Math.ceil(program.total_credits_required / uni.credits_per_year);
         }
       }
 
-      if (!tuition_usd) {
-        const isdoctoral = program.program_name?.toLowerCase().includes("doctor") || 
-                       program.program_type?.toLowerCase() === "doctoral";
-        const degreeLevel = program.degree_level === "UG" ? "undergraduate" : 
-                            isdoctoral ? "doctoral" : "masters";
+      // Fee matching based on program_type (not program name)
+      const exchangeRates = { USD: 1, CAD: 0.74, GBP: 1.27, EUR: 1.08, AUD: 0.65 };
+      let tuition_usd = null;
+      const programType = program.program_type?.toLowerCase();
 
-        // First try pattern match
-        const { data: feeStructures } = await supabase
+      let feeLevel;
+      if (programType === "doctoral") {
+        feeLevel = "doctoral";
+      } else {
+        feeLevel = "masters";
+      }
+
+      let feePattern;
+      if (programType === "research") {
+        feePattern = "thesis";
+      } else if (programType === "doctoral") {
+        feePattern = "doctor";
+      } else {
+        feePattern = null;
+      }
+
+      let matchedFee = null;
+
+      if (feePattern) {
+        const { data: patternFees } = await supabase
           .schema("ingestion")
           .from("university_fee_structure")
           .select("*")
           .eq("university_id", raw.university_id)
-          .eq("program_level", degreeLevel)
-          .not("program_name_pattern", "is", null);
-
-        let matchedFee = null;
-        if (feeStructures && feeStructures.length > 0) {
-          for (const fee of feeStructures) {
-            const pattern = fee.program_name_pattern.replace(/%/g, "");
-            if (program.program_name.toLowerCase().includes(pattern.toLowerCase())) {
-              matchedFee = fee;
-              break;
-            }
-          }
+          .eq("program_level", feeLevel)
+          .eq("program_name_pattern", feePattern);
+        
+        if (patternFees && patternFees.length > 0) {
+          matchedFee = patternFees[0];
         }
+      }
 
-        // Fall back to default (null pattern)
-        if (!matchedFee) {
-          const { data: defaultFee } = await supabase
-            .schema("ingestion")
-            .from("university_fee_structure")
-            .select("*")
-            .eq("university_id", raw.university_id)
-            .eq("program_level", degreeLevel)
-            .is("program_name_pattern", null)
-            .single();
-          matchedFee = defaultFee;
-        }
+      if (!matchedFee) {
+        const { data: defaultFee } = await supabase
+          .schema("ingestion")
+          .from("university_fee_structure")
+          .select("*")
+          .eq("university_id", raw.university_id)
+          .eq("program_level", feeLevel)
+          .is("program_name_pattern", null)
+          .single();
+        matchedFee = defaultFee;
+      }
 
-        if (matchedFee) {
-          const feeRate = exchangeRates[matchedFee.currency || "USD"] || 1;
-          if (matchedFee.fee_type === "per_instalment") {
-            tuition_usd = Math.round(matchedFee.international_fee * matchedFee.instalments_per_year * feeRate * 100) / 100;
-          } else if (matchedFee.fee_type === "flat_annual") {
-            tuition_usd = Math.round(matchedFee.international_fee * feeRate * 100) / 100;
-          }
+      if (matchedFee) {
+        const feeRate = exchangeRates[matchedFee.currency || "USD"] || 1;
+        if (matchedFee.fee_type === "per_instalment") {
+          tuition_usd = Math.round(matchedFee.international_fee * matchedFee.instalments_per_year * feeRate * 100) / 100;
+        } else if (matchedFee.fee_type === "flat_annual") {
+          tuition_usd = Math.round(matchedFee.international_fee * feeRate * 100) / 100;
         }
       }
 
