@@ -792,6 +792,11 @@ ${trimmedText}
           : program.official_duration_value;
       }
 
+      // Fallback: calculate duration from credits if still null
+      if (!duration_years && program.total_credits_required) {
+        duration_years = Math.ceil(program.total_credits_required / 30);
+      }
+
       const exchangeRates = { USD: 1, CAD: 0.74, GBP: 1.27, EUR: 1.08, AUD: 0.65 };
       let tuition_usd = null;
 
