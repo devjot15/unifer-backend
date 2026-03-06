@@ -2078,6 +2078,8 @@ async function scrapeFeeStructure(universityId) {
 
   feeText = (feeText + "\n" + nonTableText).substring(0, 8000);
 
+  console.log(`[fees-debug] Fee text sample for ${uni?.name}:`, feeText.substring(0, 500));
+
   const feePrompt = `
 You are extracting university fee structures from a tuition page.
 Return STRICT JSON array only. No markdown, no explanation.
