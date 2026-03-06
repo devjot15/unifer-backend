@@ -2350,6 +2350,18 @@ app.get("/test-page", async (req, res) => {
   res.send(text.substring(0, 3000));
 });
 
+app.post("/scrape-fees-batch", async (req, res) => {
+  const { university_ids } = req.body;
+  res.json({ message: "Fee scraping started" });
+  
+  for (const uid of university_ids) {
+    console.log(`[fees-batch] Processing ${uid}`);
+    await scrapeFeeStructure(uid);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  console.log("[fees-batch] Complete");
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
