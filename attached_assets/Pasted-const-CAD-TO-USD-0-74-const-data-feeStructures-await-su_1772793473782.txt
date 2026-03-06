@@ -1,0 +1,69 @@
+const CAD_TO_USD = 0.74;
+
+const { data: feeStructures } = await supabase
+  .schema("ingestion")
+  .from("university_fee_structure")
+  .select("*")
+  .eq("university_id", university_id);
+
+for (const p of programs) {
+  try {
+    let finalTuitionUSD = p.tuition_usd ? Math.round(p.tuition_usd) : null;
+
+    if (!finalTuitionUSD) {
+      const tuitionCAD = resolveTuition(p.program_name, p.program_type, university_id, feeStructures || []);
+      console.log(`[migrate] ${p.program_name} → tuitionCAD: ${tuitionCAD}`);
+      if (tuitionCAD) finalTuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
+    }
+
+    if (!finalTuitionUSD) {
+      console.log(`[migrate-skip] No tuition: ${p.program_name}`);
+      skipped++;
+      continue;
+    }
+
+    const { error: insertError } = await supabase.schema("core")
+      .from("courses")
+      .insert({
+        name: p.program_name,
+        university_id: p.university_id,
+        degree_level: p.degree_level,
+        duration_years: p.duration_years,
+        tuition_usd: finalTuitionUSD,
+        field_category: p.field_category,
+        internship_available: p.internship_available || false,
+        gre_required: p.gre_required || false,
+        gmat_required: p.gmat_required || false,
+        scholarship_available: p.scholarship_available || false,
+        scholarship_details: p.scholarship_details || null,
+        funding_guaranteed: p.funding_guaranteed || false,
+        program_type: p.program_type || null,
+        duration_confidence: p.duration_confidence || "high",
+        ielts_minimum: p.ielts_minimum || null,
+        pte_minimum: p.pte_minimum || null,
+        toefl_minimum: p.toefl_minimum || null,
+        min_gpa_percentage: p.min_gpa_percentage || null,
+        accepts_backlogs: p.accepts_backlogs !== false,
+        work_experience_required: p.work_experience_required || 0,
+        subjects_required: p.subjects_required || [],
+        application_deadline_intl: p.application_deadline_intl || null,
+        application_materials: p.application_materials || [],
+        source_parsed_id: p.id,
+        migrated_at: new Date().toISOString(),
+        data_quality: "parsed"
+      });
+
+    if (insertError) {
+      if (insertError.code === "23505") { skipped++; } 
+      else { console.error(`Migration failed for ${p.program_name}:`, insertError.message); failed++; }
+      continue;
+    }
+
+    await supabase.schema("ingestion").from("parsed_programs")
+      .update({ validation_status: "migrated" }).eq("id", p.id);
+    success++;
+  } catch (err) {
+    console.error(`Migration error for ${p.program_name}:`, err.message);
+    failed++;
+  }
+}

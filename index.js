@@ -11,8 +11,8 @@ async function fetchWithPuppeteer(url) {
   const browser = await puppeteer.connect({ browserWSEndpoint });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+
     // Accept cookies if present
     try {
       await page.waitForTimeout(2000);
@@ -22,15 +22,15 @@ async function fetchWithPuppeteer(url) {
         'button[id*="cookie"]',
         'button[class*="cookie"]',
         'a[id*="accept"]',
-        '#onetrust-accept-btn-handler',
-        '.cookie-accept',
+        "#onetrust-accept-btn-handler",
+        ".cookie-accept",
         '[aria-label*="accept"]',
         'button:contains("Accept")',
         'button:contains("Accept All")',
         'button:contains("I agree")',
-        'button:contains("Allow")'
+        'button:contains("Allow")',
       ];
-      
+
       for (const selector of cookieSelectors) {
         try {
           const btn = await page.$(selector);
@@ -40,10 +40,10 @@ async function fetchWithPuppeteer(url) {
             console.log(`[puppeteer] Accepted cookies with: ${selector}`);
             break;
           }
-        } catch(e) {}
+        } catch (e) {}
       }
-    } catch(e) {}
-    
+    } catch (e) {}
+
     // Wait for content to load after cookie acceptance
     await page.waitForTimeout(3000);
     const html = await page.content();
@@ -63,11 +63,11 @@ app.use(express.static("public"));
 // Connect to Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_KEY,
 );
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 app.get("/", (req, res) => {
@@ -88,7 +88,8 @@ app.get("/test-core", async (req, res) => {
 // Test route to fetch countries
 app.get("/countries", async (req, res) => {
   const { data, error } = await supabase
-    .schema("core").from("countries")
+    .schema("core")
+    .from("countries")
     .select("*");
 
   if (error) {
@@ -98,7 +99,6 @@ app.get("/countries", async (req, res) => {
   res.json(data);
 });
 
-
 app.post("/recommend", async (req, res) => {
   try {
     console.log("======== NEW REQUEST ========");
@@ -107,23 +107,30 @@ app.post("/recommend", async (req, res) => {
 
     // 1️⃣ Fetch all data
     const { data: countries, error: cErr } = await supabase
-      .schema("core").from("countries").select("*");
+      .schema("core")
+      .from("countries")
+      .select("*");
 
     const { data: universities, error: uErr } = await supabase
-      .schema("core").from("universities").select("*");
+      .schema("core")
+      .from("universities")
+      .select("*");
 
     const tuitionBounds = {
-      "Less than $12k":   { min: 0,      max: 11999 },
-      "$12k - $25k":      { min: 12000,  max: 25000 },
-      "More than $25K":   { min: 25001,  max: 999999 }
+      "Less than $12k": { min: 0, max: 11999 },
+      "$12k - $25k": { min: 12000, max: 25000 },
+      "More than $25K": { min: 25001, max: 999999 },
     };
-    const tBand = tuitionBounds[answers.tuition_band] || { min: 0, max: 999999 };
+    const tBand = tuitionBounds[answers.tuition_band] || {
+      min: 0,
+      max: 999999,
+    };
 
     const durationBounds = {
-      "1 year or less":    { min: 0,   max: 1 },
-      "More than 1 year":  { min: 1,   max: 99 },
-      "3 years or less":   { min: 0,   max: 3 },
-      "More than 3 years": { min: 3,   max: 99 }
+      "1 year or less": { min: 0, max: 1 },
+      "More than 1 year": { min: 1, max: 99 },
+      "3 years or less": { min: 0, max: 3 },
+      "More than 3 years": { min: 3, max: 99 },
     };
     const dBand = durationBounds[answers.duration] || { min: 0, max: 99 };
 
@@ -139,7 +146,9 @@ app.post("/recommend", async (req, res) => {
       .lte("duration_years", dBand.max);
 
     if (answers.gre_filter === "Without GRE or GMAT") {
-      courseQuery = courseQuery.eq("gre_required", false).eq("gmat_required", false);
+      courseQuery = courseQuery
+        .eq("gre_required", false)
+        .eq("gmat_required", false);
     } else if (answers.gre_filter === "Without GRE") {
       courseQuery = courseQuery.eq("gre_required", false);
     } else if (answers.gre_filter === "Without GMAT") {
@@ -147,7 +156,9 @@ app.post("/recommend", async (req, res) => {
     }
 
     if (answers.profile_gpa_percentage) {
-      courseQuery = courseQuery.or(`min_gpa_percentage.is.null,min_gpa_percentage.lte.${answers.profile_gpa_percentage}`);
+      courseQuery = courseQuery.or(
+        `min_gpa_percentage.is.null,min_gpa_percentage.lte.${answers.profile_gpa_percentage}`,
+      );
     }
 
     if (answers.profile_backlogs && parseInt(answers.profile_backlogs) > 0) {
@@ -161,7 +172,9 @@ app.post("/recommend", async (req, res) => {
     if (coErr) console.error("Courses fetch error:", coErr.message);
 
     if (!countries || !universities || !courses) {
-      return res.status(500).json({ error: "Failed to fetch core data from the database." });
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch core data from the database." });
     }
 
     const { data: countryData } = await supabase
@@ -174,28 +187,38 @@ app.post("/recommend", async (req, res) => {
 
     const rankingMap = {};
     if (rankingData) {
-      rankingData.forEach(r => {
+      rankingData.forEach((r) => {
         rankingMap[r.id] = r.final_score;
       });
     }
 
     const countryMap = {};
     if (countryData) {
-      countryData.forEach(c => {
+      countryData.forEach((c) => {
         countryMap[c.id] = c;
       });
     }
 
     // 2️⃣ PROFILE ELIMINATION (remaining checks not done at DB level)
-    const eligibleCourses = courses.filter(course => {
+    const eligibleCourses = courses.filter((course) => {
       // Work experience check
-      if (course.work_experience_required && course.work_experience_required > 0) {
-        if (!answers.profile_work_experience ||
-            parseFloat(answers.profile_work_experience) < course.work_experience_required) return false;
+      if (
+        course.work_experience_required &&
+        course.work_experience_required > 0
+      ) {
+        if (
+          !answers.profile_work_experience ||
+          parseFloat(answers.profile_work_experience) <
+            course.work_experience_required
+        )
+          return false;
       }
 
       // English score check
-      if (answers.profile_english_test && answers.profile_english_test !== "None") {
+      if (
+        answers.profile_english_test &&
+        answers.profile_english_test !== "None"
+      ) {
         const score = parseFloat(answers.profile_english_score);
         if (answers.profile_english_test === "IELTS" && course.ielts_minimum) {
           if (score < course.ielts_minimum) return false;
@@ -209,10 +232,16 @@ app.post("/recommend", async (req, res) => {
       }
 
       // GRE/GMAT — if student has no score, eliminate programs that require it
-      if (!answers.profile_gre_score || parseFloat(answers.profile_gre_score) === 0) {
+      if (
+        !answers.profile_gre_score ||
+        parseFloat(answers.profile_gre_score) === 0
+      ) {
         if (course.gre_required) return false;
       }
-      if (!answers.profile_gmat_score || parseFloat(answers.profile_gmat_score) === 0) {
+      if (
+        !answers.profile_gmat_score ||
+        parseFloat(answers.profile_gmat_score) === 0
+      ) {
         if (course.gmat_required) return false;
       }
 
@@ -221,32 +250,39 @@ app.post("/recommend", async (req, res) => {
 
     console.log("Eligible courses count:", eligibleCourses.length);
     console.log("Total courses fetched:", courses ? courses.length : 0);
-    console.log("Sample course:", courses ? JSON.stringify(courses[0]) : "none");
-    console.log("Answers received:", JSON.stringify({
-      level: answers.level,
-      duration: answers.duration,
-      tuition_band: answers.tuition_band,
-      field: answers.field
-    }));
+    console.log(
+      "Sample course:",
+      courses ? JSON.stringify(courses[0]) : "none",
+    );
+    console.log(
+      "Answers received:",
+      JSON.stringify({
+        level: answers.level,
+        duration: answers.duration,
+        tuition_band: answers.tuition_band,
+        field: answers.field,
+      }),
+    );
 
     if (eligibleCourses.length === 0) {
       return res.json({
         empty: true,
         message: "No courses matched your profile and filters.",
-        suggestion: "Try adjusting your tuition band, duration, or English score — some programs may require a higher score than entered."
+        suggestion:
+          "Try adjusting your tuition band, duration, or English score — some programs may require a higher score than entered.",
       });
     }
 
     // 3️⃣ MACRO WEIGHTS
     function computeMacroWeights(p1, p2, p3) {
-      const base = { 1: 0.50, 2: 0.32, 3: 0.18 };
+      const base = { 1: 0.5, 2: 0.32, 3: 0.18 };
 
       const normalise = (val) => {
         if (!val) return null;
         const map = {
-          "country": "Country",
-          "course": "Course",
-          "institution": "Institution"
+          country: "Country",
+          course: "Course",
+          institution: "Institution",
         };
         return map[val.toLowerCase()] || val;
       };
@@ -264,7 +300,11 @@ app.post("/recommend", async (req, res) => {
       return weights;
     }
 
-    const weights = computeMacroWeights(answers.priority_1, answers.priority_2, answers.priority_3);
+    const weights = computeMacroWeights(
+      answers.priority_1,
+      answers.priority_2,
+      answers.priority_3,
+    );
 
     function clamp(value) {
       if (value == null || isNaN(value)) return 0;
@@ -281,13 +321,15 @@ app.post("/recommend", async (req, res) => {
 
     // --- COUNTRY NORMALIZATION BASE ---
 
-    const maxCost = Math.max(...countries.map(c => c.avg_cost_of_living_usd));
-    const minCost = Math.min(...countries.map(c => c.avg_cost_of_living_usd));
-    const maxWorkYears = Math.max(...countries.map(c => c.post_study_work_years));
+    const maxCost = Math.max(...countries.map((c) => c.avg_cost_of_living_usd));
+    const minCost = Math.min(...countries.map((c) => c.avg_cost_of_living_usd));
+    const maxWorkYears = Math.max(
+      ...countries.map((c) => c.post_study_work_years),
+    );
 
     function normalizeCost(cost) {
       if (maxCost === minCost) return 1;
-      return 1 - ((cost - minCost) / (maxCost - minCost));
+      return 1 - (cost - minCost) / (maxCost - minCost);
     }
 
     function normalizeWorkYears(years) {
@@ -297,13 +339,17 @@ app.post("/recommend", async (req, res) => {
 
     function normalizeRank(rank, maxRank) {
       if (!rank || !maxRank) return null;
-      return 1 - ((rank - 1) / (maxRank - 1));
+      return 1 - (rank - 1) / (maxRank - 1);
     }
 
     function computeCountryScore(country, answers, countryMap) {
       const c = countryMap[country.id];
       if (!c) {
-        console.warn("Country not found in countryMap:", country.id, country.name);
+        console.warn(
+          "Country not found in countryMap:",
+          country.id,
+          country.name,
+        );
         return 0;
       }
 
@@ -312,26 +358,43 @@ app.post("/recommend", async (req, res) => {
       const costBandMap = {
         "$0 - $20K": 20000,
         "$20K - $30K": 25000,
-        "More than $30K": 35000
+        "More than $30K": 35000,
       };
       const userCostMidpoint = costBandMap[answers.cost_of_living] || 25000;
       const maxCostRange = 35000;
       const costAlignmentScore = clamp(
-        1 - (c.cost_score != null ? (1 - c.cost_score) : 0.5)
+        1 - (c.cost_score != null ? 1 - c.cost_score : 0.5),
       );
 
-      let pswWeight = answers.work_permit_importance === "Very strongly (3 years and above)" ? 1 :
-                      answers.work_permit_importance.includes("Wouldn’t mind") ? 0.6 : 0.3;
+      let pswWeight =
+        answers.work_permit_importance === "Very strongly (3 years and above)"
+          ? 1
+          : answers.work_permit_importance.includes("Wouldn’t mind")
+            ? 0.6
+            : 0.3;
 
-      let prWeight = answers.pr_importance === "Very strongly" ? 1 :
-                     answers.pr_importance === "Wouldn’t mind" ? 0.6 : 0.3;
+      let prWeight =
+        answers.pr_importance === "Very strongly"
+          ? 1
+          : answers.pr_importance === "Wouldn’t mind"
+            ? 0.6
+            : 0.3;
 
-      let govWeight = answers.gov_support_importance === "Very strongly" ? 1 :
-                      answers.gov_support_importance === "Wouldn’t mind" ? 0.6 :
-                      answers.gov_support_importance === "Don’t mind" ? 0.3 : 0.3;
+      let govWeight =
+        answers.gov_support_importance === "Very strongly"
+          ? 1
+          : answers.gov_support_importance === "Wouldn’t mind"
+            ? 0.6
+            : answers.gov_support_importance === "Don’t mind"
+              ? 0.3
+              : 0.3;
 
-      let englishWeight = answers.english_preference === "Yes" ? 1 :
-                          answers.english_preference === "Prefer but flexible" ? 0.6 : 0.3;
+      let englishWeight =
+        answers.english_preference === "Yes"
+          ? 1
+          : answers.english_preference === "Prefer but flexible"
+            ? 0.6
+            : 0.3;
 
       let weightedSum =
         costWeight * Math.max(0, Math.min(1, costAlignmentScore)) +
@@ -353,25 +416,29 @@ app.post("/recommend", async (req, res) => {
       let internshipWeightMap = {
         "Very strongly": 1,
         "Wouldn’t mind": 0.6,
-        "Don’t care": 0.3
+        "Don’t care": 0.3,
       };
-      let internshipWeight = internshipWeightMap[answers.internship_importance] || 0;
-      courseComponents.push(internshipWeight * (course.internship_available ? 1 : 0));
+      let internshipWeight =
+        internshipWeightMap[answers.internship_importance] || 0;
+      courseComponents.push(
+        internshipWeight * (course.internship_available ? 1 : 0),
+      );
       courseWeights.push(internshipWeight);
 
       let scholarshipWeightMap = {
         "Very strongly (more than 20% of tuition)": 1,
         "Wouldn’t mind getting one (less than 20% of tuition or none)": 0.6,
-        "Don’t care": 0.3
+        "Don’t care": 0.3,
       };
-      let scholarshipWeight = scholarshipWeightMap[answers.scholarship_importance] || 0;
+      let scholarshipWeight =
+        scholarshipWeightMap[answers.scholarship_importance] || 0;
       const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
       courseComponents.push(scholarshipWeight * scholarshipScore);
       courseWeights.push(scholarshipWeight);
 
       return clamp(
         courseComponents.reduce((a, b) => a + b, 0) /
-        (courseWeights.reduce((a, b) => a + b, 0) || 1)
+          (courseWeights.reduce((a, b) => a + b, 0) || 1),
       );
     }
 
@@ -380,8 +447,8 @@ app.post("/recommend", async (req, res) => {
         answers.location_preference === "Anywhere in the country"
           ? 1
           : university.location_type === answers.location_preference
-          ? 1
-          : 0;
+            ? 1
+            : 0;
 
       const careerScore = university.career_services_score ?? 0.5;
       const admissionScoreRaw = university.admission_speed_score ?? 0.5;
@@ -389,16 +456,17 @@ app.post("/recommend", async (req, res) => {
       let careerWeightMap = {
         "Very strongly (placement driven institutions)": 1,
         "Moderately (academics driven institutions)": 0.6,
-        "Not that much": 0.3
+        "Not that much": 0.3,
       };
       let careerWeight = careerWeightMap[answers.career_importance] || 0;
 
       let admissionWeightMap = {
         "Very strongly": 1,
         "Not that much": 0.6,
-        "No": 0.3
+        No: 0.3,
       };
-      let admissionWeight = admissionWeightMap[answers.admission_speed_importance] || 0;
+      let admissionWeight =
+        admissionWeightMap[answers.admission_speed_importance] || 0;
 
       const compositeRanking = rankingMap[university.id] ?? 0.5;
 
@@ -406,33 +474,51 @@ app.post("/recommend", async (req, res) => {
       let admissionScore = admissionWeight * admissionSpeedScore;
 
       let rankingWeight = 0;
-      if (answers.ranking_importance === "Only want to apply in top institutions") rankingWeight = 1;
-      if (answers.ranking_importance === "Top and middle institutions are fine") rankingWeight = 0.7;
-      if (answers.ranking_importance === "All institution irrespective of ranking") rankingWeight = 0.4;
+      if (
+        answers.ranking_importance === "Only want to apply in top institutions"
+      )
+        rankingWeight = 1;
+      if (answers.ranking_importance === "Top and middle institutions are fine")
+        rankingWeight = 0.7;
+      if (
+        answers.ranking_importance === "All institution irrespective of ranking"
+      )
+        rankingWeight = 0.4;
 
       let rankingScore = rankingWeight * compositeRanking;
 
-      const uniNumerator = locationScore + rankingScore + (careerWeight * careerScore) + admissionScore;
+      const uniNumerator =
+        locationScore +
+        rankingScore +
+        careerWeight * careerScore +
+        admissionScore;
       const uniDenominator = 1 + rankingWeight + careerWeight + admissionWeight;
       return clamp(uniNumerator / (uniDenominator || 1));
     }
 
     // 4️⃣ SCORE PATHWAYS
-    const pathways = eligibleCourses.map(course => {
-      const university = universities.find(u => u.id === course.university_id);
+    const pathways = eligibleCourses.map((course) => {
+      const university = universities.find(
+        (u) => u.id === course.university_id,
+      );
       if (!university) return null;
-      const country = countries.find(c => c.id === university.country_id);
+      const country = countries.find((c) => c.id === university.country_id);
       if (!country) return null;
 
       let countryScore = computeCountryScore(country, answers, countryMap);
       let courseScore = computeCourseScore(course, answers);
-      let universityScore = computeUniversityScore(university, country, answers, rankingMap);
+      let universityScore = computeUniversityScore(
+        university,
+        country,
+        answers,
+        rankingMap,
+      );
 
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
         country: countryScore,
         course: courseScore,
-        university: universityScore
+        university: universityScore,
       });
 
       if (!isFinite(finalScore)) {
@@ -441,38 +527,70 @@ app.post("/recommend", async (req, res) => {
 
       const explanation = [];
 
-      if (countryScore >= 0.7) explanation.push("Strong country match based on your living and work preferences");
-      else if (countryScore >= 0.4) explanation.push("Moderate country alignment with your preferences");
+      if (countryScore >= 0.7)
+        explanation.push(
+          "Strong country match based on your living and work preferences",
+        );
+      else if (countryScore >= 0.4)
+        explanation.push("Moderate country alignment with your preferences");
 
-      if (answers.pr_importance === "Very strongly" && country.pr_pathway_clarity_score >= 0.7) {
+      if (
+        answers.pr_importance === "Very strongly" &&
+        country.pr_pathway_clarity_score >= 0.7
+      ) {
         explanation.push("Strong permanent residency pathway available");
       }
 
-      if (answers.english_preference === "Yes" && country.english_primary_language) {
+      if (
+        answers.english_preference === "Yes" &&
+        country.english_primary_language
+      ) {
         explanation.push("English-speaking country matches your preference");
       }
 
-      if (answers.work_permit_importance.includes("Very strongly") && country.post_study_work_years >= 3) {
+      if (
+        answers.work_permit_importance.includes("Very strongly") &&
+        country.post_study_work_years >= 3
+      ) {
         explanation.push("Post-study work permit of 3+ years available");
       }
 
-      if (course.internship_available && answers.internship_importance !== "Don’t care") {
+      if (
+        course.internship_available &&
+        answers.internship_importance !== "Don’t care"
+      ) {
         explanation.push("Includes internship as part of the curriculum");
       }
 
-      if (courseScore >= 0.7) explanation.push("Strong course alignment with your academic preferences");
-      else if (courseScore >= 0.4) explanation.push("Reasonable course fit based on your priorities");
+      if (courseScore >= 0.7)
+        explanation.push(
+          "Strong course alignment with your academic preferences",
+        );
+      else if (courseScore >= 0.4)
+        explanation.push("Reasonable course fit based on your priorities");
 
-      if (universityScore >= 0.7) explanation.push("Institution scores well on ranking, location, and services");
-      else if (universityScore >= 0.4) explanation.push("Institution meets your core university preferences");
+      if (universityScore >= 0.7)
+        explanation.push(
+          "Institution scores well on ranking, location, and services",
+        );
+      else if (universityScore >= 0.4)
+        explanation.push("Institution meets your core university preferences");
 
-      if (answers.location_preference !== "Anywhere in the country" &&
-          university.location_type === answers.location_preference) {
-        explanation.push("Campus location matches your " + answers.location_preference.toLowerCase() + " preference");
+      if (
+        answers.location_preference !== "Anywhere in the country" &&
+        university.location_type === answers.location_preference
+      ) {
+        explanation.push(
+          "Campus location matches your " +
+            answers.location_preference.toLowerCase() +
+            " preference",
+        );
       }
 
       if (explanation.length === 0) {
-        explanation.push("Balanced match across country, course, and institution factors");
+        explanation.push(
+          "Balanced match across country, course, and institution factors",
+        );
       }
 
       return {
@@ -485,20 +603,19 @@ app.post("/recommend", async (req, res) => {
         scores: {
           country: Math.round(countryScore * 100) / 100,
           course: Math.round(courseScore * 100) / 100,
-          university: Math.round(universityScore * 100) / 100
+          university: Math.round(universityScore * 100) / 100,
         },
-        explanation
+        explanation,
       };
     });
 
     // 5️⃣ Sort & Return Top 5
     const top5 = pathways
-      .filter(p => p !== null)
+      .filter((p) => p !== null)
       .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
       .slice(0, 5);
 
     res.json(top5);
-
   } catch (error) {
     console.error(error);
     res.status(500).send("Recommendation failed");
@@ -515,7 +632,7 @@ app.post("/scrape-program", async (req, res) => {
 
     if (!university_id || !program_url) {
       return res.status(400).json({
-        error: "university_id and program_url are required"
+        error: "university_id and program_url are required",
       });
     }
 
@@ -524,16 +641,16 @@ app.post("/scrape-program", async (req, res) => {
     // Fetch page
     const response = await axios.get(program_url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)"
+        "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)",
       },
-      timeout: 30000
+      timeout: 30000,
     });
 
     const html = response.data;
 
     if (!html || html.length < 1000) {
       return res.status(400).json({
-        error: "Page content too small or invalid"
+        error: "Page content too small or invalid",
       });
     }
 
@@ -545,7 +662,7 @@ app.post("/scrape-program", async (req, res) => {
         university_id: university_id,
         source_url: program_url,
         raw_html: html,
-        parse_status: "pending"
+        parse_status: "pending",
       })
       .select();
 
@@ -556,9 +673,8 @@ app.post("/scrape-program", async (req, res) => {
 
     res.json({
       message: "Program page scraped successfully",
-      inserted_id: data[0].id
+      inserted_id: data[0].id,
     });
-
   } catch (err) {
     console.error("Scrape failed:", err.message);
 
@@ -568,12 +684,12 @@ app.post("/scrape-program", async (req, res) => {
       .insert({
         university_id: req.body.university_id || null,
         status: "failed",
-        error_message: err.message
+        error_message: err.message,
       });
 
     res.status(500).json({
       error: "Scraping failed",
-      details: err.message
+      details: err.message,
     });
   }
 });
@@ -601,10 +717,21 @@ async function parseProgramPage(pageId) {
   try {
     // IMPROVED (targeted extraction)
     const $ = cheerio.load(raw.raw_html);
-    $("script, style, nav, footer, header, aside, .menu, .sidebar, .navigation, .breadcrumb, .cookie, .banner, .advertisement").remove();
+    $(
+      "script, style, nav, footer, header, aside, .menu, .sidebar, .navigation, .breadcrumb, .cookie, .banner, .advertisement",
+    ).remove();
 
     // Prioritise main content areas
-    const mainSelectors = ["main", "article", ".content", "#content", ".program-content", ".page-content", ".main-content", "[role='main']"];
+    const mainSelectors = [
+      "main",
+      "article",
+      ".content",
+      "#content",
+      ".program-content",
+      ".page-content",
+      ".main-content",
+      "[role='main']",
+    ];
     let contentText = "";
 
     for (const selector of mainSelectors) {
@@ -622,25 +749,39 @@ async function parseProgramPage(pageId) {
 
     // If content is still very long, prioritise sections likely to contain program details
     if (contentText.length > 15000) {
-      const durationKeywords = ["duration", "year", "month", "length", "program length", 
-        "completion", "credit", "tuition", "fee", "admission", "requirement", "ielts", 
-        "toefl", "gpa", "deadline"];
-      
+      const durationKeywords = [
+        "duration",
+        "year",
+        "month",
+        "length",
+        "program length",
+        "completion",
+        "credit",
+        "tuition",
+        "fee",
+        "admission",
+        "requirement",
+        "ielts",
+        "toefl",
+        "gpa",
+        "deadline",
+      ];
+
       // Split into paragraphs and score each by keyword density
       const paragraphs = contentText.split(/\n+/);
-      const scored = paragraphs.map(p => {
+      const scored = paragraphs.map((p) => {
         const lower = p.toLowerCase();
-        const score = durationKeywords.filter(k => lower.includes(k)).length;
+        const score = durationKeywords.filter((k) => lower.includes(k)).length;
         return { text: p, score };
       });
-      
+
       // Take top scoring paragraphs first, then fill remaining space
       const topParagraphs = scored
         .sort((a, b) => b.score - a.score)
         .slice(0, 30)
-        .map(p => p.text)
+        .map((p) => p.text)
         .join(" ");
-      
+
       contentText = topParagraphs;
     }
 
@@ -776,11 +917,11 @@ ${trimmedText}
       openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0
+        temperature: 0,
       }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("OpenAI timeout after 60s")), 60000)
-      )
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("OpenAI timeout after 60s")), 60000),
+      ),
     ]);
 
     const content = completion.choices[0].message.content;
@@ -799,9 +940,10 @@ ${trimmedText}
       if (!program.program_name) continue;
       let duration_years = null;
       if (program.official_duration_value && program.official_duration_unit) {
-        duration_years = program.official_duration_unit === "months"
-          ? program.official_duration_value / 12
-          : program.official_duration_value;
+        duration_years =
+          program.official_duration_unit === "months"
+            ? program.official_duration_value / 12
+            : program.official_duration_value;
       }
 
       // Fallback: calculate from credits using university's credits_per_year
@@ -813,59 +955,77 @@ ${trimmedText}
           .eq("id", raw.university_id)
           .single();
         if (uni?.credits_per_year) {
-          duration_years = Math.ceil(program.total_credits_required / uni.credits_per_year);
+          duration_years = Math.ceil(
+            program.total_credits_required / uni.credits_per_year,
+          );
         }
       }
 
       const CAD_TO_USD = 0.74;
 
-      console.log(`[parse-fees] ${program.program_name} | type=${program.program_type} | uni=${raw.university_id} | feeStructures=${feeStructures?.length || 0}`);
+      console.log(
+        `[parse-fees] ${program.program_name} | type=${program.program_type} | uni=${raw.university_id} | feeStructures=${feeStructures?.length || 0}`,
+      );
 
       const tuitionCAD = resolveTuition(
         program.program_name,
         program.program_type,
         raw.university_id,
-        feeStructures
+        feeStructures,
       );
       console.log(`[parse-fees] resolveTuition returned: ${tuitionCAD}`);
-      const tuition_usd = tuitionCAD ? Math.round(tuitionCAD * CAD_TO_USD) : null;
+      const tuition_usd = tuitionCAD
+        ? Math.round(tuitionCAD * CAD_TO_USD)
+        : null;
 
       const { error: insertError } = await supabase
         .schema("ingestion")
         .from("parsed_programs")
-        .upsert({
-          raw_page_id: raw.id,
-          university_id: raw.university_id,
-          program_name: program.program_name,
-          degree_level: program.degree_level,
-          program_type: program.program_type || null,
-          duration_years,
-          duration_confidence: "high",
-          official_duration_text: program.official_duration_text || null,
-          tuition_usd,
-          tuition_raw_text: program.tuition_raw_text || null,
-          field_category: VALID_FIELD_CATEGORIES.includes(program.field_category) ? program.field_category : null,
-          internship_available: program.internship_available || false,
-          gre_required: program.gre_required || false,
-          gmat_required: program.gmat_required || false,
-          scholarship_available: program.scholarship_available || false,
-          scholarship_details: program.scholarship_details || null,
-          funding_guaranteed: program.funding_guaranteed || false,
-          ielts_minimum: program.ielts_minimum || null,
-          pte_minimum: program.pte_minimum || null,
-          toefl_minimum: program.toefl_minimum || null,
-          application_deadline_intl: program.application_deadline_intl || null,
-          application_materials: program.application_materials || [],
-          min_gpa_percentage: program.min_gpa_percentage || null,
-          accepts_backlogs: program.accepts_backlogs !== false,
-          subjects_required: program.subjects_required || [],
-          work_experience_required: program.work_experience_required || 0,
-          validation_status: "pending",
-          parse_status: "parsed"
-        }, { onConflict: "raw_page_id,program_name" });
+        .upsert(
+          {
+            raw_page_id: raw.id,
+            university_id: raw.university_id,
+            program_name: program.program_name,
+            degree_level: program.degree_level,
+            program_type: program.program_type || null,
+            duration_years,
+            duration_confidence: "high",
+            official_duration_text: program.official_duration_text || null,
+            tuition_usd,
+            tuition_raw_text: program.tuition_raw_text || null,
+            field_category: VALID_FIELD_CATEGORIES.includes(
+              program.field_category,
+            )
+              ? program.field_category
+              : null,
+            internship_available: program.internship_available || false,
+            gre_required: program.gre_required || false,
+            gmat_required: program.gmat_required || false,
+            scholarship_available: program.scholarship_available || false,
+            scholarship_details: program.scholarship_details || null,
+            funding_guaranteed: program.funding_guaranteed || false,
+            ielts_minimum: program.ielts_minimum || null,
+            pte_minimum: program.pte_minimum || null,
+            toefl_minimum: program.toefl_minimum || null,
+            application_deadline_intl:
+              program.application_deadline_intl || null,
+            application_materials: program.application_materials || [],
+            min_gpa_percentage: program.min_gpa_percentage || null,
+            accepts_backlogs: program.accepts_backlogs !== false,
+            subjects_required: program.subjects_required || [],
+            work_experience_required: program.work_experience_required || 0,
+            validation_status: "pending",
+            parse_status: "parsed",
+          },
+          { onConflict: "raw_page_id,program_name" },
+        );
 
       if (insertError) {
-        console.error("Insert error for", program.program_name, insertError.message);
+        console.error(
+          "Insert error for",
+          program.program_name,
+          insertError.message,
+        );
       }
     }
 
@@ -875,8 +1035,7 @@ ${trimmedText}
       .update({ parse_status: "parsed" })
       .eq("id", pageId);
 
-    return { success: true, programs: programList.map(p => p.program_name) };
-
+    return { success: true, programs: programList.map((p) => p.program_name) };
   } catch (err) {
     await supabase
       .schema("ingestion")
@@ -890,7 +1049,7 @@ ${trimmedText}
 app.post("/parse-program", async (req, res) => {
   try {
     const pageId = req.body.page_id;
-    
+
     let rawId;
     if (pageId) {
       rawId = pageId;
@@ -918,13 +1077,15 @@ app.post("/parse-program", async (req, res) => {
 // PARSE BATCH
 // ----------------------
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 app.post("/parse-batch", async (req, res) => {
   const limit = req.body.limit || 20;
   const concurrency = req.body.concurrency || 5;
 
-  res.json({ message: `Starting parallel parse — limit: ${limit}, concurrency: ${concurrency}` });
+  res.json({
+    message: `Starting parallel parse — limit: ${limit}, concurrency: ${concurrency}`,
+  });
 
   (async () => {
     const { data: pages } = await supabase
@@ -939,7 +1100,9 @@ app.post("/parse-batch", async (req, res) => {
       return;
     }
 
-    console.log(`Parsing ${pages.length} pages with concurrency ${concurrency}`);
+    console.log(
+      `Parsing ${pages.length} pages with concurrency ${concurrency}`,
+    );
 
     let success = 0;
     let failed = 0;
@@ -947,17 +1110,21 @@ app.post("/parse-batch", async (req, res) => {
     for (let i = 0; i < pages.length; i += concurrency) {
       const chunk = pages.slice(i, i + concurrency);
 
-      await Promise.all(chunk.map(async (page) => {
-        try {
-          await parseProgramPage(page.id);
-          success++;
-        } catch (err) {
-          console.error(`Failed page ${page.id}:`, err.message);
-          failed++;
-        }
-      }));
+      await Promise.all(
+        chunk.map(async (page) => {
+          try {
+            await parseProgramPage(page.id);
+            success++;
+          } catch (err) {
+            console.error(`Failed page ${page.id}:`, err.message);
+            failed++;
+          }
+        }),
+      );
 
-      console.log(`Progress: ${Math.min(i + concurrency, pages.length)}/${pages.length} — success: ${success}, failed: ${failed}`);
+      console.log(
+        `Progress: ${Math.min(i + concurrency, pages.length)}/${pages.length} — success: ${success}, failed: ${failed}`,
+      );
     }
 
     console.log(`Batch complete — success: ${success}, failed: ${failed}`);
@@ -970,15 +1137,23 @@ app.post("/parse-batch", async (req, res) => {
 
 app.post("/crawl-university", async (req, res) => {
   try {
-    const { university_id, directory_url, directory_urls, depth = 1 } = req.body;
+    const {
+      university_id,
+      directory_url,
+      directory_urls,
+      depth = 1,
+    } = req.body;
 
     if (!university_id) {
       return res.status(400).json({ error: "university_id is required" });
     }
 
-    const startUrls = directory_urls || (directory_url ? [directory_url] : null);
+    const startUrls =
+      directory_urls || (directory_url ? [directory_url] : null);
     if (!startUrls || startUrls.length === 0) {
-      return res.status(400).json({ error: "directory_url or directory_urls array is required" });
+      return res
+        .status(400)
+        .json({ error: "directory_url or directory_urls array is required" });
     }
 
     let totalDiscovered = 0;
@@ -990,9 +1165,8 @@ app.post("/crawl-university", async (req, res) => {
     res.json({
       message: "Crawl complete",
       discovered: totalDiscovered,
-      queued: totalDiscovered
+      queued: totalDiscovered,
     });
-
   } catch (err) {
     console.error("Crawl failed:", err.message);
     res.status(500).json({ error: "Crawl failed", details: err.message });
@@ -1039,48 +1213,65 @@ app.post("/process-queue", async (req, res) => {
 
         const scrapeResponse = await axios.get(item.program_url, {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-          timeout: 30000
+          timeout: 30000,
         });
 
         let html = scrapeResponse.data;
 
         if (!html || html.length < 500) {
-          console.log(`[queue] Axios got small page, trying Browserless for: ${item.program_url}`);
+          console.log(
+            `[queue] Axios got small page, trying Browserless for: ${item.program_url}`,
+          );
           try {
             const browser = await puppeteer.connect({ browserWSEndpoint });
             const page = await browser.newPage();
-            await page.goto(item.program_url, { waitUntil: "domcontentloaded", timeout: 30000 });
-            await new Promise(r => setTimeout(r, 3000));
+            await page.goto(item.program_url, {
+              waitUntil: "domcontentloaded",
+              timeout: 30000,
+            });
+            await new Promise((r) => setTimeout(r, 3000));
             html = await page.content();
             await browser.disconnect();
-            console.log(`[queue] Browserless got ${html.length} chars for: ${item.program_url}`);
+            console.log(
+              `[queue] Browserless got ${html.length} chars for: ${item.program_url}`,
+            );
           } catch (bErr) {
             console.error(`[queue] Browserless also failed: ${bErr.message}`);
-            await supabase.schema("ingestion").from("scrape_queue")
-              .update({ status: "failed", error_message: `Browserless failed: ${bErr.message}` })
+            await supabase
+              .schema("ingestion")
+              .from("scrape_queue")
+              .update({
+                status: "failed",
+                error_message: `Browserless failed: ${bErr.message}`,
+              })
               .eq("id", item.id);
             results.failed++;
             continue;
           }
 
           if (!html || html.length < 500) {
-            await supabase.schema("ingestion").from("scrape_queue")
-              .update({ status: "failed", error_message: "Page too small even after Browserless" })
+            await supabase
+              .schema("ingestion")
+              .from("scrape_queue")
+              .update({
+                status: "failed",
+                error_message: "Page too small even after Browserless",
+              })
               .eq("id", item.id);
             results.failed++;
             continue;
           }
         }
 
-        await supabase
-          .schema("ingestion")
-          .from("raw_program_pages")
-          .upsert({
+        await supabase.schema("ingestion").from("raw_program_pages").upsert(
+          {
             university_id: item.university_id,
             source_url: item.program_url,
             raw_html: html,
-            parse_status: "pending"
-          }, { onConflict: "source_url" });
+            parse_status: "pending",
+          },
+          { onConflict: "source_url" },
+        );
 
         await supabase
           .schema("ingestion")
@@ -1089,11 +1280,15 @@ app.post("/process-queue", async (req, res) => {
           .eq("id", item.id);
 
         results.success++;
-        console.log(`[queue] ✓ ${results.success}/${queueItems.length} scraped: ${item.program_url}`);
+        console.log(
+          `[queue] ✓ ${results.success}/${queueItems.length} scraped: ${item.program_url}`,
+        );
         await delay(1500);
-
       } catch (err) {
-        console.error(`[queue] ✗ Failed to scrape: ${item.program_url}`, err.message);
+        console.error(
+          `[queue] ✗ Failed to scrape: ${item.program_url}`,
+          err.message,
+        );
         await supabase
           .schema("ingestion")
           .from("scrape_queue")
@@ -1105,12 +1300,13 @@ app.post("/process-queue", async (req, res) => {
 
     res.json({
       message: "Queue processing complete",
-      ...results
+      ...results,
     });
-
   } catch (err) {
     console.error("Queue processing error:", err.message);
-    res.status(500).json({ error: "Queue processing failed", details: err.message });
+    res
+      .status(500)
+      .json({ error: "Queue processing failed", details: err.message });
   }
 });
 
@@ -1156,8 +1352,15 @@ app.post("/migrate", async (req, res) => {
         let finalTuitionUSD = p.tuition_usd ? Math.round(p.tuition_usd) : null;
 
         if (!finalTuitionUSD) {
-          const tuitionCAD = resolveTuition(p.program_name, p.program_type, p.university_id, feeStructures);
-          console.log(`[migrate-fees] ${p.program_name} → resolveTuition: ${tuitionCAD}`);
+          const tuitionCAD = resolveTuition(
+            p.program_name,
+            p.program_type,
+            p.university_id,
+            feeStructures,
+          );
+          console.log(
+            `[migrate-fees] ${p.program_name} → resolveTuition: ${tuitionCAD}`,
+          );
           if (tuitionCAD) {
             finalTuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
           }
@@ -1195,11 +1398,14 @@ app.post("/migrate", async (req, res) => {
             subjects_required: p.subjects_required || [],
             application_deadline_intl: p.application_deadline_intl || null,
             application_materials: p.application_materials || [],
-            data_quality: "parsed"
+            data_quality: "parsed",
           });
 
         if (insertError) {
-          console.error(`Migration failed for ${p.program_name}:`, insertError.message);
+          console.error(
+            `Migration failed for ${p.program_name}:`,
+            insertError.message,
+          );
           failed++;
           continue;
         }
@@ -1217,7 +1423,7 @@ app.post("/migrate", async (req, res) => {
       }
     }
 
-    const migratedUniIds = [...new Set(parsed.map(p => p.university_id))];
+    const migratedUniIds = [...new Set(parsed.map((p) => p.university_id))];
     let overridesApplied = 0;
 
     for (const uniId of migratedUniIds) {
@@ -1236,12 +1442,14 @@ app.post("/migrate", async (req, res) => {
         .eq("university_id", uniId);
 
       for (const course of courses || []) {
-        console.log(`[migrate-fees] ${course.name} | type=${course.program_type} | uni=${uniId} | feeStructures=${feeStructures?.length || 0}`);
+        console.log(
+          `[migrate-fees] ${course.name} | type=${course.program_type} | uni=${uniId} | feeStructures=${feeStructures?.length || 0}`,
+        );
         const tuitionCAD = resolveTuition(
           course.name,
           course.program_type,
           uniId,
-          feeStructures
+          feeStructures,
         );
         console.log(`[migrate-fees] resolveTuition returned: ${tuitionCAD}`);
         if (tuitionCAD) {
@@ -1251,7 +1459,7 @@ app.post("/migrate", async (req, res) => {
             .from("courses")
             .update({
               tuition_usd: tuitionUSD,
-              data_quality: "international_rate_official"
+              data_quality: "international_rate_official",
             })
             .eq("id", course.id);
           overridesApplied++;
@@ -1259,9 +1467,16 @@ app.post("/migrate", async (req, res) => {
       }
     }
 
-    console.log(`Migration complete — success: ${success}, failed: ${failed}, skipped: ${skipped}, fee overrides applied: ${overridesApplied}`);
-    res.json({ message: "Migration complete", success, failed, skipped, overrides_applied: overridesApplied });
-
+    console.log(
+      `Migration complete — success: ${success}, failed: ${failed}, skipped: ${skipped}, fee overrides applied: ${overridesApplied}`,
+    );
+    res.json({
+      message: "Migration complete",
+      success,
+      failed,
+      skipped,
+      overrides_applied: overridesApplied,
+    });
   } catch (err) {
     console.error("Migration error:", err.message);
     res.status(500).json({ error: "Migration failed", details: err.message });
@@ -1283,7 +1498,7 @@ app.post("/ml/session", async (req, res) => {
 
     if (error) throw error;
     res.json({ session_id: data.id });
-  } catch(err) {
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -1292,17 +1507,14 @@ app.post("/ml/step-complete", async (req, res) => {
   try {
     const { session_id, step_number, time_spent_seconds, answers } = req.body;
 
-    await supabase
-      .schema("ml")
-      .from("question_events")
-      .insert({
-        session_id,
-        step_number,
-        time_spent_seconds
-      });
+    await supabase.schema("ml").from("question_events").insert({
+      session_id,
+      step_number,
+      time_spent_seconds,
+    });
 
     res.json({ success: true });
-  } catch(err) {
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -1311,14 +1523,11 @@ app.post("/ml/dropoff", async (req, res) => {
   try {
     const { session_id, dropped_at_step, time_spent_total_seconds } = req.body;
 
-    await supabase
-      .schema("ml")
-      .from("session_dropoffs")
-      .insert({
-        session_id,
-        dropped_at_step,
-        time_spent_total_seconds
-      });
+    await supabase.schema("ml").from("session_dropoffs").insert({
+      session_id,
+      dropped_at_step,
+      time_spent_total_seconds,
+    });
 
     await supabase
       .schema("ml")
@@ -1327,7 +1536,7 @@ app.post("/ml/dropoff", async (req, res) => {
       .eq("id", session_id);
 
     res.json({ success: true });
-  } catch(err) {
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -1335,7 +1544,7 @@ app.post("/ml/dropoff", async (req, res) => {
 app.post("/ml/save-profile", async (req, res) => {
   try {
     const { session_id, ...profile } = req.body;
-    
+
     await supabase
       .schema("ml")
       .from("user_sessions")
@@ -1343,7 +1552,7 @@ app.post("/ml/save-profile", async (req, res) => {
       .eq("id", session_id);
 
     res.json({ success: true });
-  } catch(err) {
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -1359,16 +1568,13 @@ app.post("/ml/recommendations", async (req, res) => {
       final_score: r.finalScore,
       country_score: r.scores?.country,
       course_score: r.scores?.course,
-      university_score: r.scores?.university
+      university_score: r.scores?.university,
     }));
 
-    await supabase
-      .schema("ml")
-      .from("recommendations_shown")
-      .insert(rows);
+    await supabase.schema("ml").from("recommendations_shown").insert(rows);
 
     res.json({ success: true });
-  } catch(err) {
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -1378,73 +1584,262 @@ app.post("/ml/recommendations", async (req, res) => {
 // ============================================================
 const FIELD_CATEGORY_KEYWORDS = {
   "engineering & tech": [
-    "engineer", "engineering", "software", "computer science", "computing",
-    "electrical", "mechanical", "civil", "chemical", "biomedical", "aerospace",
-    "robotics", "automation", "data science", "artificial intelligence", "machine learning",
-    "cybersecurity", "network", "telecommunications", "materials", "nanotechnology",
-    "systems", "industrial", "manufacturing", "petroleum", "mining", "structural",
-    "information technology", "information systems", "digital", "technology"
+    "engineer",
+    "engineering",
+    "software",
+    "computer science",
+    "computing",
+    "electrical",
+    "mechanical",
+    "civil",
+    "chemical",
+    "biomedical",
+    "aerospace",
+    "robotics",
+    "automation",
+    "data science",
+    "artificial intelligence",
+    "machine learning",
+    "cybersecurity",
+    "network",
+    "telecommunications",
+    "materials",
+    "nanotechnology",
+    "systems",
+    "industrial",
+    "manufacturing",
+    "petroleum",
+    "mining",
+    "structural",
+    "information technology",
+    "information systems",
+    "digital",
+    "technology",
   ],
   "business, management and economics": [
-    "business", "management", "economics", "finance", "accounting", "mba",
-    "marketing", "commerce", "entrepreneurship", "administration", "supply chain",
-    "logistics", "operations", "human resources", "organizational", "leadership",
-    "strategy", "analytics", "fintech", "banking", "investment", "taxation",
-    "development studies", "international business", "project management"
+    "business",
+    "management",
+    "economics",
+    "finance",
+    "accounting",
+    "mba",
+    "marketing",
+    "commerce",
+    "entrepreneurship",
+    "administration",
+    "supply chain",
+    "logistics",
+    "operations",
+    "human resources",
+    "organizational",
+    "leadership",
+    "strategy",
+    "analytics",
+    "fintech",
+    "banking",
+    "investment",
+    "taxation",
+    "development studies",
+    "international business",
+    "project management",
   ],
   "science & applied science": [
-    "physics", "chemistry", "mathematics", "statistics", "biology", "biochemistry",
-    "molecular", "genetics", "neuroscience", "astronomy", "astrophysics", "geology",
-    "geography", "oceanography", "meteorology", "applied science", "biophysics",
-    "computational", "quantitative", "photonics", "optics", "nuclear"
+    "physics",
+    "chemistry",
+    "mathematics",
+    "statistics",
+    "biology",
+    "biochemistry",
+    "molecular",
+    "genetics",
+    "neuroscience",
+    "astronomy",
+    "astrophysics",
+    "geology",
+    "geography",
+    "oceanography",
+    "meteorology",
+    "applied science",
+    "biophysics",
+    "computational",
+    "quantitative",
+    "photonics",
+    "optics",
+    "nuclear",
   ],
   "medicine, health and life science": [
-    "medicine", "medical", "health", "nursing", "pharmacy", "dentistry", "dental",
-    "physiotherapy", "occupational therapy", "rehabilitation", "public health",
-    "epidemiology", "nutrition", "dietetics", "speech", "audiology", "oncology",
-    "cardiology", "psychiatry", "clinical", "healthcare", "life science",
-    "biomedical science", "pathology", "microbiology", "immunology", "virology",
-    "global health", "mental health", "kinesiology", "exercise science"
+    "medicine",
+    "medical",
+    "health",
+    "nursing",
+    "pharmacy",
+    "dentistry",
+    "dental",
+    "physiotherapy",
+    "occupational therapy",
+    "rehabilitation",
+    "public health",
+    "epidemiology",
+    "nutrition",
+    "dietetics",
+    "speech",
+    "audiology",
+    "oncology",
+    "cardiology",
+    "psychiatry",
+    "clinical",
+    "healthcare",
+    "life science",
+    "biomedical science",
+    "pathology",
+    "microbiology",
+    "immunology",
+    "virology",
+    "global health",
+    "mental health",
+    "kinesiology",
+    "exercise science",
   ],
   "social science & humanities": [
-    "psychology", "sociology", "anthropology", "political science", "history",
-    "philosophy", "linguistics", "literature", "english", "french", "languages",
-    "communication", "media", "journalism", "social work", "criminology",
-    "international relations", "cultural studies", "religious studies", "theology",
-    "jewish", "islamic", "gender studies", "indigenous", "archaeology",
-    "information studies", "library", "archives", "knowledge management",
-    "cognitive science", "counselling", "social science"
+    "psychology",
+    "sociology",
+    "anthropology",
+    "political science",
+    "history",
+    "philosophy",
+    "linguistics",
+    "literature",
+    "english",
+    "french",
+    "languages",
+    "communication",
+    "media",
+    "journalism",
+    "social work",
+    "criminology",
+    "international relations",
+    "cultural studies",
+    "religious studies",
+    "theology",
+    "jewish",
+    "islamic",
+    "gender studies",
+    "indigenous",
+    "archaeology",
+    "information studies",
+    "library",
+    "archives",
+    "knowledge management",
+    "cognitive science",
+    "counselling",
+    "social science",
   ],
   "arts, design & creative studies": [
-    "art", "arts", "design", "architecture", "music", "fine art", "visual",
-    "photography", "film", "cinema", "theatre", "drama", "dance", "creative writing",
-    "digital media", "game design", "animation", "fashion", "interior design",
-    "urban design", "landscape", "graphic", "studio", "performing arts",
-    "conducting", "composition", "musicology"
+    "art",
+    "arts",
+    "design",
+    "architecture",
+    "music",
+    "fine art",
+    "visual",
+    "photography",
+    "film",
+    "cinema",
+    "theatre",
+    "drama",
+    "dance",
+    "creative writing",
+    "digital media",
+    "game design",
+    "animation",
+    "fashion",
+    "interior design",
+    "urban design",
+    "landscape",
+    "graphic",
+    "studio",
+    "performing arts",
+    "conducting",
+    "composition",
+    "musicology",
   ],
   "law, public policy & governance": [
-    "law", "legal", "juris", "policy", "governance", "public administration",
-    "public policy", "regulation", "compliance", "international law", "human rights",
-    "constitutional", "criminal law", "civil law", "tax law", "environmental law",
-    "j.d", "ll.m", "bcl"
+    "law",
+    "legal",
+    "juris",
+    "policy",
+    "governance",
+    "public administration",
+    "public policy",
+    "regulation",
+    "compliance",
+    "international law",
+    "human rights",
+    "constitutional",
+    "criminal law",
+    "civil law",
+    "tax law",
+    "environmental law",
+    "j.d",
+    "ll.m",
+    "bcl",
   ],
   "hospitality, tourism & service industry": [
-    "hospitality", "tourism", "hotel", "travel", "events management",
-    "food service", "culinary", "recreation", "leisure", "resort", "casino",
-    "service management"
+    "hospitality",
+    "tourism",
+    "hotel",
+    "travel",
+    "events management",
+    "food service",
+    "culinary",
+    "recreation",
+    "leisure",
+    "resort",
+    "casino",
+    "service management",
   ],
   "education & teaching": [
-    "education", "teaching", "pedagogy", "curriculum", "learning", "instruction",
-    "educational", "teacher", "school psychology", "applied child psychology",
-    "higher education", "adult education", "special education", "literacy",
-    "immersion", "early childhood"
+    "education",
+    "teaching",
+    "pedagogy",
+    "curriculum",
+    "learning",
+    "instruction",
+    "educational",
+    "teacher",
+    "school psychology",
+    "applied child psychology",
+    "higher education",
+    "adult education",
+    "special education",
+    "literacy",
+    "immersion",
+    "early childhood",
   ],
   "agriculture, sustainability & environmental studies": [
-    "agriculture", "agricultural", "environmental", "sustainability", "ecology",
-    "forestry", "natural resources", "conservation", "climate", "energy",
-    "renewable", "water", "soil", "plant science", "animal science", "food science",
-    "agronomy", "horticulture", "wildlife", "fisheries", "marine", "clean energy"
-  ]
+    "agriculture",
+    "agricultural",
+    "environmental",
+    "sustainability",
+    "ecology",
+    "forestry",
+    "natural resources",
+    "conservation",
+    "climate",
+    "energy",
+    "renewable",
+    "water",
+    "soil",
+    "plant science",
+    "animal science",
+    "food science",
+    "agronomy",
+    "horticulture",
+    "wildlife",
+    "fisheries",
+    "marine",
+    "clean energy",
+  ],
 };
 
 const VALID_FIELD_CATEGORIES = [
@@ -1457,7 +1852,7 @@ const VALID_FIELD_CATEGORIES = [
   "law, public policy & governance",
   "hospitality, tourism & service industry",
   "education & teaching",
-  "agriculture, sustainability & environmental studies"
+  "agriculture, sustainability & environmental studies",
 ];
 
 function autoAssignFieldCategory(programName) {
@@ -1495,7 +1890,7 @@ const COMMON_DIRECTORY_PATTERNS = [
   "/study/graduate",
   "/programs",
   "/courses",
-  "/faculties"
+  "/faculties",
 ];
 
 async function discoverDirectoryUrls(baseUrl) {
@@ -1505,7 +1900,7 @@ async function discoverDirectoryUrls(baseUrl) {
       const response = await axios.get(testUrl, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
         timeout: 10000,
-        validateStatus: (status) => status < 404
+        validateStatus: (status) => status < 404,
       });
       if (response.status === 200 && response.data.length > 2000) {
         console.log(`[discovery] Found directory at: ${testUrl}`);
@@ -1542,7 +1937,7 @@ async function runWorker() {
       .limit(1)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
+    if (error && error.code !== "PGRST116") {
       console.error("[worker] Job fetch error:", error.message);
       workerRunning = false;
       return;
@@ -1554,7 +1949,9 @@ async function runWorker() {
       return;
     }
 
-    console.log(`[worker] Processing job for university_id: ${job.university_id}`);
+    console.log(
+      `[worker] Processing job for university_id: ${job.university_id}`,
+    );
 
     // ---- STEP 1: CRAWL ----
     await updateJobStatus(job.id, "crawling");
@@ -1573,7 +1970,11 @@ async function runWorker() {
       }
 
       if (!directoryUrls) {
-        await updateJobStatus(job.id, "failed", "Could not discover directory URLs");
+        await updateJobStatus(
+          job.id,
+          "failed",
+          "Could not discover directory URLs",
+        );
         workerRunning = false;
         return;
       }
@@ -1582,20 +1983,32 @@ async function runWorker() {
     let totalDiscovered = 0;
     for (const dirUrl of directoryUrls) {
       try {
-        const crawlResult = await crawlDirectory(job.university_id, dirUrl, job.crawl_depth);
+        const crawlResult = await crawlDirectory(
+          job.university_id,
+          dirUrl,
+          job.crawl_depth,
+        );
         totalDiscovered += crawlResult;
-        console.log(`[worker] Crawled ${dirUrl} — discovered ${crawlResult} URLs`);
+        console.log(
+          `[worker] Crawled ${dirUrl} — discovered ${crawlResult} URLs`,
+        );
       } catch (e) {
         console.error(`[worker] Crawl failed for ${dirUrl}:`, e.message);
       }
     }
 
-    await supabase.schema("ingestion").from("university_jobs")
+    await supabase
+      .schema("ingestion")
+      .from("university_jobs")
       .update({ urls_discovered: totalDiscovered })
       .eq("id", job.id);
 
     if (totalDiscovered === 0) {
-      await updateJobStatus(job.id, "failed", "No URLs discovered during crawl");
+      await updateJobStatus(
+        job.id,
+        "failed",
+        "No URLs discovered during crawl",
+      );
       workerRunning = false;
       return;
     }
@@ -1603,7 +2016,9 @@ async function runWorker() {
     // ---- STEP 2: SCRAPE ----
     await updateJobStatus(job.id, "scraping");
     const scrapeResult = await scrapeQueueForUniversity(job.university_id);
-    await supabase.schema("ingestion").from("university_jobs")
+    await supabase
+      .schema("ingestion")
+      .from("university_jobs")
       .update({ urls_scraped: scrapeResult })
       .eq("id", job.id);
     console.log(`[worker] Scraped ${scrapeResult} pages`);
@@ -1611,7 +2026,9 @@ async function runWorker() {
     // ---- STEP 3: PARSE ----
     await updateJobStatus(job.id, "parsing");
     const parseResult = await parsePagesForUniversity(job.university_id);
-    await supabase.schema("ingestion").from("university_jobs")
+    await supabase
+      .schema("ingestion")
+      .from("university_jobs")
       .update({ urls_parsed: parseResult })
       .eq("id", job.id);
     console.log(`[worker] Parsed ${parseResult} pages`);
@@ -1635,11 +2052,13 @@ async function runWorker() {
       .not("duration_years", "is", null)
       .not("field_category", "is", null);
 
-    await supabase.schema("ingestion").from("university_jobs")
+    await supabase
+      .schema("ingestion")
+      .from("university_jobs")
       .update({
         status: "ready_for_review",
         programs_ready: count || 0,
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
       })
       .eq("id", job.id);
 
@@ -1654,7 +2073,11 @@ async function updateJobStatus(jobId, status, errorMessage = null) {
   const update = { status };
   if (status === "crawling") update.started_at = new Date().toISOString();
   if (errorMessage) update.error_message = errorMessage;
-  await supabase.schema("ingestion").from("university_jobs").update(update).eq("id", jobId);
+  await supabase
+    .schema("ingestion")
+    .from("university_jobs")
+    .update(update)
+    .eq("id", jobId);
 }
 
 async function crawlDirectory(universityId, dirUrl, depth = 1) {
@@ -1662,22 +2085,57 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
   const baseDomain = parsedBase.hostname;
 
   const PROGRAM_URL_SIGNALS = [
-    "program", "degree", "graduate", "master", "phd", "doctoral",
-    "course", "faculty", "school", "department", "study", "academic",
-    "msc", "mba", "med", "llm", "meng", "certificate", "diploma"
+    "program",
+    "degree",
+    "graduate",
+    "master",
+    "phd",
+    "doctoral",
+    "course",
+    "faculty",
+    "school",
+    "department",
+    "study",
+    "academic",
+    "msc",
+    "mba",
+    "med",
+    "llm",
+    "meng",
+    "certificate",
+    "diploma",
   ];
 
   const SKIP_URL_SIGNALS = [
-    "news", "event", "blog", "contact", "about", "login", "apply",
-    "alumni", "giving", "donate", "campus", "map", "directory",
-    "privacy", "accessibility", "copyright", "sitemap", "search",
-    "career", "job", "staff", "faculty-staff", "research-staff"
+    "news",
+    "event",
+    "blog",
+    "contact",
+    "about",
+    "login",
+    "apply",
+    "alumni",
+    "giving",
+    "donate",
+    "campus",
+    "map",
+    "directory",
+    "privacy",
+    "accessibility",
+    "copyright",
+    "sitemap",
+    "search",
+    "career",
+    "job",
+    "staff",
+    "faculty-staff",
+    "research-staff",
   ];
 
   function isProgramUrl(url) {
     const path = url.toLowerCase();
-    const hasProgram = PROGRAM_URL_SIGNALS.some(s => path.includes(s));
-    const shouldSkip = SKIP_URL_SIGNALS.some(s => path.includes(s));
+    const hasProgram = PROGRAM_URL_SIGNALS.some((s) => path.includes(s));
+    const shouldSkip = SKIP_URL_SIGNALS.some((s) => path.includes(s));
     return hasProgram && !shouldSkip;
   }
 
@@ -1687,7 +2145,7 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
     try {
       const res = await axios.get(url, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-        timeout: 20000
+        timeout: 20000,
       });
       html = res.data;
     } catch (e) {
@@ -1705,13 +2163,15 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
     }
 
     if (needsPuppeteer) {
-      console.log(`[crawl] Auto-switching to Puppeteer for: ${url} (axios html: ${html?.length || 0} chars)`);
+      console.log(
+        `[crawl] Auto-switching to Puppeteer for: ${url} (axios html: ${html?.length || 0} chars)`,
+      );
       try {
         html = await Promise.race([
           fetchWithPuppeteer(url),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Puppeteer timeout")), 45000)
-          )
+            setTimeout(() => reject(new Error("Puppeteer timeout")), 45000),
+          ),
         ]);
       } catch (e) {
         console.error(`[crawl] Puppeteer failed for ${url}:`, e.message);
@@ -1748,12 +2208,16 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
         let full;
         try {
           full = new URL(href, url).toString();
-        } catch (e) { return; }
+        } catch (e) {
+          return;
+        }
 
         let fullHostname;
         try {
           fullHostname = new URL(full).hostname;
-        } catch (e) { return; }
+        } catch (e) {
+          return;
+        }
 
         if (fullHostname !== baseDomain) return;
 
@@ -1769,12 +2233,12 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
         discovered.push({
           university_id: universityId,
           program_url: full,
-          status: "pending"
+          status: "pending",
         });
       });
 
       console.log(`[crawl] ${url} → found ${foundOnPage} program URLs`);
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
     }
   }
 
@@ -1806,52 +2270,78 @@ async function scrapeQueueForUniversity(universityId) {
 
     for (let i = 0; i < items.length; i += CONCURRENCY) {
       const chunk = items.slice(i, i + CONCURRENCY);
-      await Promise.all(chunk.map(async (item) => {
-        try {
-          await supabase.schema("ingestion").from("scrape_queue")
-            .update({ status: "processing" }).eq("id", item.id);
-
-          let html;
+      await Promise.all(
+        chunk.map(async (item) => {
           try {
-            const res = await axios.get(item.program_url, {
-              headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-              timeout: 30000
-            });
-            html = res.data;
-          } catch (e) { html = null; }
+            await supabase
+              .schema("ingestion")
+              .from("scrape_queue")
+              .update({ status: "processing" })
+              .eq("id", item.id);
 
-          if (!html || html.length < 500) {
-            html = await Promise.race([
-              fetchWithPuppeteer(item.program_url),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("Puppeteer timeout after 45s")), 45000)
-              )
-            ]);
+            let html;
+            try {
+              const res = await axios.get(item.program_url, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)",
+                },
+                timeout: 30000,
+              });
+              html = res.data;
+            } catch (e) {
+              html = null;
+            }
+
+            if (!html || html.length < 500) {
+              html = await Promise.race([
+                fetchWithPuppeteer(item.program_url),
+                new Promise((_, reject) =>
+                  setTimeout(
+                    () => reject(new Error("Puppeteer timeout after 45s")),
+                    45000,
+                  ),
+                ),
+              ]);
+            }
+
+            if (!html || html.length < 500) {
+              await supabase
+                .schema("ingestion")
+                .from("scrape_queue")
+                .update({ status: "failed", error_message: "Page too small" })
+                .eq("id", item.id);
+              return;
+            }
+
+            await supabase.schema("ingestion").from("raw_program_pages").upsert(
+              {
+                university_id: item.university_id,
+                source_url: item.program_url,
+                raw_html: html,
+                parse_status: "pending",
+              },
+              { onConflict: "source_url" },
+            );
+
+            await supabase
+              .schema("ingestion")
+              .from("scrape_queue")
+              .update({
+                status: "scraped",
+                scraped_at: new Date().toISOString(),
+              })
+              .eq("id", item.id);
+            totalScraped++;
+          } catch (e) {
+            await supabase
+              .schema("ingestion")
+              .from("scrape_queue")
+              .update({ status: "failed", error_message: e.message })
+              .eq("id", item.id);
           }
-
-          if (!html || html.length < 500) {
-            await supabase.schema("ingestion").from("scrape_queue")
-              .update({ status: "failed", error_message: "Page too small" }).eq("id", item.id);
-            return;
-          }
-
-          await supabase.schema("ingestion").from("raw_program_pages")
-            .upsert({
-              university_id: item.university_id,
-              source_url: item.program_url,
-              raw_html: html,
-              parse_status: "pending"
-            }, { onConflict: "source_url" });
-
-          await supabase.schema("ingestion").from("scrape_queue")
-            .update({ status: "scraped", scraped_at: new Date().toISOString() }).eq("id", item.id);
-          totalScraped++;
-        } catch (e) {
-          await supabase.schema("ingestion").from("scrape_queue")
-            .update({ status: "failed", error_message: e.message }).eq("id", item.id);
-        }
-      }));
-      await new Promise(r => setTimeout(r, 1000));
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
 
@@ -1875,14 +2365,16 @@ async function parsePagesForUniversity(universityId) {
 
     for (let i = 0; i < pages.length; i += CONCURRENCY) {
       const chunk = pages.slice(i, i + CONCURRENCY);
-      await Promise.all(chunk.map(async (page) => {
-        try {
-          await parseProgramPage(page.id);
-          totalParsed++;
-        } catch (e) {
-          console.error(`[parse] Failed page ${page.id}:`, e.message);
-        }
-      }));
+      await Promise.all(
+        chunk.map(async (page) => {
+          try {
+            await parseProgramPage(page.id);
+            totalParsed++;
+          } catch (e) {
+            console.error(`[parse] Failed page ${page.id}:`, e.message);
+          }
+        }),
+      );
     }
   }
 
@@ -1904,7 +2396,9 @@ async function autoFixFieldCategories(universityId) {
   for (const p of programs) {
     const assigned = autoAssignFieldCategory(p.program_name);
     if (assigned) {
-      await supabase.schema("ingestion").from("parsed_programs")
+      await supabase
+        .schema("ingestion")
+        .from("parsed_programs")
         .update({ field_category: assigned })
         .eq("id", p.id);
       fixed++;
@@ -1952,48 +2446,53 @@ const FEE_PAGE_PATTERNS = [
   "/registrar/tuition-fees",
   "/registrar/fees",
   "/student-accounts/tuition",
-  "/finance/tuition-fees"
+  "/finance/tuition-fees",
 ];
 
 function resolveTuition(programName, programType, universityId, feeStructures) {
   if (!feeStructures || feeStructures.length === 0) return null;
 
-  const level = programType === 'doctoral' ? 'doctoral' : 'masters';
+  const level = programType === "doctoral" ? "doctoral" : "masters";
   const nameLower = programName.toLowerCase();
 
-  const levelFees = feeStructures.filter(f => f.program_level === level);
+  const levelFees = feeStructures.filter((f) => f.program_level === level);
 
-  const specificFees = levelFees.filter(f =>
-    f.program_name_pattern &&
-    f.program_name_pattern !== 'default_masters' &&
-    f.program_name_pattern !== 'default_doctoral' &&
-    (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
-    f.program_name_pattern.toLowerCase().includes(nameLower))
+  const specificFees = levelFees.filter(
+    (f) =>
+      f.program_name_pattern &&
+      f.program_name_pattern !== "default_masters" &&
+      f.program_name_pattern !== "default_doctoral" &&
+      (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
+        f.program_name_pattern.toLowerCase().includes(nameLower)),
   );
 
   if (specificFees.length > 0) {
-    specificFees.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+    specificFees.sort(
+      (a, b) => b.program_name_pattern.length - a.program_name_pattern.length,
+    );
     const fee = specificFees[0];
-    const annual = fee.fee_type === 'flat_annual'
-      ? fee.international_fee
-      : fee.international_fee * (fee.instalments_per_year || 2);
+    const annual =
+      fee.fee_type === "flat_annual"
+        ? fee.international_fee
+        : fee.international_fee * (fee.instalments_per_year || 2);
     return annual;
   }
 
-  const defaultFee = levelFees.find(f =>
-    f.program_name_pattern === `default_${level}`
+  const defaultFee = levelFees.find(
+    (f) => f.program_name_pattern === `default_${level}`,
   );
 
   if (defaultFee) {
-    const annual = defaultFee.fee_type === 'flat_annual'
-      ? defaultFee.international_fee
-      : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
+    const annual =
+      defaultFee.fee_type === "flat_annual"
+        ? defaultFee.international_fee
+        : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
     return annual;
   }
 
-  const genericFee = levelFees.find(f => !f.program_name_pattern);
+  const genericFee = levelFees.find((f) => !f.program_name_pattern);
   if (genericFee) {
-    return genericFee.fee_type === 'flat_annual'
+    return genericFee.fee_type === "flat_annual"
       ? genericFee.international_fee
       : genericFee.international_fee * (genericFee.instalments_per_year || 2);
   }
@@ -2039,52 +2538,69 @@ async function scrapeFeeStructure(universityId) {
 
   // Also build root domain (e.g. graduate.carleton.ca → carleton.ca)
   const hostParts = parsedUrl.hostname.split(".");
-  const rootDomain = hostParts.length > 2
-    ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
-    : baseUrl;
+  const rootDomain =
+    hostParts.length > 2
+      ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
+      : baseUrl;
 
   const baseUrls = [...new Set([baseUrl, rootDomain])];
-  console.log(`[fees] Trying fee pages for ${uni?.name} at ${baseUrls.join(", ")}`);
+  console.log(
+    `[fees] Trying fee pages for ${uni?.name} at ${baseUrls.join(", ")}`,
+  );
 
   let feeHtml = null;
   let feeUrl = null;
 
   for (const base of baseUrls) {
-  for (const pattern of FEE_PAGE_PATTERNS) {
-    const testUrl = base + pattern;
-    try {
-      let html;
+    for (const pattern of FEE_PAGE_PATTERNS) {
+      const testUrl = base + pattern;
       try {
-        const res = await axios.get(testUrl, {
-          headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-          timeout: 15000,
-          validateStatus: s => s < 404
-        });
-        html = res.status === 200 ? res.data : null;
-      } catch (e) { html = null; }
-
-      if (!html || html.length < 3000) {
-        html = await Promise.race([
-          fetchWithPuppeteer(testUrl),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
-        ]).catch(() => null);
-      }
-
-      if (html && html.length > 3000) {
-        const lowerHtml = html.toLowerCase();
-        const hasFeeContent = ["tuition", "fee", "international", "domestic", "per credit", "per term", "annual"].some(k => lowerHtml.includes(k));
-        if (hasFeeContent) {
-          feeHtml = html;
-          feeUrl = testUrl;
-          console.log(`[fees] Found fee page at: ${testUrl}`);
-          break;
+        let html;
+        try {
+          const res = await axios.get(testUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)",
+            },
+            timeout: 15000,
+            validateStatus: (s) => s < 404,
+          });
+          html = res.status === 200 ? res.data : null;
+        } catch (e) {
+          html = null;
         }
+
+        if (!html || html.length < 3000) {
+          html = await Promise.race([
+            fetchWithPuppeteer(testUrl),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("timeout")), 30000),
+            ),
+          ]).catch(() => null);
+        }
+
+        if (html && html.length > 3000) {
+          const lowerHtml = html.toLowerCase();
+          const hasFeeContent = [
+            "tuition",
+            "fee",
+            "international",
+            "domestic",
+            "per credit",
+            "per term",
+            "annual",
+          ].some((k) => lowerHtml.includes(k));
+          if (hasFeeContent) {
+            feeHtml = html;
+            feeUrl = testUrl;
+            console.log(`[fees] Found fee page at: ${testUrl}`);
+            break;
+          }
+        }
+      } catch (e) {
+        continue;
       }
-    } catch (e) {
-      continue;
     }
-  }
-  if (feeHtml) break;
+    if (feeHtml) break;
   }
 
   if (!feeHtml) {
@@ -2101,25 +2617,37 @@ async function scrapeFeeStructure(universityId) {
   const targetEl = mainEl.length ? mainEl : $("body");
 
   // Extract tables with structure preserved
-  targetEl.find("table").each(function() {
-    $(this).find("tr").each(function() {
-      const cells = [];
-      $(this).find("th, td").each(function() {
-        cells.push($(this).text().trim());
+  targetEl.find("table").each(function () {
+    $(this)
+      .find("tr")
+      .each(function () {
+        const cells = [];
+        $(this)
+          .find("th, td")
+          .each(function () {
+            cells.push($(this).text().trim());
+          });
+        if (cells.length) feeText += cells.join(" | ") + "\n";
       });
-      if (cells.length) feeText += cells.join(" | ") + "\n";
-    });
     feeText += "\n";
   });
 
   // Also extract non-table text
-  const nonTableText = targetEl.clone()
-    .find("table").remove().end()
-    .text().replace(/\s+/g, " ").trim();
+  const nonTableText = targetEl
+    .clone()
+    .find("table")
+    .remove()
+    .end()
+    .text()
+    .replace(/\s+/g, " ")
+    .trim();
 
   feeText = (feeText + "\n" + nonTableText).substring(0, 8000);
 
-  console.log(`[fees-debug] Fee text sample for ${uni?.name}:`, feeText.substring(0, 500));
+  console.log(
+    `[fees-debug] Fee text sample for ${uni?.name}:`,
+    feeText.substring(0, 500),
+  );
 
   const feePrompt = `
 You are extracting university fee structures from a tuition page.
@@ -2153,9 +2681,11 @@ ${feeText}
       openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: feePrompt }],
-        temperature: 0
+        temperature: 0,
       }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI timeout")), 60000))
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("OpenAI timeout")), 60000),
+      ),
     ]);
 
     const content = completion.choices[0].message.content;
@@ -2166,7 +2696,7 @@ ${feeText}
       return false;
     }
 
-    const feeRows = fees.map(f => ({
+    const feeRows = fees.map((f) => ({
       university_id: universityId,
       program_level: f.program_level,
       fee_type: f.fee_type,
@@ -2175,24 +2705,30 @@ ${feeText}
       currency: f.currency || "CAD",
       program_name_pattern: f.program_name_pattern || null,
       notes: f.notes || null,
-      fee_page_url: feeUrl
+      fee_page_url: feeUrl,
     }));
 
     const { error } = await supabase
       .schema("ingestion")
       .from("university_fee_structure")
-      .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern" });
+      .upsert(feeRows, {
+        onConflict: "university_id,program_level,program_name_pattern",
+      });
 
     if (error) {
       console.error(`[fees] Insert error for ${uni?.name}:`, error.message);
       return false;
     }
 
-    console.log(`[fees] Extracted ${feeRows.length} fee entries for ${uni?.name}`);
+    console.log(
+      `[fees] Extracted ${feeRows.length} fee entries for ${uni?.name}`,
+    );
     return true;
-
   } catch (err) {
-    console.error(`[fees] GPT extraction failed for ${uni?.name}:`, err.message);
+    console.error(
+      `[fees] GPT extraction failed for ${uni?.name}:`,
+      err.message,
+    );
     return false;
   }
 }
@@ -2224,7 +2760,7 @@ app.post("/worker/add-job", async (req, res) => {
         university_id,
         directory_urls: directory_urls || [],
         crawl_depth,
-        status: "queued"
+        status: "queued",
       })
       .select()
       .single();
@@ -2233,7 +2769,7 @@ app.post("/worker/add-job", async (req, res) => {
 
     res.json({
       message: `Job queued for ${uni.name}`,
-      job_id: data.id
+      job_id: data.id,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2245,7 +2781,9 @@ app.get("/worker/jobs", async (req, res) => {
     const { data } = await supabase
       .schema("ingestion")
       .from("university_jobs")
-      .select("id, university_id, status, urls_discovered, urls_scraped, urls_parsed, programs_ready, error_message, created_at, started_at, completed_at")
+      .select(
+        "id, university_id, status, urls_discovered, urls_scraped, urls_parsed, programs_ready, error_message, created_at, started_at, completed_at",
+      )
       .order("created_at", { ascending: false });
     res.json(data);
   } catch (err) {
@@ -2272,7 +2810,8 @@ app.get("/worker/review/:university_id", async (req, res) => {
       return acc;
     }, {});
 
-    const { count: nullFields } = await supabase.schema("ingestion")
+    const { count: nullFields } = await supabase
+      .schema("ingestion")
       .from("parsed_programs")
       .select("*", { count: "exact", head: true })
       .eq("university_id", university_id)
@@ -2283,9 +2822,10 @@ app.get("/worker/review/:university_id", async (req, res) => {
       total_ready: summary.length,
       by_program_type: grouped,
       null_field_category: nullFields || 0,
-      message: nullFields > 0
-        ? `${nullFields} programs still have null field_category — inspect before migrating`
-        : "Ready to migrate"
+      message:
+        nullFields > 0
+          ? `${nullFields} programs still have null field_category — inspect before migrating`
+          : "Ready to migrate",
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2313,8 +2853,30 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
     let failed = 0;
     let skipped = 0;
 
+    const CAD_TO_USD = 0.74;
+
+    const { data: feeStructures } = await supabase
+      .schema("ingestion")
+      .from("university_fee_structure")
+      .select("*")
+      .eq("university_id", university_id);
+
     for (const p of programs) {
       try {
+        let finalTuitionUSD = p.tuition_usd ? Math.round(p.tuition_usd) : null;
+
+        if (!finalTuitionUSD) {
+          const tuitionCAD = resolveTuition(p.program_name, p.program_type, university_id, feeStructures || []);
+          console.log(`[migrate] ${p.program_name} → tuitionCAD: ${tuitionCAD}`);
+          if (tuitionCAD) finalTuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
+        }
+
+        if (!finalTuitionUSD) {
+          console.log(`[migrate-skip] No tuition: ${p.program_name}`);
+          skipped++;
+          continue;
+        }
+
         const { error: insertError } = await supabase.schema("core")
           .from("courses")
           .insert({
@@ -2322,7 +2884,7 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
             university_id: p.university_id,
             degree_level: p.degree_level,
             duration_years: p.duration_years,
-            tuition_usd: p.tuition_usd,
+            tuition_usd: finalTuitionUSD,
             field_category: p.field_category,
             internship_available: p.internship_available || false,
             gre_required: p.gre_required || false,
@@ -2347,12 +2909,8 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
           });
 
         if (insertError) {
-          if (insertError.code === "23505") {
-            skipped++;
-          } else {
-            console.error(`Migration failed for ${p.program_name}:`, insertError.message);
-            failed++;
-          }
+          if (insertError.code === "23505") { skipped++; }
+          else { console.error(`Migration failed for ${p.program_name}:`, insertError.message); failed++; }
           continue;
         }
 
@@ -2365,7 +2923,9 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
       }
     }
 
-    await supabase.schema("ingestion").from("university_jobs")
+    await supabase
+      .schema("ingestion")
+      .from("university_jobs")
       .update({ status: "migrated" })
       .eq("university_id", university_id)
       .eq("status", "ready_for_review");
@@ -2374,7 +2934,7 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
       message: "Migration complete",
       success,
       failed,
-      skipped
+      skipped,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2412,100 +2972,125 @@ app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
       .limit(1)
       .single();
 
-    if (!sampleUrl) return res.json({ error: "No scraped URLs found for this university" });
+    if (!sampleUrl)
+      return res.json({ error: "No scraped URLs found for this university" });
 
     const parsedUrl = new URL(sampleUrl.program_url);
     const baseUrl = parsedUrl.origin;
 
     // Also build root domain (e.g. graduate.carleton.ca → carleton.ca)
     const hostParts = parsedUrl.hostname.split(".");
-    const rootDomain = hostParts.length > 2
-      ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
-      : baseUrl;
+    const rootDomain =
+      hostParts.length > 2
+        ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
+        : baseUrl;
 
     const baseUrls = [...new Set([baseUrl, rootDomain])];
 
     const results = [];
     for (const base of baseUrls) {
-    for (const pattern of FEE_PAGE_PATTERNS) {
-      const testUrl = base + pattern;
-      try {
-        let html;
+      for (const pattern of FEE_PAGE_PATTERNS) {
+        const testUrl = base + pattern;
         try {
-          const r = await axios.get(testUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-            timeout: 10000,
-            validateStatus: s => s < 404
-          });
-          html = r.status === 200 ? r.data : null;
-        } catch (e) { html = null; }
-
-        if (!html || html.length < 3000) {
-          html = await Promise.race([
-            fetchWithPuppeteer(testUrl),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
-          ]).catch(() => null);
-        }
-
-        if (!html) {
-          results.push({ url: testUrl, status: "failed", reason: "no response" });
-          continue;
-        }
-
-        const $ = cheerio.load(html);
-        const hasFeeContent = ["tuition", "fee", "international"].some(k => 
-          html.toLowerCase().includes(k)
-        );
-
-        const tables = [];
-        $("table").each(function() {
-          const rows = [];
-          $(this).find("tr").each(function() {
-            const cells = [];
-            $(this).find("th, td").each(function() {
-              cells.push($(this).text().trim());
+          let html;
+          try {
+            const r = await axios.get(testUrl, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)",
+              },
+              timeout: 10000,
+              validateStatus: (s) => s < 404,
             });
-            if (cells.length) rows.push(cells.join(" | "));
-          });
-          if (rows.length) tables.push(rows.slice(0, 5).join("\n"));
-        });
-
-        const feeDivs = [];
-        $("div, section, article").each(function() {
-          const text = $(this).text().replace(/\s+/g, " ").trim();
-          if (
-            (text.includes("international") || text.includes("International")) &&
-            (text.includes("$") || text.includes("CAD")) &&
-            text.length > 50 && text.length < 1000
-          ) {
-            feeDivs.push(text.substring(0, 300));
+            html = r.status === 200 ? r.data : null;
+          } catch (e) {
+            html = null;
           }
-        });
 
-        const bodyText = $("body").text().replace(/\s+/g, " ").trim().substring(0, 500);
+          if (!html || html.length < 3000) {
+            html = await Promise.race([
+              fetchWithPuppeteer(testUrl),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("timeout")), 30000),
+              ),
+            ]).catch(() => null);
+          }
 
-        results.push({
-          url: testUrl,
-          status: "found",
-          html_length: html.length,
-          has_fee_content: hasFeeContent,
-          tables_found: tables.length,
-          table_sample: tables[0] ? tables[0].substring(0, 400) : null,
-          fee_divs_found: feeDivs.length,
-          fee_div_sample: feeDivs[0] || null,
-          body_sample: bodyText
-        });
+          if (!html) {
+            results.push({
+              url: testUrl,
+              status: "failed",
+              reason: "no response",
+            });
+            continue;
+          }
 
-        if (hasFeeContent) break;
+          const $ = cheerio.load(html);
+          const hasFeeContent = ["tuition", "fee", "international"].some((k) =>
+            html.toLowerCase().includes(k),
+          );
 
-      } catch (e) {
-        results.push({ url: testUrl, status: "error", reason: e.message });
+          const tables = [];
+          $("table").each(function () {
+            const rows = [];
+            $(this)
+              .find("tr")
+              .each(function () {
+                const cells = [];
+                $(this)
+                  .find("th, td")
+                  .each(function () {
+                    cells.push($(this).text().trim());
+                  });
+                if (cells.length) rows.push(cells.join(" | "));
+              });
+            if (rows.length) tables.push(rows.slice(0, 5).join("\n"));
+          });
+
+          const feeDivs = [];
+          $("div, section, article").each(function () {
+            const text = $(this).text().replace(/\s+/g, " ").trim();
+            if (
+              (text.includes("international") ||
+                text.includes("International")) &&
+              (text.includes("$") || text.includes("CAD")) &&
+              text.length > 50 &&
+              text.length < 1000
+            ) {
+              feeDivs.push(text.substring(0, 300));
+            }
+          });
+
+          const bodyText = $("body")
+            .text()
+            .replace(/\s+/g, " ")
+            .trim()
+            .substring(0, 500);
+
+          results.push({
+            url: testUrl,
+            status: "found",
+            html_length: html.length,
+            has_fee_content: hasFeeContent,
+            tables_found: tables.length,
+            table_sample: tables[0] ? tables[0].substring(0, 400) : null,
+            fee_divs_found: feeDivs.length,
+            fee_div_sample: feeDivs[0] || null,
+            body_sample: bodyText,
+          });
+
+          if (hasFeeContent) break;
+        } catch (e) {
+          results.push({ url: testUrl, status: "error", reason: e.message });
+        }
       }
     }
-    }
 
-    res.json({ university: uni?.name, base_url: baseUrl, base_urls: baseUrls, results });
-
+    res.json({
+      university: uni?.name,
+      base_url: baseUrl,
+      base_urls: baseUrls,
+      results,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2514,28 +3099,41 @@ app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
 // ============================================================
 // START BACKGROUND WORKER — runs every 3 minutes
 // ============================================================
-setInterval(async () => {
-  // Only reset jobs stuck in active processing states for over 2 hours
-  // NEVER reset ready_for_review or migrated jobs
-  await supabase.schema("ingestion").from("university_jobs")
-    .update({ status: "queued", error_message: "Reset after timeout" })
-    .in("status", ["crawling", "scraping", "parsing", "fixing", "fee_scraping"])
-    .not("status", "in", '("ready_for_review","migrated","failed")')
-    .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+setInterval(
+  async () => {
+    // Only reset jobs stuck in active processing states for over 2 hours
+    // NEVER reset ready_for_review or migrated jobs
+    await supabase
+      .schema("ingestion")
+      .from("university_jobs")
+      .update({ status: "queued", error_message: "Reset after timeout" })
+      .in("status", [
+        "crawling",
+        "scraping",
+        "parsing",
+        "fixing",
+        "fee_scraping",
+      ])
+      .not("status", "in", '("ready_for_review","migrated","failed")')
+      .lt(
+        "started_at",
+        new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      );
 
-  runWorker();
-}, 3 * 60 * 1000);
+    runWorker();
+  },
+  3 * 60 * 1000,
+);
 console.log("Background worker started — polling every 3 minutes");
-
 
 app.post("/scrape-fees-batch", async (req, res) => {
   const { university_ids } = req.body;
   res.json({ message: "Fee scraping started" });
-  
+
   for (const uid of university_ids) {
     console.log(`[fees-batch] Processing ${uid}`);
     await scrapeFeeStructure(uid);
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 2000));
   }
   console.log("[fees-batch] Complete");
 });
