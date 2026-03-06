@@ -2879,7 +2879,7 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
 
         const { error: insertError } = await supabase.schema("core")
           .from("courses")
-          .insert({
+          .upsert({
             name: p.program_name,
             university_id: p.university_id,
             degree_level: p.degree_level,
@@ -2906,11 +2906,11 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
             source_parsed_id: p.id,
             migrated_at: new Date().toISOString(),
             data_quality: "parsed"
-          });
+          }, { onConflict: "university_id,name,degree_level,program_type", ignoreDuplicates: true });
 
         if (insertError) {
-          if (insertError.code === "23505") { skipped++; }
-          else { console.error(`Migration failed for ${p.program_name}:`, insertError.message); failed++; }
+          console.error(`Migration failed for ${p.program_name}:`, insertError.message);
+          failed++;
           continue;
         }
 
