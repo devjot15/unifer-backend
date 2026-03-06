@@ -1,0 +1,193 @@
+// ============================================================
+// FEE SCRAPING — Auto-discover and extract university fee structure
+// ============================================================
+
+const FEE_PAGE_PATTERNS = [
+  "/graduate/fees",
+  "/graduate/tuition",
+  "/graduate-studies/tuition",
+  "/graduate-studies/fees",
+  "/fees-and-funding",
+  "/tuition-fees",
+  "/tuition",
+  "/fees",
+  "/graduate/funding-and-fees",
+  "/future-students/tuition-fees",
+  "/admissions/tuition-fees",
+  "/graduate/costs",
+  "/graduate-studies/costs-and-funding",
+  "/programs/tuition",
+  "/financial/tuition"
+];
+
+async function scrapeFeeStructure(universityId) {
+  // Check if fee structure already exists
+  const { data: existing } = await supabase
+    .schema("ingestion")
+    .from("university_fee_structure")
+    .select("id")
+    .eq("university_id", universityId)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    console.log(`[fees] Fee structure already exists for ${universityId}`);
+    return true;
+  }
+
+  // Get university website
+  const { data: uni } = await supabase
+    .schema("core")
+    .from("universities")
+    .select("name")
+    .eq("id", universityId)
+    .single();
+
+  // Get a scraped URL to derive base domain
+  const { data: sampleUrl } = await supabase
+    .schema("ingestion")
+    .from("scrape_queue")
+    .select("program_url")
+    .eq("university_id", universityId)
+    .limit(1)
+    .single();
+
+  if (!sampleUrl) {
+    console.log(`[fees] No scraped URLs found for ${uni?.name}`);
+    return false;
+  }
+
+  const baseUrl = new URL(sampleUrl.program_url).origin;
+  console.log(`[fees] Trying fee pages for ${uni?.name} at ${baseUrl}`);
+
+  let feeHtml = null;
+  let feeUrl = null;
+
+  // Try each fee page pattern
+  for (const pattern of FEE_PAGE_PATTERNS) {
+    const testUrl = baseUrl + pattern;
+    try {
+      let html;
+      try {
+        const res = await axios.get(testUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+          timeout: 15000,
+          validateStatus: s => s < 404
+        });
+        html = res.status === 200 ? res.data : null;
+      } catch (e) { html = null; }
+
+      // If axios fails or returns thin page, try Puppeteer
+      if (!html || html.length < 3000) {
+        html = await Promise.race([
+          fetchWithPuppeteer(testUrl),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
+        ]).catch(() => null);
+      }
+
+      if (html && html.length > 3000) {
+        // Check if page actually contains fee-related content
+        const lowerHtml = html.toLowerCase();
+        const hasFeeContent = ["tuition", "fee", "international", "domestic", "per credit", "per term", "annual"].some(k => lowerHtml.includes(k));
+        if (hasFeeContent) {
+          feeHtml = html;
+          feeUrl = testUrl;
+          console.log(`[fees] Found fee page at: ${testUrl}`);
+          break;
+        }
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  if (!feeHtml) {
+    console.log(`[fees] Could not find fee page for ${uni?.name}`);
+    return false;
+  }
+
+  // Extract text from fee page
+  const $ = cheerio.load(feeHtml);
+  $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
+  let feeText = $("main, article, .content, #content, [role='main']").first().text();
+  if (!feeText || feeText.length < 200) {
+    feeText = $("body").text();
+  }
+  feeText = feeText.replace(/\s+/g, " ").trim().substring(0, 8000);
+
+  // GPT extraction
+  const feePrompt = `
+You are extracting university fee structures from a tuition page.
+Return STRICT JSON array only. No markdown, no explanation.
+
+Extract ALL distinct fee entries for INTERNATIONAL students.
+Each entry should represent a specific program level and type combination.
+
+FIELDS:
+- program_level: "masters" or "doctoral"
+- fee_type: "flat_annual" (one annual fee) or "per_instalment" (fee paid per term/semester/instalment)
+- international_fee: numeric fee amount (no currency symbols, no commas)
+- instalments_per_year: number of instalments per year (1 if flat_annual, 2 for semester, 3 for trimester)
+- currency: "CAD", "USD", "GBP", "EUR", "AUD"
+- program_name_pattern: null for general fees, or a keyword if this fee applies to specific programs only (e.g. "mba", "thesis", "research", "professional", "doctor")
+- notes: any relevant notes about this fee
+
+RULES:
+- Only extract INTERNATIONAL student fees
+- If fees vary by faculty/program, extract the most common/default rate
+- If both per-credit and annual fees are shown, prefer annual
+- If fee is per-credit, calculate annual by multiplying by typical credits per year (30 for Canada)
+- Return empty array [] if no clear fee structure found for international students
+
+Content:
+${feeText}
+`;
+
+  try {
+    const completion = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: feePrompt }],
+        temperature: 0
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI timeout")), 60000))
+    ]);
+
+    const content = completion.choices[0].message.content;
+    const fees = JSON.parse(content.replace(/```json|```/g, "").trim());
+
+    if (!Array.isArray(fees) || fees.length === 0) {
+      console.log(`[fees] No fee entries extracted for ${uni?.name}`);
+      return false;
+    }
+
+    // Insert fee entries
+    const feeRows = fees.map(f => ({
+      university_id: universityId,
+      program_level: f.program_level,
+      fee_type: f.fee_type,
+      international_fee: f.international_fee,
+      instalments_per_year: f.instalments_per_year || 1,
+      currency: f.currency || "CAD",
+      program_name_pattern: f.program_name_pattern || null,
+      notes: f.notes || null,
+      fee_page_url: feeUrl
+    }));
+
+    const { error } = await supabase
+      .schema("ingestion")
+      .from("university_fee_structure")
+      .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern" });
+
+    if (error) {
+      console.error(`[fees] Insert error for ${uni?.name}:`, error.message);
+      return false;
+    }
+
+    console.log(`[fees] ✅ Extracted ${feeRows.length} fee entries for ${uni?.name}`);
+    return true;
+
+  } catch (err) {
+    console.error(`[fees] GPT extraction failed for ${uni?.name}:`, err.message);
+    return false;
+  }
+}
