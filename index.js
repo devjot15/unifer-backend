@@ -1513,7 +1513,7 @@ async function discoverDirectoryUrls(baseUrl) {
 // CORE WORKER FUNCTION
 // Status flow: queued → crawling → scraping → parsing → fee_scraping → fixing → ready_for_review → migrated → failed
 // ============================================================
-let workerRunning = true; // temporarily disabled
+let workerRunning = false;
 
 async function runWorker() {
   if (workerRunning) {
