@@ -1569,11 +1569,17 @@ async function runWorker() {
     const { data: job, error } = await supabase
       .schema("ingestion")
       .from("university_jobs")
-      .select("*, core.universities(name, country_id)")
+      .select("*")
       .eq("status", "queued")
       .order("created_at", { ascending: true })
       .limit(1)
       .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error("[worker] Job fetch error:", error.message);
+      workerRunning = false;
+      return;
+    }
 
     if (error || !job) {
       console.log("[worker] No queued jobs found");
