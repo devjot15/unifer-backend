@@ -1979,14 +1979,24 @@ async function scrapeFeeStructure(universityId) {
     return false;
   }
 
-  const baseUrl = new URL(sampleUrl.program_url).origin;
-  console.log(`[fees] Trying fee pages for ${uni?.name} at ${baseUrl}`);
+  const parsedUrl = new URL(sampleUrl.program_url);
+  const baseUrl = parsedUrl.origin;
+
+  // Also build root domain (e.g. graduate.carleton.ca → carleton.ca)
+  const hostParts = parsedUrl.hostname.split(".");
+  const rootDomain = hostParts.length > 2
+    ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
+    : baseUrl;
+
+  const baseUrls = [...new Set([baseUrl, rootDomain])];
+  console.log(`[fees] Trying fee pages for ${uni?.name} at ${baseUrls.join(", ")}`);
 
   let feeHtml = null;
   let feeUrl = null;
 
+  for (const base of baseUrls) {
   for (const pattern of FEE_PAGE_PATTERNS) {
-    const testUrl = baseUrl + pattern;
+    const testUrl = base + pattern;
     try {
       let html;
       try {
@@ -2018,6 +2028,8 @@ async function scrapeFeeStructure(universityId) {
     } catch (e) {
       continue;
     }
+  }
+  if (feeHtml) break;
   }
 
   if (!feeHtml) {
@@ -2347,11 +2359,21 @@ app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
 
     if (!sampleUrl) return res.json({ error: "No scraped URLs found for this university" });
 
-    const baseUrl = new URL(sampleUrl.program_url).origin;
+    const parsedUrl = new URL(sampleUrl.program_url);
+    const baseUrl = parsedUrl.origin;
+
+    // Also build root domain (e.g. graduate.carleton.ca → carleton.ca)
+    const hostParts = parsedUrl.hostname.split(".");
+    const rootDomain = hostParts.length > 2
+      ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
+      : baseUrl;
+
+    const baseUrls = [...new Set([baseUrl, rootDomain])];
 
     const results = [];
+    for (const base of baseUrls) {
     for (const pattern of FEE_PAGE_PATTERNS) {
-      const testUrl = baseUrl + pattern;
+      const testUrl = base + pattern;
       try {
         let html;
         try {
@@ -2425,8 +2447,9 @@ app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
         results.push({ url: testUrl, status: "error", reason: e.message });
       }
     }
+    }
 
-    res.json({ university: uni?.name, base_url: baseUrl, results });
+    res.json({ university: uni?.name, base_url: baseUrl, base_urls: baseUrls, results });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
