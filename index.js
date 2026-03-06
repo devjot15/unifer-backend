@@ -2364,11 +2364,29 @@ setInterval(async () => {
 console.log("Background worker started — polling every 3 minutes");
 
 app.get("/test-page", async (req, res) => {
-  const html = await fetchWithPuppeteer("https://www.sgs.utoronto.ca/programs/civil-engineering/");
+  const html = await fetchWithPuppeteer("https://www.concordia.ca/graduate/fees");
   const $ = cheerio.load(html);
-  $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
-  const text = $("main, article, .content, #content, [role='main']").first().text().replace(/\s+/g, " ").trim();
-  res.send(text.substring(0, 3000));
+  
+  const tables = [];
+  $("table").each(function() {
+    const rows = [];
+    $(this).find("tr").each(function() {
+      const cells = [];
+      $(this).find("th, td").each(function() {
+        cells.push($(this).text().trim());
+      });
+      if (cells.length) rows.push(cells.join(" | "));
+    });
+    if (rows.length) tables.push(rows.join("\n"));
+  });
+  
+  const bodyText = $("body").text().replace(/\s+/g, " ").trim().substring(0, 1000);
+  
+  res.json({ 
+    tables_found: tables.length,
+    table_sample: tables[0] ? tables[0].substring(0, 500) : "no tables",
+    body_sample: bodyText
+  });
 });
 
 app.post("/scrape-fees-batch", async (req, res) => {
