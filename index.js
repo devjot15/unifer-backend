@@ -789,6 +789,12 @@ ${trimmedText}
     // Handle both single object (legacy) and array (multi-degree pages)
     const programList = Array.isArray(parsed) ? parsed : [parsed];
 
+    const { data: feeStructures } = await supabase
+      .schema("ingestion")
+      .from("university_fee_structure")
+      .select("*")
+      .eq("university_id", raw.university_id);
+
     for (const program of programList) {
       if (!program.program_name) continue;
       let duration_years = null;
@@ -813,15 +819,9 @@ ${trimmedText}
 
       const CAD_TO_USD = 0.74;
 
-      const { data: feeStructures } = await supabase
-        .schema("ingestion")
-        .from("university_fee_structure")
-        .select("*")
-        .eq("university_id", raw.university_id);
-
       console.log(`[parse-fees] ${program.program_name} | type=${program.program_type} | uni=${raw.university_id} | feeStructures=${feeStructures?.length || 0}`);
 
-      const tuitionCAD = await resolveTuition(
+      const tuitionCAD = resolveTuition(
         program.program_name,
         program.program_type,
         raw.university_id,
@@ -1140,6 +1140,11 @@ app.post("/migrate", async (req, res) => {
 
     for (const p of parsed) {
       try {
+        if (!p.tuition_usd) {
+          console.log(`[migrate] Skipping ${p.program_name} — no tuition match`);
+          continue;
+        }
+
         const { error: insertError } = await supabase
           .schema("core")
           .from("courses")
@@ -1208,7 +1213,7 @@ app.post("/migrate", async (req, res) => {
 
       for (const course of courses || []) {
         console.log(`[migrate-fees] ${course.name} | type=${course.program_type} | uni=${uniId} | feeStructures=${feeStructures?.length || 0}`);
-        const tuitionCAD = await resolveTuition(
+        const tuitionCAD = resolveTuition(
           course.name,
           course.program_type,
           uniId,
@@ -1926,7 +1931,7 @@ const FEE_PAGE_PATTERNS = [
   "/finance/tuition-fees"
 ];
 
-async function resolveTuition(programName, programType, universityId, feeStructures) {
+function resolveTuition(programName, programType, universityId, feeStructures) {
   if (!feeStructures || feeStructures.length === 0) return null;
 
   const level = programType === 'doctoral' ? 'doctoral' : 'masters';
