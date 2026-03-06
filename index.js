@@ -12,6 +12,39 @@ async function fetchWithPuppeteer(url) {
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    
+    // Accept cookies if present
+    try {
+      await page.waitForTimeout(2000);
+      const cookieSelectors = [
+        'button[id*="accept"]',
+        'button[class*="accept"]',
+        'button[id*="cookie"]',
+        'button[class*="cookie"]',
+        'a[id*="accept"]',
+        '#onetrust-accept-btn-handler',
+        '.cookie-accept',
+        '[aria-label*="accept"]',
+        'button:contains("Accept")',
+        'button:contains("Accept All")',
+        'button:contains("I agree")',
+        'button:contains("Allow")'
+      ];
+      
+      for (const selector of cookieSelectors) {
+        try {
+          const btn = await page.$(selector);
+          if (btn) {
+            await btn.click();
+            await page.waitForTimeout(1000);
+            console.log(`[puppeteer] Accepted cookies with: ${selector}`);
+            break;
+          }
+        } catch(e) {}
+      }
+    } catch(e) {}
+    
+    // Wait for content to load after cookie acceptance
     await page.waitForTimeout(3000);
     const html = await page.content();
     return html;
