@@ -819,12 +819,15 @@ ${trimmedText}
         .select("*")
         .eq("university_id", raw.university_id);
 
+      console.log(`[parse-fees] ${program.program_name} | type=${program.program_type} | uni=${raw.university_id} | feeStructures=${feeStructures?.length || 0}`);
+
       const tuitionCAD = await resolveTuition(
         program.program_name,
         program.program_type,
         raw.university_id,
         feeStructures
       );
+      console.log(`[parse-fees] resolveTuition returned: ${tuitionCAD}`);
       const tuition_usd = tuitionCAD ? Math.round(tuitionCAD * CAD_TO_USD) : null;
 
       const { error: insertError } = await supabase
@@ -1204,12 +1207,14 @@ app.post("/migrate", async (req, res) => {
         .eq("university_id", uniId);
 
       for (const course of courses || []) {
+        console.log(`[migrate-fees] ${course.name} | type=${course.program_type} | uni=${uniId} | feeStructures=${feeStructures?.length || 0}`);
         const tuitionCAD = await resolveTuition(
           course.name,
           course.program_type,
           uniId,
           feeStructures
         );
+        console.log(`[migrate-fees] resolveTuition returned: ${tuitionCAD}`);
         if (tuitionCAD) {
           const tuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
           await supabase
