@@ -1943,7 +1943,8 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     f.program_name_pattern &&
     f.program_name_pattern !== 'default_masters' &&
     f.program_name_pattern !== 'default_doctoral' &&
-    nameLower.includes(f.program_name_pattern.toLowerCase())
+    (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
+    f.program_name_pattern.toLowerCase().includes(nameLower))
   );
 
   if (specificFees.length > 0) {
