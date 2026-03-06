@@ -1137,11 +1137,35 @@ app.post("/migrate", async (req, res) => {
 
     let success = 0;
     let failed = 0;
+    let skipped = 0;
+
+    const feeCache = {};
 
     for (const p of parsed) {
       try {
-        if (!p.tuition_usd) {
-          console.log(`[migrate] Skipping ${p.program_name} — no tuition match`);
+        if (!feeCache[p.university_id]) {
+          const { data: fs } = await supabase
+            .schema("ingestion")
+            .from("university_fee_structure")
+            .select("*")
+            .eq("university_id", p.university_id);
+          feeCache[p.university_id] = fs || [];
+        }
+        const feeStructures = feeCache[p.university_id];
+
+        let finalTuitionUSD = p.tuition_usd ? Math.round(p.tuition_usd) : null;
+
+        if (!finalTuitionUSD) {
+          const tuitionCAD = resolveTuition(p.program_name, p.program_type, p.university_id, feeStructures);
+          console.log(`[migrate-fees] ${p.program_name} → resolveTuition: ${tuitionCAD}`);
+          if (tuitionCAD) {
+            finalTuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
+          }
+        }
+
+        if (!finalTuitionUSD) {
+          console.log(`[migrate-skip] No tuition for: ${p.program_name}`);
+          skipped++;
           continue;
         }
 
@@ -1153,7 +1177,7 @@ app.post("/migrate", async (req, res) => {
             university_id: p.university_id,
             degree_level: p.degree_level,
             duration_years: p.duration_years,
-            tuition_usd: p.tuition_usd,
+            tuition_usd: finalTuitionUSD,
             field_category: p.field_category,
             internship_available: p.internship_available || false,
             gre_required: p.gre_required || false,
@@ -1235,8 +1259,8 @@ app.post("/migrate", async (req, res) => {
       }
     }
 
-    console.log(`Migration complete — success: ${success}, failed: ${failed}, fee overrides applied: ${overridesApplied}`);
-    res.json({ message: "Migration complete", success, failed, overrides_applied: overridesApplied });
+    console.log(`Migration complete — success: ${success}, failed: ${failed}, skipped: ${skipped}, fee overrides applied: ${overridesApplied}`);
+    res.json({ message: "Migration complete", success, failed, skipped, overrides_applied: overridesApplied });
 
   } catch (err) {
     console.error("Migration error:", err.message);
