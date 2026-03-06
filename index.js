@@ -811,63 +811,21 @@ ${trimmedText}
         }
       }
 
-      // Fee matching based on program_type (not program name)
-      const exchangeRates = { USD: 1, CAD: 0.74, GBP: 1.27, EUR: 1.08, AUD: 0.65 };
-      let tuition_usd = null;
-      const programType = program.program_type?.toLowerCase();
+      const CAD_TO_USD = 0.74;
 
-      let feeLevel;
-      if (programType === "doctoral") {
-        feeLevel = "doctoral";
-      } else {
-        feeLevel = "masters";
-      }
+      const { data: feeStructures } = await supabase
+        .schema("ingestion")
+        .from("university_fee_structure")
+        .select("*")
+        .eq("university_id", raw.university_id);
 
-      let feePattern;
-      if (programType === "research") {
-        feePattern = "thesis";
-      } else if (programType === "doctoral") {
-        feePattern = "doctor";
-      } else {
-        feePattern = null;
-      }
-
-      let matchedFee = null;
-
-      if (feePattern) {
-        const { data: patternFees } = await supabase
-          .schema("ingestion")
-          .from("university_fee_structure")
-          .select("*")
-          .eq("university_id", raw.university_id)
-          .eq("program_level", feeLevel)
-          .eq("program_name_pattern", feePattern);
-        
-        if (patternFees && patternFees.length > 0) {
-          matchedFee = patternFees[0];
-        }
-      }
-
-      if (!matchedFee) {
-        const { data: defaultFee } = await supabase
-          .schema("ingestion")
-          .from("university_fee_structure")
-          .select("*")
-          .eq("university_id", raw.university_id)
-          .eq("program_level", feeLevel)
-          .is("program_name_pattern", null)
-          .single();
-        matchedFee = defaultFee;
-      }
-
-      if (matchedFee) {
-        const feeRate = exchangeRates[matchedFee.currency || "USD"] || 1;
-        if (matchedFee.fee_type === "per_instalment") {
-          tuition_usd = Math.round(matchedFee.international_fee * matchedFee.instalments_per_year * feeRate * 100) / 100;
-        } else if (matchedFee.fee_type === "flat_annual") {
-          tuition_usd = Math.round(matchedFee.international_fee * feeRate * 100) / 100;
-        }
-      }
+      const tuitionCAD = await resolveTuition(
+        program.program_name,
+        program.program_type,
+        raw.university_id,
+        feeStructures
+      );
+      const tuition_usd = tuitionCAD ? Math.round(tuitionCAD * CAD_TO_USD) : null;
 
       const { error: insertError } = await supabase
         .schema("ingestion")
@@ -1172,7 +1130,7 @@ app.post("/migrate", async (req, res) => {
 
     console.log(`Migrating ${parsed.length} programs to core.courses...`);
 
-    const exchangeRates = { CAD: 0.74, GBP: 1.27, AUD: 0.66, EUR: 1.08, USD: 1 };
+    const CAD_TO_USD = 0.74;
 
     let success = 0;
     let failed = 0;
@@ -1227,31 +1185,48 @@ app.post("/migrate", async (req, res) => {
       }
     }
 
-    const { data: overrides } = await supabase
-      .schema("ingestion")
-      .from("university_fee_structure")
-      .select("*")
-      .not("program_name_pattern", "is", null);
+    const migratedUniIds = [...new Set(parsed.map(p => p.university_id))];
+    let overridesApplied = 0;
 
-    for (const override of overrides || []) {
-      const exchangeRate = exchangeRates[override.currency || "USD"] || 1;
-      const annualFee = Math.round(
-        override.international_fee * override.instalments_per_year * exchangeRate * 100
-      ) / 100;
+    for (const uniId of migratedUniIds) {
+      const { data: feeStructures } = await supabase
+        .schema("ingestion")
+        .from("university_fee_structure")
+        .select("*")
+        .eq("university_id", uniId);
 
-      await supabase
+      if (!feeStructures || feeStructures.length === 0) continue;
+
+      const { data: courses } = await supabase
         .schema("core")
         .from("courses")
-        .update({
-          tuition_usd: annualFee,
-          data_quality: "international_rate_official"
-        })
-        .eq("university_id", override.university_id)
-        .ilike("name", override.program_name_pattern);
+        .select("id, name, degree_level, program_type")
+        .eq("university_id", uniId);
+
+      for (const course of courses || []) {
+        const tuitionCAD = await resolveTuition(
+          course.name,
+          course.program_type,
+          uniId,
+          feeStructures
+        );
+        if (tuitionCAD) {
+          const tuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
+          await supabase
+            .schema("core")
+            .from("courses")
+            .update({
+              tuition_usd: tuitionUSD,
+              data_quality: "international_rate_official"
+            })
+            .eq("id", course.id);
+          overridesApplied++;
+        }
+      }
     }
 
-    console.log(`Migration complete — success: ${success}, failed: ${failed}, overrides applied: ${(overrides || []).length}`);
-    res.json({ message: "Migration complete", success, failed, overrides_applied: (overrides || []).length });
+    console.log(`Migration complete — success: ${success}, failed: ${failed}, fee overrides applied: ${overridesApplied}`);
+    res.json({ message: "Migration complete", success, failed, overrides_applied: overridesApplied });
 
   } catch (err) {
     console.error("Migration error:", err.message);
