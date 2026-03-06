@@ -2147,14 +2147,11 @@ setInterval(async () => {
 console.log("Background worker started — polling every 3 minutes");
 
 app.get("/test-page", async (req, res) => {
-  const html = await fetchWithPuppeteer("https://you.ubc.ca/programs/");
+  const html = await fetchWithPuppeteer("https://www.sgs.utoronto.ca/programs/civil-engineering/");
   const $ = cheerio.load(html);
-  const links = [];
-  $("a[href]").each(function() {
-    const href = $(this).attr("href");
-    if (href && href.includes("ubc.ca")) links.push(href);
-  });
-  res.json([...new Set(links)].slice(0, 50));
+  $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
+  const text = $("main, article, .content, #content, [role='main']").first().text().replace(/\s+/g, " ").trim();
+  res.send(text.substring(0, 3000));
 });
 
 const PORT = process.env.PORT || 5000;
