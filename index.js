@@ -1946,6 +1946,51 @@ const FEE_PAGE_PATTERNS = [
   "/finance/tuition-fees"
 ];
 
+async function resolveTuition(programName, programType, universityId, feeStructures) {
+  if (!feeStructures || feeStructures.length === 0) return null;
+
+  const level = programType === 'doctoral' ? 'doctoral' : 'masters';
+  const nameLower = programName.toLowerCase();
+
+  const levelFees = feeStructures.filter(f => f.program_level === level);
+
+  const specificFees = levelFees.filter(f =>
+    f.program_name_pattern &&
+    f.program_name_pattern !== 'default_masters' &&
+    f.program_name_pattern !== 'default_doctoral' &&
+    nameLower.includes(f.program_name_pattern.toLowerCase())
+  );
+
+  if (specificFees.length > 0) {
+    specificFees.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+    const fee = specificFees[0];
+    const annual = fee.fee_type === 'flat_annual'
+      ? fee.international_fee
+      : fee.international_fee * (fee.instalments_per_year || 2);
+    return annual;
+  }
+
+  const defaultFee = levelFees.find(f =>
+    f.program_name_pattern === `default_${level}`
+  );
+
+  if (defaultFee) {
+    const annual = defaultFee.fee_type === 'flat_annual'
+      ? defaultFee.international_fee
+      : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
+    return annual;
+  }
+
+  const genericFee = levelFees.find(f => !f.program_name_pattern);
+  if (genericFee) {
+    return genericFee.fee_type === 'flat_annual'
+      ? genericFee.international_fee
+      : genericFee.international_fee * (genericFee.instalments_per_year || 2);
+  }
+
+  return null;
+}
+
 async function scrapeFeeStructure(universityId) {
   const { data: existing } = await supabase
     .schema("ingestion")
