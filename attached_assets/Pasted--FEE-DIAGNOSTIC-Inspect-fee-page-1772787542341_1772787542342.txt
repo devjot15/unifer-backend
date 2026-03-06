@@ -1,0 +1,112 @@
+// ============================================================
+// FEE DIAGNOSTIC — Inspect fee page content for any university
+// ============================================================
+app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
+  try {
+    const { university_id } = req.params;
+
+    const { data: uni } = await supabase
+      .schema("core")
+      .from("universities")
+      .select("name")
+      .eq("id", university_id)
+      .single();
+
+    const { data: sampleUrl } = await supabase
+      .schema("ingestion")
+      .from("scrape_queue")
+      .select("program_url")
+      .eq("university_id", university_id)
+      .limit(1)
+      .single();
+
+    if (!sampleUrl) return res.json({ error: "No scraped URLs found for this university" });
+
+    const baseUrl = new URL(sampleUrl.program_url).origin;
+
+    // Try all fee page patterns
+    const results = [];
+    for (const pattern of FEE_PAGE_PATTERNS) {
+      const testUrl = baseUrl + pattern;
+      try {
+        let html;
+        try {
+          const r = await axios.get(testUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+            timeout: 10000,
+            validateStatus: s => s < 404
+          });
+          html = r.status === 200 ? r.data : null;
+        } catch (e) { html = null; }
+
+        if (!html || html.length < 3000) {
+          html = await Promise.race([
+            fetchWithPuppeteer(testUrl),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
+          ]).catch(() => null);
+        }
+
+        if (!html) {
+          results.push({ url: testUrl, status: "failed", reason: "no response" });
+          continue;
+        }
+
+        const $ = cheerio.load(html);
+        const hasFeeContent = ["tuition", "fee", "international"].some(k => 
+          html.toLowerCase().includes(k)
+        );
+
+        // Extract tables
+        const tables = [];
+        $("table").each(function() {
+          const rows = [];
+          $(this).find("tr").each(function() {
+            const cells = [];
+            $(this).find("th, td").each(function() {
+              cells.push($(this).text().trim());
+            });
+            if (cells.length) rows.push(cells.join(" | "));
+          });
+          if (rows.length) tables.push(rows.slice(0, 5).join("\n"));
+        });
+
+        // Extract fee-relevant divs
+        const feeDivs = [];
+        $("div, section, article").each(function() {
+          const text = $(this).text().replace(/\s+/g, " ").trim();
+          if (
+            (text.includes("international") || text.includes("International")) &&
+            (text.includes("$") || text.includes("CAD")) &&
+            text.length > 50 && text.length < 1000
+          ) {
+            feeDivs.push(text.substring(0, 300));
+          }
+        });
+
+        const bodyText = $("body").text().replace(/\s+/g, " ").trim().substring(0, 500);
+
+        results.push({
+          url: testUrl,
+          status: "found",
+          html_length: html.length,
+          has_fee_content: hasFeeContent,
+          tables_found: tables.length,
+          table_sample: tables[0] ? tables[0].substring(0, 400) : null,
+          fee_divs_found: feeDivs.length,
+          fee_div_sample: feeDivs[0] || null,
+          body_sample: bodyText
+        });
+
+        if (hasFeeContent) break; // Stop at first promising page
+
+      } catch (e) {
+        results.push({ url: testUrl, status: "error", reason: e.message });
+      }
+    }
+
+    res.json({ university: uni?.name, base_url: baseUrl, results });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

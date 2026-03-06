@@ -98,82 +98,6 @@ app.get("/countries", async (req, res) => {
   res.json(data);
 });
 
-app.get("/seed", async (req, res) => {
-  try {
-    // Clear existing data (order matters due to foreign keys)
-    await supabase.schema("core").from("courses").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    await supabase.schema("core").from("universities").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    await supabase.schema("core").from("countries").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-
-    const countriesData = [
-      { name: "Canada", cost_of_living_band: "20-30K", work_permit_level: 0.9, english_first_language: true, government_support_level: 0.8, pr_opportunity_level: 0.9 },
-      { name: "Germany", cost_of_living_band: "0-20K", work_permit_level: 0.6, english_first_language: false, government_support_level: 0.9, pr_opportunity_level: 0.7 },
-      { name: "Australia", cost_of_living_band: "30K+", work_permit_level: 0.8, english_first_language: true, government_support_level: 0.7, pr_opportunity_level: 0.6 },
-      { name: "UK", cost_of_living_band: "30K+", work_permit_level: 0.7, english_first_language: true, government_support_level: 0.6, pr_opportunity_level: 0.5 },
-      { name: "Ireland", cost_of_living_band: "20-30K", work_permit_level: 0.8, english_first_language: true, government_support_level: 0.7, pr_opportunity_level: 0.6 }
-    ];
-
-    const { data: countries, error: countriesError } = await supabase.schema("core").from("countries").insert(countriesData).select();
-    if (countriesError) throw countriesError;
-
-    for (let country of countries) {
-      for (let i = 1; i <= 5; i++) {
-        const { data: university, error: uniError } = await supabase
-          .schema("core").from("universities")
-          .insert({
-            name: `${country.name} University ${i}`,
-            country_id: country.id,
-            location_type: i % 2 === 0 ? "Main city" : "Smaller cities",
-            ranking_score: Math.random(),
-            career_services_score: 0.5,
-            admission_speed_score: 0.5
-          })
-          .select()
-          .single();
-        
-        if (uniError) throw uniError;
-        if (!university) continue;
-
-        for (let j = 1; j <= 10; j++) {
-          const { error: courseError } = await supabase.schema("core").from("courses").insert({
-            name: `Course ${j}`,
-            university_id: university.id,
-            level: j % 2 === 0 ? "UG" : "PG",
-            duration_category: j % 2 === 0 ? "3 years or less" : "1 year or less",
-            internship_available: j % 2 === 0,
-            gre_required: false,
-            gmat_required: false,
-            scholarship_level: Math.random(),
-            tuition_band: j % 3 === 0 ? "Less than $12k" : j % 3 === 1 ? "$12k - $25k" : "More than $25K",
-            field_category: "engineering & tech"
-          });
-          if (courseError) throw courseError;
-        }
-      }
-    }
-
-    res.send("Database reset and seeded successfully 🚀");
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Seeding failed");
-  }
-});
-
-app.get("/debug-courses", async (req, res) => {
-  const { data, error } = await supabase
-    .schema("core")
-    .from("courses")
-    .select("id, name, degree_level, field_category, tuition_usd, duration_years")
-    .eq("degree_level", "PG")
-    .eq("field_category", "engineering & tech")
-    .gte("tuition_usd", 25001)
-    .lte("tuition_usd", 999999)
-    .gte("duration_years", 1)
-    .lte("duration_years", 99)
-    .limit(5);
-  
-  res.json({ count: data?.length, error: error?.message, sample: data });
-});
 
 app.post("/recommend", async (req, res) => {
   try {
@@ -2383,6 +2307,116 @@ app.get("/worker/status", (req, res) => {
 });
 
 // ============================================================
+// FEE DIAGNOSTIC — Inspect fee page content for any university
+// ============================================================
+app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
+  try {
+    const { university_id } = req.params;
+
+    const { data: uni } = await supabase
+      .schema("core")
+      .from("universities")
+      .select("name")
+      .eq("id", university_id)
+      .single();
+
+    const { data: sampleUrl } = await supabase
+      .schema("ingestion")
+      .from("scrape_queue")
+      .select("program_url")
+      .eq("university_id", university_id)
+      .limit(1)
+      .single();
+
+    if (!sampleUrl) return res.json({ error: "No scraped URLs found for this university" });
+
+    const baseUrl = new URL(sampleUrl.program_url).origin;
+
+    const results = [];
+    for (const pattern of FEE_PAGE_PATTERNS) {
+      const testUrl = baseUrl + pattern;
+      try {
+        let html;
+        try {
+          const r = await axios.get(testUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+            timeout: 10000,
+            validateStatus: s => s < 404
+          });
+          html = r.status === 200 ? r.data : null;
+        } catch (e) { html = null; }
+
+        if (!html || html.length < 3000) {
+          html = await Promise.race([
+            fetchWithPuppeteer(testUrl),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000))
+          ]).catch(() => null);
+        }
+
+        if (!html) {
+          results.push({ url: testUrl, status: "failed", reason: "no response" });
+          continue;
+        }
+
+        const $ = cheerio.load(html);
+        const hasFeeContent = ["tuition", "fee", "international"].some(k => 
+          html.toLowerCase().includes(k)
+        );
+
+        const tables = [];
+        $("table").each(function() {
+          const rows = [];
+          $(this).find("tr").each(function() {
+            const cells = [];
+            $(this).find("th, td").each(function() {
+              cells.push($(this).text().trim());
+            });
+            if (cells.length) rows.push(cells.join(" | "));
+          });
+          if (rows.length) tables.push(rows.slice(0, 5).join("\n"));
+        });
+
+        const feeDivs = [];
+        $("div, section, article").each(function() {
+          const text = $(this).text().replace(/\s+/g, " ").trim();
+          if (
+            (text.includes("international") || text.includes("International")) &&
+            (text.includes("$") || text.includes("CAD")) &&
+            text.length > 50 && text.length < 1000
+          ) {
+            feeDivs.push(text.substring(0, 300));
+          }
+        });
+
+        const bodyText = $("body").text().replace(/\s+/g, " ").trim().substring(0, 500);
+
+        results.push({
+          url: testUrl,
+          status: "found",
+          html_length: html.length,
+          has_fee_content: hasFeeContent,
+          tables_found: tables.length,
+          table_sample: tables[0] ? tables[0].substring(0, 400) : null,
+          fee_divs_found: feeDivs.length,
+          fee_div_sample: feeDivs[0] || null,
+          body_sample: bodyText
+        });
+
+        if (hasFeeContent) break;
+
+      } catch (e) {
+        results.push({ url: testUrl, status: "error", reason: e.message });
+      }
+    }
+
+    res.json({ university: uni?.name, base_url: baseUrl, results });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
 // START BACKGROUND WORKER — runs every 3 minutes
 // ============================================================
 setInterval(async () => {
@@ -2396,31 +2430,6 @@ setInterval(async () => {
 }, 3 * 60 * 1000);
 console.log("Background worker started — polling every 3 minutes");
 
-app.get("/test-page", async (req, res) => {
-  const html = await fetchWithPuppeteer("https://www.concordia.ca/graduate/fees");
-  const $ = cheerio.load(html);
-  
-  const tables = [];
-  $("table").each(function() {
-    const rows = [];
-    $(this).find("tr").each(function() {
-      const cells = [];
-      $(this).find("th, td").each(function() {
-        cells.push($(this).text().trim());
-      });
-      if (cells.length) rows.push(cells.join(" | "));
-    });
-    if (rows.length) tables.push(rows.join("\n"));
-  });
-  
-  const bodyText = $("body").text().replace(/\s+/g, " ").trim().substring(0, 1000);
-  
-  res.json({ 
-    tables_found: tables.length,
-    table_sample: tables[0] ? tables[0].substring(0, 500) : "no tables",
-    body_sample: bodyText
-  });
-});
 
 app.post("/scrape-fees-batch", async (req, res) => {
   const { university_ids } = req.body;
