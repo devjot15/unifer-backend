@@ -1926,7 +1926,24 @@ const FEE_PAGE_PATTERNS = [
   "/graduate/costs",
   "/graduate-studies/costs-and-funding",
   "/programs/tuition",
-  "/financial/tuition"
+  "/financial/tuition",
+  "/graduate/funding",
+  "/graduate/financial-support",
+  "/graduate-studies/funding",
+  "/graduate-studies/financial",
+  "/graduate/cost-of-studies",
+  "/graduate/cost",
+  "/grad/fees",
+  "/grad/tuition",
+  "/academics/graduate/fees",
+  "/future-students/fees",
+  "/future-students/tuition",
+  "/graduate/international-fees",
+  "/international/tuition",
+  "/registrar/tuition-fees",
+  "/registrar/fees",
+  "/student-accounts/tuition",
+  "/finance/tuition-fees"
 ];
 
 async function scrapeFeeStructure(universityId) {
