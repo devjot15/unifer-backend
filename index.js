@@ -1649,12 +1649,16 @@ async function runWorker() {
       .eq("id", job.id);
     console.log(`[worker] Parsed ${parseResult} pages`);
 
-    // ---- STEP 4: AUTO-FIX field_category nulls ----
+    // ---- STEP 4: SCRAPE FEE STRUCTURE ----
+    await updateJobStatus(job.id, "fee_scraping");
+    await scrapeFeeStructure(job.university_id);
+
+    // ---- STEP 5: AUTO-FIX field_category nulls ----
     await updateJobStatus(job.id, "fixing");
     const fixResult = await autoFixFieldCategories(job.university_id);
     console.log(`[worker] Auto-fixed ${fixResult} field categories`);
 
-    // ---- STEP 5: COUNT READY PROGRAMS ----
+    // ---- STEP 6: COUNT READY PROGRAMS ----
     const { count } = await supabase
       .schema("ingestion")
       .from("parsed_programs")
@@ -2330,7 +2334,7 @@ setInterval(async () => {
   // Reset any jobs stuck in processing states for over 2 hours
   await supabase.schema("ingestion").from("university_jobs")
     .update({ status: "queued", error_message: "Reset after timeout" })
-    .in("status", ["crawling", "scraping", "parsing", "fixing"])
+    .in("status", ["crawling", "scraping", "parsing", "fee_scraping", "fixing"])
     .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
 
   runWorker();
