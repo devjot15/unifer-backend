@@ -2420,10 +2420,12 @@ app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
 // START BACKGROUND WORKER — runs every 3 minutes
 // ============================================================
 setInterval(async () => {
-  // Reset any jobs stuck in processing states for over 2 hours
+  // Only reset jobs stuck in active processing states for over 2 hours
+  // NEVER reset ready_for_review or migrated jobs
   await supabase.schema("ingestion").from("university_jobs")
     .update({ status: "queued", error_message: "Reset after timeout" })
-    .in("status", ["crawling", "scraping", "parsing", "fee_scraping", "fixing"])
+    .in("status", ["crawling", "scraping", "parsing", "fixing", "fee_scraping"])
+    .not("status", "in", '("ready_for_review","migrated","failed")')
     .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
 
   runWorker();
