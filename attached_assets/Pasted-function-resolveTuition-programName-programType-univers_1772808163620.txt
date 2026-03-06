@@ -1,0 +1,68 @@
+function resolveTuition(programName, programType, universityId, feeStructures) {
+  if (!feeStructures || feeStructures.length === 0) return null;
+
+  const level = programType === 'doctoral' ? 'doctoral' : 'masters';
+  const nameLower = programName.toLowerCase();
+
+  const levelFees = feeStructures.filter(f => f.program_level === level);
+
+  // 1. Try specific match with program_type
+  if (programType) {
+    const specificWithType = levelFees.filter(f =>
+      f.program_type === programType &&
+      f.program_name_pattern &&
+      f.program_name_pattern !== `default_${level}` &&
+      (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
+       f.program_name_pattern.toLowerCase().includes(nameLower))
+    );
+    if (specificWithType.length > 0) {
+      specificWithType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+      const fee = specificWithType[0];
+      return fee.fee_type === 'flat_annual'
+        ? fee.international_fee
+        : fee.international_fee * (fee.instalments_per_year || 2);
+    }
+  }
+
+  // 2. Try specific match without program_type filter (null = applies to all types)
+  const specificNoType = levelFees.filter(f =>
+    f.program_type === null &&
+    f.program_name_pattern &&
+    f.program_name_pattern !== `default_${level}` &&
+    (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
+     f.program_name_pattern.toLowerCase().includes(nameLower))
+  );
+  if (specificNoType.length > 0) {
+    specificNoType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+    const fee = specificNoType[0];
+    return fee.fee_type === 'flat_annual'
+      ? fee.international_fee
+      : fee.international_fee * (fee.instalments_per_year || 2);
+  }
+
+  // 3. Try default with program_type match
+  if (programType) {
+    const defaultWithType = levelFees.find(f =>
+      f.program_type === programType &&
+      f.program_name_pattern === `default_${level}`
+    );
+    if (defaultWithType) {
+      return defaultWithType.fee_type === 'flat_annual'
+        ? defaultWithType.international_fee
+        : defaultWithType.international_fee * (defaultWithType.instalments_per_year || 2);
+    }
+  }
+
+  // 4. Fall back to default with no program_type
+  const defaultFee = levelFees.find(f =>
+    f.program_name_pattern === `default_${level}` &&
+    f.program_type === null
+  );
+  if (defaultFee) {
+    return defaultFee.fee_type === 'flat_annual'
+      ? defaultFee.international_fee
+      : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
+  }
+
+  return null;
+}

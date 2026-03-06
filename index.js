@@ -2452,49 +2452,63 @@ const FEE_PAGE_PATTERNS = [
 function resolveTuition(programName, programType, universityId, feeStructures) {
   if (!feeStructures || feeStructures.length === 0) return null;
 
-  const level = programType === "doctoral" ? "doctoral" : "masters";
+  const level = programType === 'doctoral' ? 'doctoral' : 'masters';
   const nameLower = programName.toLowerCase();
 
-  const levelFees = feeStructures.filter((f) => f.program_level === level);
+  const levelFees = feeStructures.filter(f => f.program_level === level);
 
-  const specificFees = levelFees.filter(
-    (f) =>
+  if (programType) {
+    const specificWithType = levelFees.filter(f =>
+      f.program_type === programType &&
       f.program_name_pattern &&
-      f.program_name_pattern !== "default_masters" &&
-      f.program_name_pattern !== "default_doctoral" &&
+      f.program_name_pattern !== `default_${level}` &&
       (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
-        f.program_name_pattern.toLowerCase().includes(nameLower)),
-  );
-
-  if (specificFees.length > 0) {
-    specificFees.sort(
-      (a, b) => b.program_name_pattern.length - a.program_name_pattern.length,
+       f.program_name_pattern.toLowerCase().includes(nameLower))
     );
-    const fee = specificFees[0];
-    const annual =
-      fee.fee_type === "flat_annual"
+    if (specificWithType.length > 0) {
+      specificWithType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+      const fee = specificWithType[0];
+      return fee.fee_type === 'flat_annual'
         ? fee.international_fee
         : fee.international_fee * (fee.instalments_per_year || 2);
-    return annual;
+    }
   }
 
-  const defaultFee = levelFees.find(
-    (f) => f.program_name_pattern === `default_${level}`,
+  const specificNoType = levelFees.filter(f =>
+    f.program_type === null &&
+    f.program_name_pattern &&
+    f.program_name_pattern !== `default_${level}` &&
+    (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
+     f.program_name_pattern.toLowerCase().includes(nameLower))
   );
-
-  if (defaultFee) {
-    const annual =
-      defaultFee.fee_type === "flat_annual"
-        ? defaultFee.international_fee
-        : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
-    return annual;
+  if (specificNoType.length > 0) {
+    specificNoType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+    const fee = specificNoType[0];
+    return fee.fee_type === 'flat_annual'
+      ? fee.international_fee
+      : fee.international_fee * (fee.instalments_per_year || 2);
   }
 
-  const genericFee = levelFees.find((f) => !f.program_name_pattern);
-  if (genericFee) {
-    return genericFee.fee_type === "flat_annual"
-      ? genericFee.international_fee
-      : genericFee.international_fee * (genericFee.instalments_per_year || 2);
+  if (programType) {
+    const defaultWithType = levelFees.find(f =>
+      f.program_type === programType &&
+      f.program_name_pattern === `default_${level}`
+    );
+    if (defaultWithType) {
+      return defaultWithType.fee_type === 'flat_annual'
+        ? defaultWithType.international_fee
+        : defaultWithType.international_fee * (defaultWithType.instalments_per_year || 2);
+    }
+  }
+
+  const defaultFee = levelFees.find(f =>
+    f.program_name_pattern === `default_${level}` &&
+    f.program_type === null
+  );
+  if (defaultFee) {
+    return defaultFee.fee_type === 'flat_annual'
+      ? defaultFee.international_fee
+      : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
   }
 
   return null;
