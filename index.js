@@ -2053,11 +2053,30 @@ async function scrapeFeeStructure(universityId) {
 
   const $ = cheerio.load(feeHtml);
   $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
-  let feeText = $("main, article, .content, #content, [role='main']").first().text();
-  if (!feeText || feeText.length < 200) {
-    feeText = $("body").text();
-  }
-  feeText = feeText.replace(/\s+/g, " ").trim().substring(0, 8000);
+
+  // Preserve table structure for fee parsing
+  let feeText = "";
+  const mainEl = $("main, article, .content, #content, [role='main']").first();
+  const targetEl = mainEl.length ? mainEl : $("body");
+
+  // Extract tables with structure preserved
+  targetEl.find("table").each(function() {
+    $(this).find("tr").each(function() {
+      const cells = [];
+      $(this).find("th, td").each(function() {
+        cells.push($(this).text().trim());
+      });
+      if (cells.length) feeText += cells.join(" | ") + "\n";
+    });
+    feeText += "\n";
+  });
+
+  // Also extract non-table text
+  const nonTableText = targetEl.clone()
+    .find("table").remove().end()
+    .text().replace(/\s+/g, " ").trim();
+
+  feeText = (feeText + "\n" + nonTableText).substring(0, 8000);
 
   const feePrompt = `
 You are extracting university fee structures from a tuition page.
