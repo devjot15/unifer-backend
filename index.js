@@ -1091,7 +1091,7 @@ ${trimmedText}
             validation_status: "pending",
             parse_status: "parsed",
           },
-          { onConflict: "university_id,program_name,degree_level,program_type" },
+          { onConflict: "raw_page_id,program_name" },
         );
 
       if (insertError) {
