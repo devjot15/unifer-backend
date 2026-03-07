@@ -705,22 +705,39 @@ const PROGRAM_URL_SIGNALS_GLOBAL = [
 function isListingPage(html, sourceUrl) {
   try {
     const $ = cheerio.load(html);
-    let programLinkCount = 0;
-    const sourceHost = new URL(sourceUrl).hostname;
-    $("a[href]").each(function () {
-      const href = $(this).attr("href") || "";
-      let full;
-      try { full = new URL(href, sourceUrl).toString(); } catch (e) { return; }
-      try { if (new URL(full).hostname !== sourceHost) return; } catch (e) { return; }
-      const p = full.toLowerCase();
-      if (PROGRAM_URL_SIGNALS_GLOBAL.some((s) => p.includes(s))) programLinkCount++;
-    });
-    if (programLinkCount > 80) {
-      console.log(`[parse] Detected listing page (${programLinkCount} program links): ${sourceUrl}`);
-      return true;
+
+    $("script, style, nav, footer, header, .menu, .navigation, .breadcrumb").remove();
+
+    const mainSelectors = ["main", "article", ".content", "#content", "[role='main']", ".page-content", ".main-content"];
+    let mainText = "";
+    for (const sel of mainSelectors) {
+      const el = $(sel);
+      if (el.length && el.text().trim().length > 200) {
+        mainText = el.text().replace(/\s+/g, " ").trim();
+        break;
+      }
     }
+    if (!mainText) mainText = $("body").text().replace(/\s+/g, " ").trim();
+
+    const wordCount = mainText.split(/\s+/).length;
+
+    const programHeadings = [
+      "admission", "requirement", "curriculum", "degree requirement",
+      "program structure", "course requirement", "application",
+      "tuition", "duration", "thesis", "dissertation", "supervisor"
+    ];
+    const headingText = $("h1, h2, h3").text().toLowerCase();
+    const hasProgamHeadings = programHeadings.some(h => headingText.includes(h));
+
+    if (wordCount > 300 || hasProgamHeadings) {
+      return false;
+    }
+
+    console.log(`[parse] Detected listing page (words: ${wordCount}, no program headings): ${sourceUrl}`);
+    return true;
+  } catch (e) {
     return false;
-  } catch (e) { return false; }
+  }
 }
 
 // ----------------------
