@@ -694,6 +694,35 @@ app.post("/scrape-program", async (req, res) => {
   }
 });
 
+// ============================================================
+// LISTING PAGE DETECTOR
+// ============================================================
+const PROGRAM_URL_SIGNALS_GLOBAL = [
+  "program","degree","graduate","master","phd","doctoral","course",
+  "faculty","school","department","msc","mba","med","llm","meng","certificate","diploma",
+];
+
+function isListingPage(html, sourceUrl) {
+  try {
+    const $ = cheerio.load(html);
+    let programLinkCount = 0;
+    const sourceHost = new URL(sourceUrl).hostname;
+    $("a[href]").each(function () {
+      const href = $(this).attr("href") || "";
+      let full;
+      try { full = new URL(href, sourceUrl).toString(); } catch (e) { return; }
+      try { if (new URL(full).hostname !== sourceHost) return; } catch (e) { return; }
+      const p = full.toLowerCase();
+      if (PROGRAM_URL_SIGNALS_GLOBAL.some((s) => p.includes(s))) programLinkCount++;
+    });
+    if (programLinkCount > 12) {
+      console.log(`[parse] Detected listing page (${programLinkCount} program links): ${sourceUrl}`);
+      return true;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+
 // ----------------------
 // PARSE SINGLE PROGRAM
 // ----------------------
@@ -715,8 +744,47 @@ async function parseProgramPage(pageId) {
     .eq("id", pageId);
 
   try {
-    // IMPROVED (targeted extraction)
+    if (isListingPage(raw.raw_html, raw.source_url)) {
+      await supabase.schema("ingestion").from("raw_program_pages")
+        .update({ parse_status: "skipped" }).eq("id", pageId);
+      console.log(`[parse] Skipped listing page: ${raw.source_url}`);
+      return { success: true, programs: [], skipped: true };
+    }
+
     const $ = cheerio.load(raw.raw_html);
+
+    let structuredMetadata = "";
+    $("dl").each(function () {
+      const pairs = [];
+      $(this).find("dt").each(function () {
+        const key = $(this).text().trim();
+        const val = $(this).next("dd").text().trim();
+        if (key && val) pairs.push(`${key}: ${val}`);
+      });
+      if (pairs.length) structuredMetadata += pairs.join("\n") + "\n\n";
+    });
+    const metaSelectors = [
+      ".program-meta",".program-info",".program-details",".info-box",
+      ".sidebar-info",".course-info",".aside","[class*='program-overview']",
+      "[class*='program-summary']","[class*='key-info']","[class*='course-details']",
+      "[class*='sidebar']",".callout",".highlight-box",".quick-facts",".program-facts",
+    ];
+    for (const sel of metaSelectors) {
+      $(sel).each(function () {
+        const text = $(this).text().replace(/\s+/g, " ").trim();
+        if (text.length > 20 && text.length < 3000) structuredMetadata += text + "\n\n";
+      });
+    }
+    let tableText = "";
+    $("table").each(function () {
+      $(this).find("tr").each(function () {
+        const cells = [];
+        $(this).find("th, td").each(function () { cells.push($(this).text().trim()); });
+        if (cells.length) tableText += cells.join(" | ") + "\n";
+      });
+      tableText += "\n";
+    });
+
     $(
       "script, style, nav, footer, header, aside, .menu, .sidebar, .navigation, .breadcrumb, .cookie, .banner, .advertisement",
     ).remove();
@@ -747,45 +815,14 @@ async function parseProgramPage(pageId) {
       contentText = $("body").text().replace(/\s+/g, " ").trim();
     }
 
-    // If content is still very long, prioritise sections likely to contain program details
-    if (contentText.length > 15000) {
-      const durationKeywords = [
-        "duration",
-        "year",
-        "month",
-        "length",
-        "program length",
-        "completion",
-        "credit",
-        "tuition",
-        "fee",
-        "admission",
-        "requirement",
-        "ielts",
-        "toefl",
-        "gpa",
-        "deadline",
-      ];
-
-      // Split into paragraphs and score each by keyword density
-      const paragraphs = contentText.split(/\n+/);
-      const scored = paragraphs.map((p) => {
-        const lower = p.toLowerCase();
-        const score = durationKeywords.filter((k) => lower.includes(k)).length;
-        return { text: p, score };
-      });
-
-      // Take top scoring paragraphs first, then fill remaining space
-      const topParagraphs = scored
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 30)
-        .map((p) => p.text)
-        .join(" ");
-
-      contentText = topParagraphs;
-    }
-
-    const trimmedText = contentText.substring(0, 12000);
+    const trimmedText = [
+      "=== PROGRAM METADATA (Duration, Credits, Deadlines, Experiential Learning) ===",
+      structuredMetadata.substring(0, 3000),
+      "=== TABLES (Fees, Requirements, Deadlines) ===",
+      tableText.substring(0, 2000),
+      "=== MAIN CONTENT ===",
+      contentText.substring(0, 7000),
+    ].join("\n").substring(0, 12000);
 
     const prompt = `
 You are extracting structured data from a university program page.
@@ -798,7 +835,11 @@ Example: [{"program_name": "Master of Science", ...}, {"program_name": "Doctor o
 
 FIELDS TO EXTRACT:
 
-- program_name: Full official program name as stated on the page
+- program_name: Full official program name EXACTLY as shown in the page heading.
+  CRITICAL: Always include the degree abbreviation in parentheses if it appears on the page.
+  CORRECT: "Aerospace Engineering (MEng)", "Computer Science (MCompSc)", "Business Administration (MBA)"
+  WRONG:   "Aerospace MEng", "Computer Science Masters", "Aerospace Engineering Master"
+  Never shorten, abbreviate, or rearrange the subject area name.
 - degree_level: Must be exactly "UG" or "PG". Masters, PhD, Graduate Certificate, MBA = PG. Bachelor = UG.
 
 PROGRAM TYPE:
@@ -815,7 +856,10 @@ DURATION:
   Look for patterns like "X years of funding" or "X-year program" as duration signals.
 - official_duration_unit: "months" or "years"
 - official_duration_text: exact quoted text from page describing duration
-- total_credits_required: numeric credit count if stated. Look carefully for patterns like "(45 credits)", "45-credit program", "requires 45 credits", or credits mentioned in program title links on the page.
+- total_credits_required: Numeric credit count if stated.
+  Look in PROGRAM METADATA section FIRST for patterns like "Credits: 45 credits".
+  Also look for: "(45 credits)", "45-credit program", "requires 45 credits", "minimum of 45 credits".
+  Return null only if no credit count is found anywhere on the page.
 - credit_system: "US", "UK", "ECTS", "AUS", "CAN"
 - completion_time_value: numeric value if average completion time is mentioned
 - completion_time_unit: "months" or "years"
@@ -844,11 +888,12 @@ FIELD:
 
 INTERNSHIP:
 - internship_available: true or false
-  Set TRUE if the page mentions ANY of:
+  Set TRUE if the page OR the PROGRAM METADATA section mentions ANY of:
   internship, co-op, coop, practicum, fieldwork, field placement,
   field experience, work placement, work-integrated learning, industry project,
   clinical placement, clinical experience, experiential learning, applied project,
-  community placement, industry internship, professional experience
+  community placement, industry internship, professional experience.
+  ALSO look in PROGRAM METADATA for entries like "Experiential learning: Co-op, Internship".
 
 GRE / GMAT:
 - gre_required: true or false
@@ -896,9 +941,14 @@ SUBJECT REQUIREMENTS (for UG programs):
   Return empty array [] if no specific subjects required or if this is a PG program.
 
 APPLICATION:
-- application_deadline_intl: the application deadline for international students.
-  Return exact text as stated on page (e.g. "January 15", "December 1", "Rolling admissions").
-  Return null if not found.
+- application_deadline_intl: Deadline for INTERNATIONAL students.
+  IMPORTANT — many pages use section-based formats:
+    "FALL: July 1 (U.S. and international)" → return "July 1"
+    "March 1 (international students)" → return "March 1"
+    "January 15 for international applicants" → return "January 15"
+    "Rolling admissions" → return "Rolling admissions"
+  If multiple intake terms, return the Fall or primary intake deadline.
+  Return null only if no deadline information exists on the page.
 - application_materials: array of strings listing required application documents.
   Examples: ["CV", "Statement of Purpose", "3 Reference Letters", "Transcripts", "Writing Sample"]
   Return empty array [] if not found.
@@ -908,6 +958,7 @@ RULES:
 - Do not guess or infer
 - Do not fabricate values
 - If a field is ambiguous, return null
+- Check the PROGRAM METADATA section first for Duration, Credits, Experiential learning, and Deadlines.
 
 Content:
 ${trimmedText}
@@ -990,7 +1041,13 @@ ${trimmedText}
             program_type: program.program_type || null,
             duration_years,
             duration_confidence: "high",
+            official_duration_value: program.official_duration_value || null,
+            official_duration_unit: program.official_duration_unit || null,
             official_duration_text: program.official_duration_text || null,
+            total_credits_required: program.total_credits_required || null,
+            credit_system: program.credit_system || null,
+            completion_time_value: program.completion_time_value || null,
+            completion_time_unit: program.completion_time_unit || null,
             tuition_usd,
             tuition_raw_text: program.tuition_raw_text || null,
             field_category: VALID_FIELD_CATEGORIES.includes(
@@ -1017,7 +1074,7 @@ ${trimmedText}
             validation_status: "pending",
             parse_status: "parsed",
           },
-          { onConflict: "raw_page_id,program_name" },
+          { onConflict: "university_id,program_name,degree_level,program_type" },
         );
 
       if (insertError) {
@@ -2186,6 +2243,7 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
   const seen = new Set();
   const toVisit = [dirUrl];
   const visited = new Set();
+  seen.add(dirUrl);
 
   for (let d = 0; d < depth; d++) {
     const batch = [...toVisit];
@@ -2462,8 +2520,7 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       f.program_type === programType &&
       f.program_name_pattern &&
       f.program_name_pattern !== `default_${level}` &&
-      (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
-       f.program_name_pattern.toLowerCase().includes(nameLower))
+      nameLower.includes(f.program_name_pattern.toLowerCase())
     );
     if (specificWithType.length > 0) {
       specificWithType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
@@ -2478,8 +2535,7 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     f.program_type === null &&
     f.program_name_pattern &&
     f.program_name_pattern !== `default_${level}` &&
-    (nameLower.includes(f.program_name_pattern.toLowerCase()) ||
-     f.program_name_pattern.toLowerCase().includes(nameLower))
+    nameLower.includes(f.program_name_pattern.toLowerCase())
   );
   if (specificNoType.length > 0) {
     specificNoType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
@@ -2672,6 +2728,10 @@ Each entry should represent a specific program level and type combination.
 
 FIELDS:
 - program_level: "masters" or "doctoral"
+- program_type: "research", "professional", or null.
+    "research" — thesis-based, research masters
+    "professional" — coursework-based, professional masters, MBA
+    null — when page makes no type distinction at that level
 - fee_type: "flat_annual" (one annual fee) or "per_instalment" (fee paid per term/semester/instalment)
 - international_fee: numeric fee amount (no currency symbols, no commas)
 - instalments_per_year: number of instalments per year (1 if flat_annual, 2 for semester, 3 for trimester)
@@ -2713,6 +2773,7 @@ ${feeText}
     const feeRows = fees.map((f) => ({
       university_id: universityId,
       program_level: f.program_level,
+      program_type: f.program_type || null,
       fee_type: f.fee_type,
       international_fee: f.international_fee,
       instalments_per_year: f.instalments_per_year || 1,
