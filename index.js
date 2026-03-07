@@ -715,7 +715,7 @@ function isListingPage(html, sourceUrl) {
       const p = full.toLowerCase();
       if (PROGRAM_URL_SIGNALS_GLOBAL.some((s) => p.includes(s))) programLinkCount++;
     });
-    if (programLinkCount > 12) {
+    if (programLinkCount > 40) {
       console.log(`[parse] Detected listing page (${programLinkCount} program links): ${sourceUrl}`);
       return true;
     }
