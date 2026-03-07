@@ -1046,6 +1046,20 @@ ${trimmedText}
         ? Math.round(tuitionCAD * CAD_TO_USD)
         : null;
 
+      const { data: existingProgram } = await supabase
+        .schema("ingestion")
+        .from("parsed_programs")
+        .select("id")
+        .eq("university_id", raw.university_id)
+        .eq("program_name", program.program_name)
+        .eq("degree_level", program.degree_level || "PG")
+        .limit(1);
+
+      if (existingProgram && existingProgram.length > 0) {
+        console.log(`[parse] Skipping duplicate: ${program.program_name}`);
+        continue;
+      }
+
       const { error: insertError } = await supabase
         .schema("ingestion")
         .from("parsed_programs")
