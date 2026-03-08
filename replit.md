@@ -89,3 +89,13 @@ Preferred communication style: Simple, everyday language.
   - Submit button ("Run Decision Analysis") only appears on Step 5 and is gated to that step
   - Profile data sent to `/recommend` endpoint: `profile_degree_completed`, `profile_gpa_percentage`, `profile_backlogs`, `profile_english_test`, `profile_english_score`, `profile_gre_score`, `profile_gmat_score`, `profile_work_experience`, `profile_subjects`
   - Added a "Start Again" button and a professional footer with UNIFER branding
+- **2026-03-08:**
+  - French program auto-deletion in `autoFixFieldCategories` — detects French-language programs via accented chars and keyword signals, deletes before migration
+  - GPT fallback for unresolved `field_category` nulls — after keyword matching, remaining nulls sent to GPT for classification (index-based matching)
+  - Fee scraping failure alerting — sets `error_message` on job when fee scraping fails
+  - UG mis-classification guard — GPT prompt explicitly warns graduate school pages → PG only
+  - **Intelligent fee scraper** (`scrapeFeeStructureIntelligent`): analyses fee pages for form-based calculators, uses GPT to build form-filling plans, Puppeteer executes combinations, falls back to static text extraction
+  - New helpers: `analyseFeePage`, `buildFormFillingPlan`, `executeFormPlan`, `parseFormResults`, `extractFeesFromText`, `findFeePageUrl`, `getBaseUrlsForUniversity`
+  - Refactored `scrapeFeeStructure` to use shared `extractFeesFromText` helper
+  - New endpoint: `POST /worker/scrape-fees-intelligent/:university_id` (optional body: `{ fee_url: "..." }`)
+  - Worker step 4 now uses `scrapeFeeStructureIntelligent` instead of `scrapeFeeStructure`

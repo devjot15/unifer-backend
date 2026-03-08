@@ -2122,9 +2122,9 @@ async function runWorker() {
       .eq("id", job.id);
     console.log(`[worker] Parsed ${parseResult} pages`);
 
-    // ---- STEP 4: SCRAPE FEE STRUCTURE ----
+    // ---- STEP 4: SCRAPE FEE STRUCTURE (intelligent — tries form-based then static) ----
     await updateJobStatus(job.id, "fee_scraping");
-    const feeResult = await scrapeFeeStructure(job.university_id);
+    const feeResult = await scrapeFeeStructureIntelligent(job.university_id);
     if (!feeResult) {
       console.warn(`[worker] Fee scraping FAILED for ${job.university_id} — manual fee insertion needed`);
       await supabase.schema("ingestion").from("university_jobs")
@@ -2768,6 +2768,411 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
   return null;
 }
 
+async function analyseFeePage(html, url) {
+  const $ = cheerio.load(html);
+  const hasForms = $("form, select, input[type='radio'], input[type='submit']").length > 0;
+  const hasTable = $("table").length > 0;
+  const hasDropdowns = $("select").length > 0;
+
+  const formElements = [];
+  $("select").each(function () {
+    const id = $(this).attr("id") || $(this).attr("name") || "";
+    const label = $(`label[for='${id}']`).text().trim() || id;
+    const options = [];
+    $(this).find("option").each(function () {
+      const val = $(this).attr("value") || "";
+      const text = $(this).text().trim();
+      if (val && text) options.push({ value: val, text });
+    });
+    if (options.length > 0) formElements.push({ type: "select", id, label, options });
+  });
+
+  $("input[type='radio']").each(function () {
+    const name = $(this).attr("name") || "";
+    const val = $(this).attr("value") || "";
+    const label = $(`label[for='${$(this).attr("id")}']`).text().trim() || val;
+    formElements.push({ type: "radio", name, value: val, label });
+  });
+
+  return { hasForms, hasTable, hasDropdowns, formElements, isFormBased: formElements.length > 0 };
+}
+
+async function buildFormFillingPlan(html, url, universityName) {
+  const $ = cheerio.load(html);
+  $("script, style, nav, footer, header, aside").remove();
+
+  let formHtml = "";
+  $("form, select, input, label, button[type='submit'], input[type='submit']").each(function () {
+    formHtml += $.html(this) + "\n";
+  });
+  $("table").each(function () {
+    formHtml += $.html(this).substring(0, 2000) + "\n";
+  });
+  formHtml = formHtml.substring(0, 6000);
+
+  const prompt = `
+You are helping scrape international graduate tuition fees from a university fee calculator page.
+University: ${universityName}
+URL: ${url}
+
+Here is the relevant HTML from the fee page (forms, selects, inputs, tables):
+${formHtml}
+
+Your task: Return a JSON plan describing exactly how to use this form to extract international graduate fees.
+
+Return STRICT JSON only (no markdown, no explanation) with this structure:
+{
+  "page_type": "form_calculator" | "static_table" | "mixed",
+  "submit_selector": "CSS selector for the submit button or null if auto-submits",
+  "result_selector": "CSS selector where the fee result appears after submission",
+  "combinations": [
+    {
+      "label": "International Masters Research",
+      "fields": [
+        { "selector": "CSS selector", "type": "select|radio|checkbox", "value": "exact option value to select" }
+      ]
+    }
+  ]
+}
+
+RULES:
+- Include combinations for: international + masters (research), international + masters (professional), international + doctoral
+- If the form has a "faculty" or "program" field, include the most common/default option (e.g. "Arts" or "General")
+- If the page is a static table (no form), set page_type to "static_table" and combinations to []
+- If you cannot determine the form structure, return { "page_type": "unknown", "combinations": [] }
+- selector values must be valid CSS selectors (use #id, [name='x'], or select:nth-of-type(n))
+`;
+
+  try {
+    const completion = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 45000)),
+    ]);
+    const content = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
+    return JSON.parse(content);
+  } catch (err) {
+    console.error("[fees-intelligent] GPT form plan failed:", err.message);
+    return { page_type: "unknown", combinations: [] };
+  }
+}
+
+async function executeFormPlan(feeUrl, plan) {
+  const browser = await puppeteer.connect({ browserWSEndpoint });
+  const page = await browser.newPage();
+  const results = [];
+
+  try {
+    await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
+
+    for (const combo of plan.combinations) {
+      try {
+        await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
+        await new Promise(r => setTimeout(r, 1000));
+
+        for (const field of combo.fields) {
+          try {
+            if (field.type === "select") {
+              await page.select(field.selector, field.value);
+            } else if (field.type === "radio" || field.type === "checkbox") {
+              try {
+                await page.click(field.selector);
+              } catch {
+                await page.evaluate((sel, val) => {
+                  const el = document.querySelector(`${sel}[value="${val}"]`) || document.querySelector(sel);
+                  if (el) el.click();
+                }, field.selector, field.value);
+              }
+            }
+            await new Promise(r => setTimeout(r, 300));
+          } catch (fieldErr) {
+            console.warn(`[fees-intelligent] Field fill failed (${field.selector}): ${fieldErr.message}`);
+          }
+        }
+
+        if (plan.submit_selector) {
+          try {
+            await page.click(plan.submit_selector);
+            await new Promise(r => setTimeout(r, 2000));
+          } catch (submitErr) {
+            console.warn(`[fees-intelligent] Submit failed: ${submitErr.message}`);
+          }
+        } else {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+
+        let resultHtml = "";
+        if (plan.result_selector) {
+          try {
+            await page.waitForSelector(plan.result_selector, { timeout: 5000 });
+            resultHtml = await page.$eval(plan.result_selector, el => el.innerHTML);
+          } catch (e) {
+            resultHtml = await page.content();
+          }
+        } else {
+          resultHtml = await page.content();
+        }
+
+        results.push({ label: combo.label, html: resultHtml.substring(0, 3000) });
+        console.log(`[fees-intelligent] Got result for: ${combo.label}`);
+      } catch (comboErr) {
+        console.warn(`[fees-intelligent] Combo failed (${combo.label}): ${comboErr.message}`);
+      }
+    }
+  } finally {
+    await page.close();
+    await browser.disconnect();
+  }
+
+  return results;
+}
+
+async function parseFormResults(results, universityName) {
+  if (results.length === 0) return [];
+
+  const resultText = results.map(r => {
+    const $ = cheerio.load(r.html);
+    $("script, style").remove();
+    return `=== ${r.label} ===\n${$("body").text().replace(/\s+/g, " ").trim().substring(0, 1500)}`;
+  }).join("\n\n");
+
+  const prompt = `
+You are extracting international graduate tuition fees from university fee calculator results.
+University: ${universityName}
+
+Results from the fee calculator for different combinations:
+${resultText}
+
+Return STRICT JSON array only. Each entry is one fee row:
+[
+  {
+    "program_level": "masters" | "doctoral",
+    "program_type": "research" | "professional" | null,
+    "fee_type": "flat_annual" | "per_instalment",
+    "international_fee": numeric_amount,
+    "instalments_per_year": 1 | 2 | 3,
+    "currency": "CAD" | "GBP" | "EUR" | "AUD" | "USD",
+    "program_name_pattern": null or specific keyword,
+    "notes": "optional notes"
+  }
+]
+
+RULES:
+- international_fee should be the ANNUAL total (multiply per-term by instalments_per_year)
+- If you see "per term" fees, set fee_type to "per_instalment" and set instalments_per_year accordingly
+- Graduate year = 3 terms for Canadian universities, 2 for UK/Australian
+- program_name_pattern = null for default fees, or lowercase keyword for program-specific (e.g. "mba", "engineering")
+- Deduplicate: if masters research and professional have same fee, create one entry with program_type = null
+- Return [] if no clear fee amounts found
+`;
+
+  try {
+    const completion = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 45000)),
+    ]);
+    const content = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
+    return JSON.parse(content);
+  } catch (err) {
+    console.error("[fees-intelligent] GPT result parsing failed:", err.message);
+    return [];
+  }
+}
+
+async function extractFeesFromText(feeText, universityName) {
+  const feePrompt = `
+You are extracting university fee structures from a tuition page.
+Return STRICT JSON array only. No markdown, no explanation.
+University: ${universityName}
+
+Extract ALL distinct fee entries for INTERNATIONAL students.
+
+FIELDS:
+- program_level: "masters" or "doctoral"
+- program_type: "research", "professional", or null
+- fee_type: "flat_annual" or "per_instalment"
+- international_fee: numeric annual fee (multiply per-term by instalments if needed)
+- instalments_per_year: 1 | 2 | 3
+- currency: "CAD", "USD", "GBP", "EUR", "AUD"
+- program_name_pattern: null for defaults, or lowercase keyword for specific programs
+- notes: any relevant notes
+
+RULES:
+- Only international student fees
+- Graduate year = 3 terms for Canadian, 2 for UK/Australian
+- program_name_pattern = "default_masters" or "default_doctoral" for general fees
+- Return [] if no clear fee structure found
+
+Content:
+${feeText}
+`;
+  try {
+    const completion = await Promise.race([
+      openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: feePrompt }], temperature: 0 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 60000)),
+    ]);
+    const content = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
+    return JSON.parse(content);
+  } catch (err) {
+    console.error("[fees] GPT extraction failed:", err.message);
+    return [];
+  }
+}
+
+function findFeePageUrl(baseUrls) {
+  return new Promise(async (resolve) => {
+    for (const base of baseUrls) {
+      for (const pattern of FEE_PAGE_PATTERNS) {
+        const testUrl = base + pattern;
+        try {
+          const res = await axios.get(testUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+            timeout: 15000,
+            validateStatus: (s) => s < 404,
+          });
+          if (res.status === 200 && res.data.length > 3000) {
+            const hasFee = ["tuition", "fee", "international"].some(k => res.data.toLowerCase().includes(k));
+            if (hasFee) return resolve(testUrl);
+          }
+        } catch (e) { continue; }
+      }
+    }
+    resolve(null);
+  });
+}
+
+async function getBaseUrlsForUniversity(universityId) {
+  const { data: sampleUrl } = await supabase
+    .schema("ingestion")
+    .from("scrape_queue")
+    .select("program_url")
+    .eq("university_id", universityId)
+    .limit(1)
+    .single();
+  if (!sampleUrl) return null;
+  const parsedUrl = new URL(sampleUrl.program_url);
+  const baseUrl = parsedUrl.origin;
+  const hostParts = parsedUrl.hostname.split(".");
+  const rootDomain = hostParts.length > 2
+    ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
+    : baseUrl;
+  return [...new Set([baseUrl, rootDomain])];
+}
+
+async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) {
+  const { data: uni } = await supabase.schema("core").from("universities").select("name").eq("id", universityId).single();
+  const universityName = uni?.name || universityId;
+
+  let feeUrl = manualFeeUrl;
+  if (!feeUrl) {
+    const baseUrls = await getBaseUrlsForUniversity(universityId);
+    if (!baseUrls) {
+      console.log(`[fees-intelligent] No URLs found for ${universityName}`);
+      return false;
+    }
+    feeUrl = await findFeePageUrl(baseUrls);
+  }
+
+  if (!feeUrl) {
+    console.log(`[fees-intelligent] Could not find fee page for ${universityName}`);
+    return false;
+  }
+  console.log(`[fees-intelligent] Using fee URL: ${feeUrl}`);
+
+  let html = null;
+  try {
+    const res = await axios.get(feeUrl, { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 15000 });
+    if (res.status === 200 && res.data.length > 1000) html = res.data;
+  } catch (e) {}
+
+  if (!html) {
+    html = await Promise.race([
+      fetchWithPuppeteer(feeUrl),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
+    ]).catch(() => null);
+  }
+
+  if (!html) {
+    console.log(`[fees-intelligent] Could not fetch fee page for ${universityName}`);
+    return false;
+  }
+
+  const analysis = await analyseFeePage(html, feeUrl);
+  console.log(`[fees-intelligent] Page type for ${universityName}: ${analysis.isFormBased ? "form-based" : "static"}, forms=${analysis.hasForms}, tables=${analysis.hasTable}`);
+
+  let fees = [];
+
+  if (analysis.isFormBased) {
+    console.log(`[fees-intelligent] Building form-filling plan for ${universityName}...`);
+    const plan = await buildFormFillingPlan(html, feeUrl, universityName);
+    console.log(`[fees-intelligent] Plan: ${plan.page_type}, ${plan.combinations?.length || 0} combinations`);
+
+    if (plan.page_type !== "unknown" && plan.combinations?.length > 0) {
+      const results = await executeFormPlan(feeUrl, plan);
+      fees = await parseFormResults(results, universityName);
+    }
+
+    if (fees.length === 0) {
+      console.log(`[fees-intelligent] Form approach yielded nothing, falling back to static extraction`);
+    }
+  }
+
+  if (fees.length === 0) {
+    const $ = cheerio.load(html);
+    $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
+    let feeText = "";
+    const mainEl = $("main, article, .content, #content, [role='main']").first();
+    const targetEl = mainEl.length ? mainEl : $("body");
+    targetEl.find("table").each(function () {
+      $(this).find("tr").each(function () {
+        const cells = [];
+        $(this).find("th, td").each(function () { cells.push($(this).text().trim()); });
+        if (cells.length) feeText += cells.join(" | ") + "\n";
+      });
+      feeText += "\n";
+    });
+    const nonTableText = targetEl.clone().find("table").remove().end().text().replace(/\s+/g, " ").trim();
+    feeText = (feeText + "\n" + nonTableText).substring(0, 8000);
+
+    fees = await extractFeesFromText(feeText, universityName);
+  }
+
+  if (!fees || fees.length === 0) {
+    console.log(`[fees-intelligent] No fees extracted for ${universityName}`);
+    return false;
+  }
+
+  const feeRows = fees.map(f => ({
+    university_id: universityId,
+    program_level: f.program_level,
+    program_type: f.program_type || null,
+    fee_type: f.fee_type || "flat_annual",
+    international_fee: f.international_fee,
+    instalments_per_year: f.instalments_per_year || 1,
+    currency: f.currency || "CAD",
+    program_name_pattern: f.program_name_pattern || `default_${f.program_level}`,
+    notes: f.notes || null,
+    fee_page_url: feeUrl,
+  }));
+
+  const { error } = await supabase.schema("ingestion").from("university_fee_structure")
+    .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern,program_type" });
+
+  if (error) {
+    console.error(`[fees-intelligent] Insert error for ${universityName}:`, error.message);
+    return false;
+  }
+  console.log(`[fees-intelligent] Extracted ${feeRows.length} fee entries for ${universityName}`);
+  return true;
+}
+
 async function scrapeFeeStructure(universityId) {
   const { data: existing } = await supabase
     .schema("ingestion")
@@ -2788,33 +3193,13 @@ async function scrapeFeeStructure(universityId) {
     .eq("id", universityId)
     .single();
 
-  const { data: sampleUrl } = await supabase
-    .schema("ingestion")
-    .from("scrape_queue")
-    .select("program_url")
-    .eq("university_id", universityId)
-    .limit(1)
-    .single();
-
-  if (!sampleUrl) {
+  const baseUrls = await getBaseUrlsForUniversity(universityId);
+  if (!baseUrls) {
     console.log(`[fees] No scraped URLs found for ${uni?.name}`);
     return false;
   }
 
-  const parsedUrl = new URL(sampleUrl.program_url);
-  const baseUrl = parsedUrl.origin;
-
-  // Also build root domain (e.g. graduate.carleton.ca → carleton.ca)
-  const hostParts = parsedUrl.hostname.split(".");
-  const rootDomain =
-    hostParts.length > 2
-      ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
-      : baseUrl;
-
-  const baseUrls = [...new Set([baseUrl, rootDomain])];
-  console.log(
-    `[fees] Trying fee pages for ${uni?.name} at ${baseUrls.join(", ")}`,
-  );
+  console.log(`[fees] Trying fee pages for ${uni?.name} at ${baseUrls.join(", ")}`);
 
   let feeHtml = null;
   let feeUrl = null;
@@ -2826,9 +3211,7 @@ async function scrapeFeeStructure(universityId) {
         let html;
         try {
           const res = await axios.get(testUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)",
-            },
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
             timeout: 15000,
             validateStatus: (s) => s < 404,
           });
@@ -2840,23 +3223,14 @@ async function scrapeFeeStructure(universityId) {
         if (!html || html.length < 3000) {
           html = await Promise.race([
             fetchWithPuppeteer(testUrl),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("timeout")), 30000),
-            ),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
           ]).catch(() => null);
         }
 
         if (html && html.length > 3000) {
           const lowerHtml = html.toLowerCase();
-          const hasFeeContent = [
-            "tuition",
-            "fee",
-            "international",
-            "domestic",
-            "per credit",
-            "per term",
-            "annual",
-          ].some((k) => lowerHtml.includes(k));
+          const hasFeeContent = ["tuition", "fee", "international", "domestic", "per credit", "per term", "annual"]
+            .some((k) => lowerHtml.includes(k));
           if (hasFeeContent) {
             feeHtml = html;
             feeUrl = testUrl;
@@ -2879,136 +3253,87 @@ async function scrapeFeeStructure(universityId) {
   const $ = cheerio.load(feeHtml);
   $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
 
-  // Preserve table structure for fee parsing
   let feeText = "";
   const mainEl = $("main, article, .content, #content, [role='main']").first();
   const targetEl = mainEl.length ? mainEl : $("body");
 
-  // Extract tables with structure preserved
   targetEl.find("table").each(function () {
-    $(this)
-      .find("tr")
-      .each(function () {
-        const cells = [];
-        $(this)
-          .find("th, td")
-          .each(function () {
-            cells.push($(this).text().trim());
-          });
-        if (cells.length) feeText += cells.join(" | ") + "\n";
-      });
+    $(this).find("tr").each(function () {
+      const cells = [];
+      $(this).find("th, td").each(function () { cells.push($(this).text().trim()); });
+      if (cells.length) feeText += cells.join(" | ") + "\n";
+    });
     feeText += "\n";
   });
 
-  // Also extract non-table text
-  const nonTableText = targetEl
-    .clone()
-    .find("table")
-    .remove()
-    .end()
-    .text()
-    .replace(/\s+/g, " ")
-    .trim();
-
+  const nonTableText = targetEl.clone().find("table").remove().end().text().replace(/\s+/g, " ").trim();
   feeText = (feeText + "\n" + nonTableText).substring(0, 8000);
 
-  console.log(
-    `[fees-debug] Fee text sample for ${uni?.name}:`,
-    feeText.substring(0, 500),
-  );
-
-  const feePrompt = `
-You are extracting university fee structures from a tuition page.
-Return STRICT JSON array only. No markdown, no explanation.
-
-Extract ALL distinct fee entries for INTERNATIONAL students.
-Each entry should represent a specific program level and type combination.
-
-FIELDS:
-- program_level: "masters" or "doctoral"
-- program_type: "research", "professional", or null.
-    "research" — thesis-based, research masters
-    "professional" — coursework-based, professional masters, MBA
-    null — when page makes no type distinction at that level
-- fee_type: "flat_annual" (one annual fee) or "per_instalment" (fee paid per term/semester/instalment)
-- international_fee: numeric fee amount (no currency symbols, no commas)
-- instalments_per_year: number of instalments per year (1 if flat_annual, 2 for semester, 3 for trimester)
-- currency: "CAD", "USD", "GBP", "EUR", "AUD"
-- program_name_pattern: null for general fees, or a keyword if this fee applies to specific programs only (e.g. "mba", "thesis", "research", "professional", "doctor")
-- notes: any relevant notes about this fee
-
-RULES:
-- Only extract INTERNATIONAL student fees
-- If fees vary by faculty/program, extract the most common/default rate
-- If both per-credit and annual fees are shown, prefer annual
-- If fee is per-credit, calculate annual by multiplying by typical credits per year (30 for Canada)
-- Return empty array [] if no clear fee structure found for international students
-
-Content:
-${feeText}
-`;
-
-  try {
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: feePrompt }],
-        temperature: 0,
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("OpenAI timeout")), 60000),
-      ),
-    ]);
-
-    const content = completion.choices[0].message.content;
-    const fees = JSON.parse(content.replace(/```json|```/g, "").trim());
-
-    if (!Array.isArray(fees) || fees.length === 0) {
-      console.log(`[fees] No fee entries extracted for ${uni?.name}`);
-      return false;
-    }
-
-    const feeRows = fees.map((f) => ({
-      university_id: universityId,
-      program_level: f.program_level,
-      program_type: f.program_type || null,
-      fee_type: f.fee_type,
-      international_fee: f.international_fee,
-      instalments_per_year: f.instalments_per_year || 1,
-      currency: f.currency || "CAD",
-      program_name_pattern: f.program_name_pattern || null,
-      notes: f.notes || null,
-      fee_page_url: feeUrl,
-    }));
-
-    const { error } = await supabase
-      .schema("ingestion")
-      .from("university_fee_structure")
-      .upsert(feeRows, {
-        onConflict: "university_id,program_level,program_name_pattern",
-      });
-
-    if (error) {
-      console.error(`[fees] Insert error for ${uni?.name}:`, error.message);
-      return false;
-    }
-
-    console.log(
-      `[fees] Extracted ${feeRows.length} fee entries for ${uni?.name}`,
-    );
-    return true;
-  } catch (err) {
-    console.error(
-      `[fees] GPT extraction failed for ${uni?.name}:`,
-      err.message,
-    );
+  const fees = await extractFeesFromText(feeText, uni?.name || universityId);
+  if (!Array.isArray(fees) || fees.length === 0) {
+    console.log(`[fees] No fee entries extracted for ${uni?.name}`);
     return false;
   }
+
+  const feeRows = fees.map((f) => ({
+    university_id: universityId,
+    program_level: f.program_level,
+    program_type: f.program_type || null,
+    fee_type: f.fee_type,
+    international_fee: f.international_fee,
+    instalments_per_year: f.instalments_per_year || 1,
+    currency: f.currency || "CAD",
+    program_name_pattern: f.program_name_pattern || null,
+    notes: f.notes || null,
+    fee_page_url: feeUrl,
+  }));
+
+  const { error } = await supabase
+    .schema("ingestion")
+    .from("university_fee_structure")
+    .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern" });
+
+  if (error) {
+    console.error(`[fees] Insert error for ${uni?.name}:`, error.message);
+    return false;
+  }
+
+  console.log(`[fees] Extracted ${feeRows.length} fee entries for ${uni?.name}`);
+  return true;
 }
 
 // ============================================================
 // WORKER ROUTES
 // ============================================================
+
+app.post("/worker/scrape-fees-intelligent/:university_id", async (req, res) => {
+  const { university_id } = req.params;
+  const { fee_url } = req.body || {};
+
+  try {
+    await supabase.schema("ingestion").from("university_fee_structure")
+      .delete()
+      .eq("university_id", university_id);
+
+    const result = await scrapeFeeStructureIntelligent(university_id, fee_url || null);
+
+    if (!result) {
+      return res.status(422).json({
+        message: "Fee scraping failed — could not extract fee structure",
+        tip: "Try passing a fee_url in the request body: { fee_url: 'https://...' }"
+      });
+    }
+
+    const { data: fees } = await supabase.schema("ingestion").from("university_fee_structure")
+      .select("program_level, program_type, program_name_pattern, international_fee, currency")
+      .eq("university_id", university_id);
+
+    res.json({ message: "Fee scraping complete", rows_inserted: fees?.length || 0, fees });
+  } catch (err) {
+    console.error("[fees-intelligent] Endpoint error:", err.message);
+    res.status(500).json({ message: "Fee scraping error", error: err.message });
+  }
+});
 
 app.post("/worker/add-job", async (req, res) => {
   try {
