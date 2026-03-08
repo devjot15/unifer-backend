@@ -2769,296 +2769,110 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-  // INTELLIGENT FEE SCRAPER v2 — THREE-PHASE (patch5i)
+  // INTELLIGENT FEE SCRAPER — cascade-aware, DOM-first
+  // Cascade order: Year → Level → Faculty → Discipline → Submit
+  // Fee reading: DOM table first, GPT text fallback if needed
   // ═══════════════════════════════════════════════════════════════
 
   async function safeSelect(page, elementId, value) {
     const ok = await page.evaluate((id, val) => {
       let el = document.getElementById(id);
       if (!el) { try { el = document.querySelector('#' + CSS.escape(id)); } catch(e) {} }
-      if (!el) { try { el = document.querySelector(`select[name="${id}"]`); } catch(e) {} }
-      if (!el) { try { el = document.querySelector(id); } catch(e) {} }
+      if (!el) { try { el = document.querySelector('select[name="' + id + '"]'); } catch(e) {} }
       if (!el) return false;
       el.value = val;
       el.dispatchEvent(new Event('change', { bubbles: true }));
       el.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
     }, elementId, value);
-    if (!ok) throw new Error('safeSelect: not found: ' + elementId);
+    if (!ok) throw new Error('safeSelect: element not found: ' + elementId);
   }
 
-  // Screenshot → base64 JPEG
-  async function snap(page) {
-    const buf = await page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
-    return buf.toString('base64');
+  async function readOptions(page, elementId) {
+    return page.evaluate((id) => {
+      let el = document.getElementById(id);
+      if (!el) { try { el = document.querySelector('#' + CSS.escape(id)); } catch(e) {} }
+      if (!el) { try { el = document.querySelector('select[name="' + id + '"]'); } catch(e) {} }
+      if (!el) return [];
+      return Array.from(el.options)
+        .filter(o => o.value && o.value.trim())
+        .map(o => ({ value: o.value, label: o.textContent.trim() }));
+    }, elementId);
   }
 
-  async function exploreDropdowns(page, feeUrl, universityName) {
-    const selects = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('select')).map((el, i) => {
-        const id = el.id || '';
-        let label = '';
-        if (id) { const l = document.querySelector('label[for="' + id + '"]'); if (l) label = l.textContent.trim(); }
-        if (!label) { const p = el.closest('div,p,td,fieldset,li'); if (p) { const l = p.querySelector('label,th,legend'); if (l) label = l.textContent.trim(); } }
-        if (!label) label = id || el.name || ('dropdown_' + i);
-        const options = Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
-        return { id, name: el.name || '', label, options };
-      })
-    );
-
-    console.log('[fees5i] Classifying ' + selects.length + ' dropdowns by keyword...');
-    const classified = [];
-
-    for (const sel of selects) {
-      if (!sel.id) continue;
-
-      const idLow = sel.id.toLowerCase();
-      const lblLow = sel.label.toLowerCase();
-
-      let role = 'unknown';
-      let iterate_all = false;
-
-      if (idLow.includes('level') || lblLow.includes('level') || lblLow.includes('level of study') || lblLow.includes('cycle')) {
-        role = 'level_of_study';
-      } else if (idLow.includes('faculty') || lblLow.includes('faculty') || lblLow.includes('school') || lblLow.includes('département') || lblLow.includes('department')) {
-        role = 'faculty_or_school';
-        iterate_all = true;
-      } else if (idLow.includes('discipline') || lblLow.includes('discipline') || lblLow.includes('program') || lblLow.includes('field')) {
-        role = 'discipline';
-        iterate_all = true;
-      } else if (idLow.includes('student') || idLow.includes('status') || lblLow.includes('student') || lblLow.includes('status') || lblLow.includes('citizenship')) {
-        role = 'student_type';
-      } else if (idLow.includes('year') || lblLow.includes('year') || lblLow.includes('academic') || lblLow.includes('session')) {
-        role = 'academic_year';
-      } else if (idLow.includes('load') || idLow.includes('time') || lblLow.includes('course load') || lblLow.includes('full-time') || lblLow.includes('regime')) {
-        role = 'course_load';
-      } else if (idLow.includes('billing') || lblLow.includes('billing') || lblLow.includes('fee type') || lblLow.includes('assessment')) {
-        role = 'course_load';
-      }
-
-      const options = sel.options.map(o => {
-        const t = o.label.toLowerCase();
-        let meaning = 'skip';
-
-        if (role === 'level_of_study') {
-          if (t.includes('master') || t.includes('maîtrise') || t.includes('maitrise') || t.includes('graduate diploma') || t.includes('grad dip')) meaning = 'masters';
-          else if (t.includes('doctor') || t.includes('phd') || t.includes('ph.d') || t.includes('doctorat')) meaning = 'doctoral';
-          else if (t.includes('bachelor') || t.includes('undergrad') || t.includes('baccalaur')) meaning = 'undergraduate';
-        } else if (role === 'faculty_or_school') {
-          meaning = 'faculty:' + o.label;
-        } else if (role === 'discipline') {
-          meaning = 'discipline:' + o.label;
-        } else if (role === 'student_type') {
-          if (t.includes('international') || t.includes('visa') || t.includes('foreign')) meaning = 'international';
-          else if (t.includes('domestic') || t.includes('canadian') || t.includes('resident')) meaning = 'domestic';
-        } else if (role === 'academic_year') {
-          const yearMatch = o.label.match(/\d{4}/);
-          meaning = yearMatch ? 'year:' + o.label : 'skip';
-        } else if (role === 'course_load') {
-          if (t.includes('full') && !t.includes('part')) meaning = 'fulltime';
-          else if (t.includes('part')) meaning = 'parttime';
-          else if (t.includes('flat') || t.includes('per term') || t.includes('per session')) meaning = 'fulltime';
-        }
-
-        return { value: o.value, label: o.label, meaning };
-      });
-
-      console.log('[fees5i] "' + sel.label + '" (id=' + sel.id + ') → role=' + role + ', options=' + options.length);
-
-      classified.push({
-        element_id: sel.id,
-        role,
-        iterate_all,
-        options,
-        all_options: sel.options,
-      });
-    }
-
-    return classified;
-  }
-
-  // Phase 2: Build iteration plan from classified dropdowns
-  function buildIterationPlan(classified) {
-    let levelId = null, mastersValues = [], doctoralValues = [];
-    let facultyId = null, facultyOptions = [];
-    let disciplineId = null, disciplineOptions = [];
-    let studentTypeId = null, studentTypeIntlValue = null;
-    let yearId = null, yearValue = null;
-    let loadId = null, loadValue = null;
-
-    for (const d of classified) {
-      switch(d.role) {
-        case 'level_of_study':
-          levelId = d.element_id;
-          mastersValues = (d.options || []).filter(o => o.meaning === 'masters').map(o => ({ value: o.value, label: o.label }));
-          doctoralValues = (d.options || []).filter(o => o.meaning === 'doctoral').map(o => ({ value: o.value, label: o.label }));
-          if (!mastersValues.length && !doctoralValues.length) {
-            const allOpts = d.all_options || [];
-            for (const o of allOpts) {
-              const t = (o.label || o.text || '').toLowerCase();
-              if (t.includes('master') || t.includes('maîtrise') || t.includes('maitrise') || t.includes('graduate diploma') || t.includes('grad dip')) {
-                mastersValues.push({ value: o.value, label: o.label || o.text });
-              } else if (t.includes('doctor') || t.includes('phd') || t.includes('doctorat')) {
-                doctoralValues.push({ value: o.value, label: o.label || o.text });
-              }
-            }
-          }
-          console.log('[fees5i] Level values — masters: [' + mastersValues.map(v=>v.value).join(',') + '] doctoral: [' + doctoralValues.map(v=>v.value).join(',') + ']');
-          break;
-        case 'faculty_or_school':
-          facultyId = d.element_id;
-          facultyOptions = (d.all_options || d.options || []).map(o => ({ value: o.value, label: o.label || o.text }));
-          break;
-        case 'discipline':
-          disciplineId = d.element_id;
-          disciplineOptions = (d.all_options || d.options || []).map(o => ({ value: o.value, label: o.label || o.text }));
-          break;
-        case 'student_type':
-          studentTypeId = d.element_id;
-          studentTypeIntlValue = (d.options || []).find(o => o.meaning === 'international')?.value || null;
-          if (!studentTypeIntlValue) {
-            studentTypeIntlValue = (d.all_options || []).find(o => (o.label || o.text || '').toLowerCase().includes('international'))?.value || null;
-          }
-          console.log('[fees5i] Student type international value: ' + studentTypeIntlValue);
-          break;
-        case 'academic_year':
-          yearId = d.element_id;
-          const yrs = (d.options || []).filter(o => o.meaning?.startsWith('year:')).sort((a,b) => b.meaning.localeCompare(a.meaning));
-          yearValue = yrs[0]?.value || null;
-          if (!yearValue) {
-            const allOpts = d.all_options || d.options || [];
-            yearValue = allOpts[allOpts.length - 1]?.value || null;
-          }
-          break;
-        case 'course_load':
-          loadId = d.element_id;
-          loadValue = (d.options || []).find(o => o.meaning === 'fulltime')?.value || null;
-          if (!loadValue) {
-            const allOpts = d.all_options || d.options || [];
-            loadValue = allOpts.find(o => (o.label || o.text || '').toLowerCase().includes('full'))?.value || null;
-          }
-          break;
-      }
-    }
-
-    const levels = [
-      ...mastersValues.map(v => ({ ...v, dbLevel: 'masters' })),
-      ...doctoralValues.map(v => ({ ...v, dbLevel: 'doctoral' })),
-    ];
-    const faculties = facultyOptions.length ? facultyOptions : [{ value: null, label: 'default' }];
-
-    const hasDiscipline = disciplineOptions.length > 0;
-
-    const combinations = [];
-    for (const lv of levels) {
-      for (const fac of faculties) {
-        if (hasDiscipline) {
-          combinations.push({ level: lv, faculty: fac, discipline: null, loadDiscipline: true });
-        } else {
-          combinations.push({ level: lv, faculty: fac, discipline: null, loadDiscipline: false });
-        }
-      }
-    }
-
-    console.log('[fees5i] Plan: ' + combinations.length + ' base combos (' + levels.length + ' levels × ' + faculties.length + ' faculties' + (hasDiscipline ? ', discipline cascading' : '') + ')');
-
-    return { levelId, studentTypeId, studentTypeIntlValue, yearId, yearValue, loadId, loadValue, facultyId, disciplineId, hasDiscipline, combinations };
-  }
-
-  // Phase 3: Execute one combination → screenshot result → GPT reads fee
-  async function runCombo(page, feeUrl, plan, combo, universityName) {
-    await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    try { await page.waitForSelector('select', { timeout: 8000 }); } catch(e) {}
-    await new Promise(r => setTimeout(r, 800));
-
-    if (plan.studentTypeId && plan.studentTypeIntlValue) { try { await safeSelect(page, plan.studentTypeId, plan.studentTypeIntlValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
-    if (plan.yearId && plan.yearValue) { try { await safeSelect(page, plan.yearId, plan.yearValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
-
-    if (plan.levelId && combo.level?.value) {
-      try { await safeSelect(page, plan.levelId, combo.level.value); await new Promise(r => setTimeout(r, 1200)); } catch(e) {}
-
-      if (plan.facultyId) {
-        try {
-          const liveFaculty = await page.evaluate((id) => {
-            const el = document.getElementById(id);
-            if (!el) return [];
-            return Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
-          }, plan.facultyId);
-          if (liveFaculty.length > 0) {
-            console.log('[fees5i] Live faculty options after level set: ' + liveFaculty.map(f => f.label).slice(0, 5).join(', '));
-            plan._liveFaculty = liveFaculty;
-          }
-        } catch(e) {}
-      }
-    }
-
-    const facultyValue = combo.faculty?.value || null;
-    let disciplineOptionsForCombo = [];
-    if (plan.facultyId && facultyValue) {
-      try { await safeSelect(page, plan.facultyId, facultyValue); await new Promise(r => setTimeout(r, 800)); } catch(e) {}
-
-      if (plan.disciplineId) {
-        try {
-          const liveDiscipline = await page.evaluate((id) => {
-            const el = document.getElementById(id);
-            if (!el) return [];
-            return Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
-          }, plan.disciplineId);
-          if (liveDiscipline.length > 0) {
-            console.log('[fees5i] Live discipline options: ' + liveDiscipline.map(d => d.label).slice(0, 5).join(', '));
-            disciplineOptionsForCombo = liveDiscipline;
-          }
-        } catch(e) {}
-      }
-    }
-
-    if (plan.disciplineId && combo.discipline?.value) {
-      try { await safeSelect(page, plan.disciplineId, combo.discipline.value); await new Promise(r => setTimeout(r, 500)); } catch(e) {}
-    }
-
-    if (plan.loadId && plan.loadValue) { try { await safeSelect(page, plan.loadId, plan.loadValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
-
-    const htmlBefore = await page.evaluate(() => document.body.innerText.length);
-    await page.evaluate(() => { const b = document.querySelector("input[type='submit'],button[type='submit']"); if (b) b.click(); else { const f = document.querySelector('form'); if (f) f.submit(); } });
-
-    for (let w = 0; w < 10; w++) {
+  async function submitAndWait(page) {
+    const before = await page.evaluate(() => document.body.innerText.length);
+    await page.evaluate(() => {
+      const btn = document.querySelector("input[type='submit'], button[type='submit']");
+      if (btn) { btn.click(); return; }
+      const form = document.querySelector('form');
+      if (form) { form.submit(); }
+    });
+    for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 500));
-      const htmlAfter = await page.evaluate(() => document.body.innerText.length);
-      if (Math.abs(htmlAfter - htmlBefore) > 50) break;
+      const after = await page.evaluate(() => document.body.innerText.length);
+      if (Math.abs(after - before) > 30) break;
     }
-    await new Promise(r => setTimeout(r, 1000));
-
-    const b64 = await snap(page);
-    try {
-      const completion = await Promise.race([
-        openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: [{ role: 'user', content: [
-            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64, detail: 'high' } },
-            { type: 'text', text:
-              'University: ' + universityName + '\n' +
-              'Selected: Level=' + combo.level.dbLevel + ', Faculty=' + (combo.faculty?.label || 'default') + '\n\n' +
-              'Look at the fee result table shown on screen.\n' +
-              'Extract the FIRST ROW fee (Year 1 / lowest progress level) for this international student.\n\n' +
-              'Return STRICT JSON only:\n' +
-              '{ "fee_per_term": 9720.89, "currency": "CAD", "raw_text": "exact fee text as shown" }\n' +
-              'Return { "fee_per_term": null } if no result table visible.'
-            }
-          ]}],
-          temperature: 0, max_tokens: 150,
-        }),
-        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 30000)),
-      ]);
-      const feeResult = JSON.parse(completion.choices[0].message.content.replace(/\`\`\`json|\`\`\`/g, '').trim());
-
-      if (combo.loadDiscipline && plan.hasDiscipline && plan.disciplineId) {
-        return { ...feeResult, disciplineOptions: disciplineOptionsForCombo };
-      }
-      return feeResult;
-    } catch(e) { console.error('[fees5i] runCombo GPT failed:', e.message); return null; }
+    await new Promise(r => setTimeout(r, 600));
   }
 
-  // Faculty label → short pattern keyword for resolveTuition
+  async function readFeeFromDOM(page) {
+    return page.evaluate(() => {
+      const candidates = Array.from(document.querySelectorAll('table, .fee-result, .tuition-result, .results, #results'));
+      const CAD_PATTERN = /\$\s?([\d,]+\.?\d*)/;
+
+      for (const el of candidates) {
+        const text = el.innerText || el.textContent || '';
+        if (text.trim().length < 20) continue;
+        const rows = text.split(/\n/).filter(r => r.trim());
+        for (const row of rows) {
+          const match = row.match(CAD_PATTERN);
+          if (match) {
+            const amount = parseFloat(match[1].replace(/,/g, ''));
+            if (amount > 1000 && amount < 100000) {
+              return { fee_per_term: amount, raw_text: row.trim() };
+            }
+          }
+        }
+      }
+
+      const bodyText = document.body.innerText;
+      const allMatches = [...bodyText.matchAll(/\$\s?([\d,]+\.?\d*)/g)];
+      for (const m of allMatches) {
+        const amount = parseFloat(m[1].replace(/,/g, ''));
+        if (amount > 1000 && amount < 100000) {
+          const ctx = bodyText.substring(Math.max(0, m.index - 40), m.index + 60).trim();
+          return { fee_per_term: amount, raw_text: ctx };
+        }
+      }
+
+      return null;
+    });
+  }
+
+  function classifyDropdownRole(id, label, optionLabels) {
+    const idL = id.toLowerCase();
+    const lblL = label.toLowerCase();
+    const opts = optionLabels.toLowerCase();
+
+    if (idL.includes('year') || lblL.includes('academic year') || lblL.includes('year') || lblL.includes('session')) return 'year';
+    if (idL.includes('level') || lblL.includes('level of study') || lblL.includes('level') || lblL.includes('cycle')) return 'level';
+    if (idL.includes('faculty') || lblL.includes('faculty') || lblL.includes('school') || lblL.includes('département') || lblL.includes('department')) return 'faculty';
+    if (idL.includes('discipline') || lblL.includes('discipline') || lblL.includes('program') || lblL.includes('field')) return 'discipline';
+    if (idL.includes('student') || lblL.includes('student type') || idL.includes('status') || lblL.includes('citizenship')) return 'student_type';
+    if (idL.includes('classif') || idL.includes('load') || idL.includes('time') || lblL.includes('course load') || lblL.includes('full-time') || lblL.includes('regime') || lblL.includes('billing') || lblL.includes('fee type') || lblL.includes('assessment')) return 'course_load';
+    return 'unknown';
+  }
+
+  function levelMeaning(label) {
+    const t = label.toLowerCase();
+    if (t.includes('doctor') || t.includes('phd') || t.includes('ph.d') || t.includes('doctorat')) return 'doctoral';
+    if (t.includes('master') || t.includes('maîtrise') || t.includes('maitrise') || t.includes('msc') || t.includes('mba') || t.includes('graduate diploma') || t.includes('grad dip')) return 'masters';
+    if (t.includes('postgraduate') || t.includes('post-graduate') || t.includes('second cycle') || t.includes('2nd cycle') || t.includes('2e cycle')) return 'masters';
+    if ((t.includes('graduate') || t.includes('grad')) && !t.includes('under')) return 'masters';
+    return null;
+  }
+
   function toPatternKeyword(label) {
     if (!label || label === 'default') return null;
     const low = label.toLowerCase().replace(/faculty of |school of |telfer |department of |college of |faculty |/gi, '').replace(/[^a-z0-9 ]/g, '').trim();
@@ -3067,7 +2881,6 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     return low.split(' ')[0];
   }
 
-  // Main intelligent scraper
   async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) {
     const { data: uni } = await supabase.schema('core').from('universities').select('name, terms_per_year').eq('id', universityId).single();
     const uniName = uni?.name || universityId;
@@ -3076,22 +2889,28 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     let feeUrl = manualFeeUrl;
     if (!feeUrl) {
       const { data: sample } = await supabase.schema('ingestion').from('scrape_queue').select('program_url').eq('university_id', universityId).limit(1).single();
-      if (!sample) { console.log('[fees5i] No sample URL for ' + uniName); return false; }
+      if (!sample) { console.log('[fees] No sample URL for ' + uniName); return false; }
       const parsed = new URL(sample.program_url);
-      const bases = [...new Set([parsed.origin, parsed.hostname.split('.').length > 2 ? parsed.protocol + '//' + parsed.hostname.split('.').slice(-2).join('.') : null].filter(Boolean))];
+      const bases = [...new Set([
+        parsed.origin,
+        parsed.hostname.split('.').length > 2
+          ? parsed.protocol + '//' + parsed.hostname.split('.').slice(-2).join('.')
+          : null
+      ].filter(Boolean))];
       outer: for (const base of bases) {
         for (const pat of FEE_PAGE_PATTERNS) {
           try {
             const res = await axios.get(base + pat, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000, maxRedirects: 3 });
-            if (res.status === 200 && res.data.length > 3000 && ['tuition','fee','international'].some(w => res.data.toLowerCase().includes(w))) {
+            if (res.status === 200 && res.data.length > 3000 &&
+                ['tuition','fee','international'].some(w => res.data.toLowerCase().includes(w))) {
               feeUrl = base + pat; break outer;
             }
           } catch(e) {}
         }
       }
     }
-    if (!feeUrl) { console.log('[fees5i] Could not find fee page for ' + uniName); return false; }
-    console.log('[fees5i] Fee URL: ' + feeUrl);
+    if (!feeUrl) { console.log('[fees] Could not find fee page for ' + uniName); return false; }
+    console.log('[fees] Fee URL: ' + feeUrl);
 
     const browser = await puppeteer.connect({ browserWSEndpoint });
     const page = await browser.newPage();
@@ -3099,140 +2918,227 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 
     try {
       await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-      try { await page.waitForSelector('select', { timeout: 10000 }); } catch(e) {
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
-        await new Promise(r => setTimeout(r, 3000));
-        await page.evaluate(() => window.scrollTo(0, 0));
-        await new Promise(r => setTimeout(r, 2000));
-      }
+      await new Promise(r => setTimeout(r, 2000));
 
-      const mainCount = await page.evaluate(() => document.querySelectorAll('select').length);
-      if (mainCount === 0) {
+      let selectCount = await page.evaluate(() => document.querySelectorAll('select').length);
+      if (selectCount === 0) {
         for (const frame of page.frames()) {
           try {
             const cnt = await frame.evaluate(() => document.querySelectorAll('select').length);
             if (cnt > 0) {
               feeUrl = frame.url();
-              console.log('[fees5i] Form in iframe: ' + feeUrl);
+              console.log('[fees] Form in iframe: ' + feeUrl);
               await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-              try { await page.waitForSelector('select', { timeout: 8000 }); } catch(e) {}
               await new Promise(r => setTimeout(r, 1500));
               break;
             }
           } catch(e) {}
         }
       }
-
       renderedHtml = await page.content();
 
-      // Phase 1: Explore
-      const classified = await exploreDropdowns(page, feeUrl, uniName);
-      if (!classified.length) {
-        console.log('[fees5i] No dropdowns classified — static fallback');
+      const rawSelects = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('select')).map((el, i) => {
+          const id = el.id || el.name || '';
+          let label = '';
+          if (el.id) { const l = document.querySelector('label[for="' + el.id + '"]'); if (l) label = l.textContent.trim(); }
+          if (!label) { const p = el.closest('div,p,td,fieldset,li'); if (p) { const l = p.querySelector('label,th,legend'); if (l) label = l.textContent.trim(); } }
+          if (!label) label = el.id || el.name || ('dropdown_' + i);
+          const options = Array.from(el.options).filter(o => o.value && o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
+          return { id, label, options };
+        })
+      );
+
+      if (!rawSelects.length) {
+        console.log('[fees] No dropdowns found — static fallback');
         await page.close(); await browser.disconnect();
         return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
       }
 
-      // Phase 2: Plan
-      const plan = buildIterationPlan(classified);
-      if (!plan.combinations.length) {
-        console.log('[fees5i] No combinations — static fallback');
+      let yearId = null, yearValue = null;
+      let levelId = null;
+      let facultyId = null;
+      let disciplineId = null;
+      let studentTypeId = null, studentTypeIntlValue = null;
+      let loadId = null, loadValue = null;
+
+      for (const sel of rawSelects) {
+        if (!sel.id) continue;
+        const optLabels = sel.options.map(o => o.label).join(' ');
+        const role = classifyDropdownRole(sel.id, sel.label, optLabels);
+        console.log('[fees] "' + sel.label + '" → ' + role + ' (' + sel.options.length + ' opts)');
+
+        if (role === 'year') {
+          yearId = sel.id;
+          const sorted = [...sel.options].sort((a, b) => b.label.localeCompare(a.label));
+          yearValue = sorted[0]?.value || sel.options[sel.options.length - 1]?.value;
+          console.log('[fees] Year value: ' + yearValue + ' (' + sorted[0]?.label + ')');
+        }
+        else if (role === 'level') { levelId = sel.id; }
+        else if (role === 'faculty') { facultyId = sel.id; }
+        else if (role === 'discipline') { disciplineId = sel.id; }
+        else if (role === 'student_type') {
+          studentTypeId = sel.id;
+          studentTypeIntlValue = sel.options.find(o => o.label.toLowerCase().includes('international'))?.value || null;
+          console.log('[fees] International student value: ' + studentTypeIntlValue);
+        }
+        else if (role === 'course_load') {
+          loadId = sel.id;
+          loadValue = sel.options.find(o => o.label.toLowerCase().includes('full'))?.value
+            || sel.options[0]?.value || null;
+        }
+      }
+
+      if (!levelId) {
+        console.log('[fees] No level dropdown — static fallback');
         await page.close(); await browser.disconnect();
         return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
       }
 
-      // Phase 3: Execute
+      if (yearId && yearValue) {
+        try { await safeSelect(page, yearId, yearValue); await new Promise(r => setTimeout(r, 1000)); } catch(e) {}
+      }
+      if (studentTypeId && studentTypeIntlValue) {
+        try { await safeSelect(page, studentTypeId, studentTypeIntlValue); await new Promise(r => setTimeout(r, 800)); } catch(e) {}
+      }
+
+      const liveLevels = await readOptions(page, levelId);
+      console.log('[fees] Live level options: ' + liveLevels.map(o => '"' + o.label + '"').join(', '));
+
+      const pgLevels = liveLevels
+        .map(o => ({ ...o, dbLevel: levelMeaning(o.label) }))
+        .filter(o => o.dbLevel === 'masters' || o.dbLevel === 'doctoral');
+
+      if (!pgLevels.length) {
+        console.log('[fees] No PG levels found — static fallback');
+        await page.close(); await browser.disconnect();
+        return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
+      }
+      console.log('[fees] PG levels: ' + pgLevels.map(o => o.label + '(' + o.dbLevel + ')').join(', '));
+
       const feeRows = [];
       const seen = new Set();
 
-      if (plan.combinations.length > 0 && plan.facultyId &&
-          (plan.combinations[0].faculty.value === null || !plan.combinations[0].faculty.value)) {
-        console.log('[fees5i] Faculty appears cascading — probing with first level to discover live options...');
-        const probeCombo = plan.combinations[0];
-        await runCombo(page, feeUrl, plan, probeCombo, uniName);
+      for (const level of pgLevels) {
+        console.log('[fees] ── ' + level.dbLevel + ': ' + level.label + ' ──');
 
-        if (plan._liveFaculty && plan._liveFaculty.length > 1) {
-          console.log('[fees5i] Rebuilding combinations with ' + plan._liveFaculty.length + ' live faculty options');
-          const levels = [...new Set(plan.combinations.map(c => JSON.stringify(c.level)))].map(s => JSON.parse(s));
-          plan.combinations = [];
-          for (const lv of levels) {
-            for (const fac of plan._liveFaculty) {
-              plan.combinations.push({ level: lv, faculty: fac, discipline: null, loadDiscipline: plan.hasDiscipline });
+        await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        await new Promise(r => setTimeout(r, 1000));
+
+        if (yearId && yearValue) { try { await safeSelect(page, yearId, yearValue); await new Promise(r => setTimeout(r, 800)); } catch(e) {} }
+        if (studentTypeId && studentTypeIntlValue) { try { await safeSelect(page, studentTypeId, studentTypeIntlValue); await new Promise(r => setTimeout(r, 800)); } catch(e) {} }
+        try { await safeSelect(page, levelId, level.value); await new Promise(r => setTimeout(r, 1200)); } catch(e) {}
+
+        let faculties = [{ value: null, label: 'default' }];
+        if (facultyId) {
+          const liveFac = await readOptions(page, facultyId);
+          if (liveFac.length > 0) {
+            faculties = liveFac;
+            console.log('[fees] Faculties: ' + liveFac.map(f => f.label).join(', '));
+          }
+        }
+
+        for (const faculty of faculties) {
+          if (facultyId && faculty.value) {
+            try { await safeSelect(page, levelId, level.value); await new Promise(r => setTimeout(r, 800)); } catch(e) {}
+            try { await safeSelect(page, facultyId, faculty.value); await new Promise(r => setTimeout(r, 800)); } catch(e) {}
+          }
+
+          let disciplines = [{ value: null, label: null }];
+          if (disciplineId) {
+            const liveDisc = await readOptions(page, disciplineId);
+            if (liveDisc.length > 0) {
+              disciplines = liveDisc;
+              console.log('[fees] Disciplines (' + faculty.label + '): ' + liveDisc.map(d => d.label).slice(0, 5).join(', '));
             }
           }
-          console.log('[fees5i] Rebuilt plan: ' + plan.combinations.length + ' combos');
-        }
-      }
 
-      for (const combo of plan.combinations) {
-        console.log('[fees5i] → ' + combo.level.dbLevel + ' | ' + (combo.faculty?.label || 'default'));
-        const baseResult = await runCombo(page, feeUrl, plan, combo, uniName);
+          for (const discipline of disciplines) {
+            const key = level.dbLevel + '|' + (faculty.value || 'x') + '|' + (discipline.value || 'x');
+            if (seen.has(key)) continue;
+            seen.add(key);
 
-        const disciplineList = (plan.hasDiscipline && baseResult?.disciplineOptions?.length)
-          ? baseResult.disciplineOptions
-          : [{ value: null, label: null }];
+            if (disciplineId && discipline.value) {
+              try { await safeSelect(page, disciplineId, discipline.value); await new Promise(r => setTimeout(r, 500)); } catch(e) {}
+            }
+            if (loadId && loadValue) { try { await safeSelect(page, loadId, loadValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
 
-        const feeResultsToProcess = plan.hasDiscipline && baseResult?.disciplineOptions?.length
-          ? []
-          : [{ result: baseResult, discipline: null }];
+            await submitAndWait(page);
 
-        for (const disc of disciplineList) {
-          if (disc.value) {
-            const discCombo = { ...combo, discipline: disc };
-            const discResult = await runCombo(page, feeUrl, plan, discCombo, uniName);
-            feeResultsToProcess.push({ result: discResult, discipline: disc });
-          } else if (!plan.hasDiscipline) {
-            feeResultsToProcess.push({ result: baseResult, discipline: null });
+            let result = await readFeeFromDOM(page);
+
+            if (!result) {
+              const pageText = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').substring(0, 3000));
+              try {
+                const completion = await Promise.race([
+                  openai.chat.completions.create({
+                    model: 'gpt-4o-mini',
+                    messages: [{ role: 'user', content:
+                      'University: ' + uniName + '\n' +
+                      'Level: ' + level.dbLevel + ', Faculty: ' + (faculty.label || 'default') + '\n' +
+                      'Extract the international student fee per term from this text.\n' +
+                      'Return STRICT JSON only: { "fee_per_term": 9720.89, "raw_text": "..." }\n' +
+                      'Return { "fee_per_term": null } if not found.\n\n' + pageText
+                    }],
+                    temperature: 0, max_tokens: 100,
+                  }),
+                  new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 20000)),
+                ]);
+                result = JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, '').trim());
+              } catch(e) { console.error('[fees] GPT fallback failed:', e.message); }
+            }
+
+            if (!result?.fee_per_term) {
+              console.log('[fees] No fee found for: ' + level.dbLevel + ' | ' + faculty.label + (discipline.label ? ' | ' + discipline.label : ''));
+              continue;
+            }
+
+            const annualFee = Math.round(result.fee_per_term * termsPerYear * 100) / 100;
+            const patternKey = discipline.label
+              ? toPatternKeyword(discipline.label)
+              : faculty.label === 'default'
+                ? 'default_' + level.dbLevel
+                : toPatternKeyword(faculty.label) || faculty.label.toLowerCase().split(' ')[0];
+
+            feeRows.push({
+              university_id: universityId,
+              program_level: level.dbLevel,
+              program_type: null,
+              fee_type: 'flat_annual',
+              international_fee: annualFee,
+              fee_per_instalment: result.fee_per_term,
+              instalments_per_year: termsPerYear,
+              currency: 'CAD',
+              program_name_pattern: patternKey || 'default_' + level.dbLevel,
+              faculty_name: faculty.label === 'default' ? null : faculty.label,
+              discipline_name: discipline.label || null,
+              level_of_study: level.dbLevel,
+              academic_year: yearValue || '2025-2026',
+              notes: (result.raw_text || '').substring(0, 100),
+              fee_page_url: feeUrl,
+            });
+
+            console.log('[fees] OK ' + level.dbLevel + ' | ' + faculty.label + (discipline.label ? ' | ' + discipline.label : '') + ' → $' + result.fee_per_term);
           }
         }
-
-        for (const { result, discipline } of feeResultsToProcess) {
-          if (!result?.fee_per_term) continue;
-
-          const facLabel = combo.faculty?.label || 'default';
-          const discLabel = discipline?.label || null;
-          const key = combo.level.dbLevel + '|' + (combo.faculty?.value || 'default') + '|' + (discipline?.value || 'default');
-          if (seen.has(key)) continue;
-          seen.add(key);
-
-          const patternBase = discLabel
-            ? (toPatternKeyword(discLabel) || toPatternKeyword(facLabel) || facLabel.toLowerCase())
-            : facLabel === 'default'
-              ? 'default_' + combo.level.dbLevel
-              : (toPatternKeyword(facLabel) || facLabel.toLowerCase());
-
-          const annualFee = Math.round(result.fee_per_term * termsPerYear * 100) / 100;
-
-          feeRows.push({
-            university_id: universityId, program_level: combo.level.dbLevel, program_type: null,
-            fee_type: 'flat_annual', international_fee: annualFee, fee_per_instalment: result.fee_per_term,
-            instalments_per_year: termsPerYear, currency: result.currency || 'CAD',
-            program_name_pattern: patternBase,
-            faculty_name: facLabel === 'default' ? null : facLabel,
-            discipline_name: discLabel,
-            level_of_study: combo.level.dbLevel,
-            academic_year: plan.yearValue || '2025-2026',
-            notes: (result.raw_text || '').substring(0, 100), fee_page_url: feeUrl,
-          });
-          console.log('[fees5i] ✓ ' + combo.level.dbLevel + ' | ' + facLabel + (discLabel ? '/' + discLabel : '') + ' → ' + result.fee_per_term + ' ' + (result.currency || 'CAD'));
-        }
       }
 
-      await page.close(); await browser.disconnect();
+      await page.close();
+      await browser.disconnect();
 
       if (!feeRows.length) {
-        console.log('[fees5i] No fees — static fallback');
+        console.log('[fees] No fees extracted — static fallback');
         return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
       }
 
       await supabase.schema('ingestion').from('university_fee_structure').delete().eq('university_id', universityId);
       const { error } = await supabase.schema('ingestion').from('university_fee_structure').insert(feeRows);
-      if (error) { console.error('[fees5i] Insert error:', error.message); return false; }
-      console.log('[fees5i] ' + feeRows.length + ' fee rows inserted for ' + uniName);
+      if (error) { console.error('[fees] Insert error:', error.message); return false; }
+      console.log('[fees] ' + feeRows.length + ' fee rows inserted for ' + uniName);
       return true;
 
     } catch(err) {
-      console.error('[fees5i] Fatal:', err.message);
+      console.error('[fees] Fatal error:', err.message);
       try { await page.close(); await browser.disconnect(); } catch(e) {}
       return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
     }

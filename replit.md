@@ -94,13 +94,11 @@ Preferred communication style: Simple, everyday language.
   - GPT fallback for unresolved `field_category` nulls — after keyword matching, remaining nulls sent to GPT for classification (index-based matching)
   - Fee scraping failure alerting — sets `error_message` on job when fee scraping fails
   - UG mis-classification guard — GPT prompt explicitly warns graduate school pages → PG only
-  - **Intelligent fee scraper v2** (`scrapeFeeStructureIntelligent`): THREE-PHASE screenshot-based approach:
-    - Phase 1 (Explore): For each dropdown, selects each option one by one, screenshots the page, sends all screenshots to GPT-4o Vision which classifies the dropdown role and option meanings
-    - Phase 2 (Plan): Builds level × faculty iteration matrix from classified dropdowns
-    - Phase 3 (Execute): For each combination, sets all selectors, submits form, screenshots result, GPT-4o reads fee from the result table
-  - Uses `safeSelect` (getElementById-based) for .NET WebForms $ IDs, `snap` for screenshots, `exploreDropdowns` for Phase 1, `buildIterationPlan` for Phase 2, `runCombo` for Phase 3
-  - New helpers: `toPatternKeyword`, `extractFeesFromStaticPage`, `extractFeesFromText`
-  - Falls back to `extractFeesFromStaticPage` if no dropdowns classified or no combinations found
-  - Refactored `scrapeFeeStructure` to use shared `extractFeesFromText` helper
+  - **Intelligent fee scraper** (`scrapeFeeStructureIntelligent`): cascade-aware, DOM-first approach:
+    - Cascade order: Year → Level → Faculty → Discipline → Submit (fresh page load per level for clean state)
+    - Dropdown classification via pure keyword matching (`classifyDropdownRole`) — no GPT Vision, no screenshots for classification
+    - Fee reading: `readFeeFromDOM` reads dollar amounts from DOM tables first; GPT-4o-mini text fallback only if DOM finds nothing
+    - Helpers: `safeSelect` (.NET WebForms compatible), `readOptions` (live DOM option reader), `submitAndWait`, `readFeeFromDOM`, `classifyDropdownRole`, `levelMeaning`, `toPatternKeyword`
+    - Falls back to `extractFeesFromStaticPage` if no dropdowns found, no level dropdown, or no fees extracted
   - New endpoint: `POST /worker/scrape-fees-intelligent/:university_id` (optional body: `{ fee_url: "..." }`)
-  - Worker step 4 now uses `scrapeFeeStructureIntelligent` instead of `scrapeFeeStructure`
+  - Worker step 4 uses `scrapeFeeStructureIntelligent` instead of `scrapeFeeStructure`
