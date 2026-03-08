@@ -2889,16 +2889,20 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       switch(d.role) {
         case 'level_of_study':
           levelId = d.element_id;
-          mastersValues = (d.all_options || d.options || []).filter(o => o.meaning === 'masters').map(o => ({ value: o.value, label: o.label }));
-          doctoralValues = (d.all_options || d.options || []).filter(o => o.meaning === 'doctoral').map(o => ({ value: o.value, label: o.label }));
+          mastersValues = (d.options || []).filter(o => o.meaning === 'masters').map(o => ({ value: o.value, label: o.label }));
+          doctoralValues = (d.options || []).filter(o => o.meaning === 'doctoral').map(o => ({ value: o.value, label: o.label }));
           if (!mastersValues.length && !doctoralValues.length) {
-            const allOpts = d.all_options || d.options || [];
+            const allOpts = d.all_options || [];
             for (const o of allOpts) {
               const t = (o.label || o.text || '').toLowerCase();
-              if (t.includes('master') || t.includes('maîtrise') || t.includes('maitrise')) mastersValues.push({ value: o.value, label: o.label || o.text });
-              else if (t.includes('doctor') || t.includes('phd') || t.includes('doctorat')) doctoralValues.push({ value: o.value, label: o.label || o.text });
+              if (t.includes('master') || t.includes('maîtrise') || t.includes('maitrise') || t.includes('graduate diploma') || t.includes('grad dip')) {
+                mastersValues.push({ value: o.value, label: o.label || o.text });
+              } else if (t.includes('doctor') || t.includes('phd') || t.includes('doctorat')) {
+                doctoralValues.push({ value: o.value, label: o.label || o.text });
+              }
             }
           }
+          console.log('[fees5i] Level values — masters: [' + mastersValues.map(v=>v.value).join(',') + '] doctoral: [' + doctoralValues.map(v=>v.value).join(',') + ']');
           break;
         case 'faculty_or_school':
           facultyId = d.element_id;
@@ -2912,9 +2916,9 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
           studentTypeId = d.element_id;
           studentTypeIntlValue = (d.options || []).find(o => o.meaning === 'international')?.value || null;
           if (!studentTypeIntlValue) {
-            const allOpts = d.all_options || d.options || [];
-            studentTypeIntlValue = allOpts.find(o => (o.label || o.text || '').toLowerCase().includes('international'))?.value || null;
+            studentTypeIntlValue = (d.all_options || []).find(o => (o.label || o.text || '').toLowerCase().includes('international'))?.value || null;
           }
+          console.log('[fees5i] Student type international value: ' + studentTypeIntlValue);
           break;
         case 'academic_year':
           yearId = d.element_id;
@@ -2942,16 +2946,22 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     ];
     const faculties = facultyOptions.length ? facultyOptions : [{ value: null, label: 'default' }];
 
+    const hasDiscipline = disciplineOptions.length > 0;
+
     const combinations = [];
     for (const lv of levels) {
       for (const fac of faculties) {
-        combinations.push({ level: lv, faculty: fac });
+        if (hasDiscipline) {
+          combinations.push({ level: lv, faculty: fac, discipline: null, loadDiscipline: true });
+        } else {
+          combinations.push({ level: lv, faculty: fac, discipline: null, loadDiscipline: false });
+        }
       }
     }
 
-    console.log('[fees5i] Plan: ' + combinations.length + ' combos (' + levels.length + ' levels × ' + faculties.length + ' faculties)');
+    console.log('[fees5i] Plan: ' + combinations.length + ' base combos (' + levels.length + ' levels × ' + faculties.length + ' faculties' + (hasDiscipline ? ', discipline cascading' : '') + ')');
 
-    return { levelId, studentTypeId, studentTypeIntlValue, yearId, yearValue, loadId, loadValue, facultyId, disciplineId, disciplineOptions, combinations };
+    return { levelId, studentTypeId, studentTypeIntlValue, yearId, yearValue, loadId, loadValue, facultyId, disciplineId, hasDiscipline, combinations };
   }
 
   // Phase 3: Execute one combination → screenshot result → GPT reads fee
@@ -2967,7 +2977,21 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 
     if (plan.facultyId && combo.faculty?.value) { try { await safeSelect(page, plan.facultyId, combo.faculty.value); await new Promise(r => setTimeout(r, 800)); } catch(e) {} }
 
-    if (plan.disciplineId && combo.discipline?.value) { try { await safeSelect(page, plan.disciplineId, combo.discipline.value); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
+    let disciplineOptionsForCombo = [];
+    if (plan.hasDiscipline && plan.disciplineId) {
+      try {
+        disciplineOptionsForCombo = await page.evaluate((id) => {
+          const el = document.getElementById(id);
+          if (!el) return [];
+          return Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
+        }, plan.disciplineId);
+        console.log('[fees5i] Discipline options for this faculty: ' + disciplineOptionsForCombo.length);
+      } catch(e) {}
+    }
+
+    if (combo.discipline?.value) {
+      try { await safeSelect(page, plan.disciplineId, combo.discipline.value); await new Promise(r => setTimeout(r, 500)); } catch(e) {}
+    }
 
     if (plan.loadId && plan.loadValue) { try { await safeSelect(page, plan.loadId, plan.loadValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
 
@@ -3002,7 +3026,12 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
         }),
         new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 30000)),
       ]);
-      return JSON.parse(completion.choices[0].message.content.replace(/\`\`\`json|\`\`\`/g, '').trim());
+      const feeResult = JSON.parse(completion.choices[0].message.content.replace(/\`\`\`json|\`\`\`/g, '').trim());
+
+      if (combo.loadDiscipline && plan.hasDiscipline && plan.disciplineId) {
+        return { ...feeResult, disciplineOptions: disciplineOptionsForCombo };
+      }
+      return feeResult;
     } catch(e) { console.error('[fees5i] runCombo GPT failed:', e.message); return null; }
   }
 
@@ -3095,27 +3124,56 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 
       for (const combo of plan.combinations) {
         console.log('[fees5i] → ' + combo.level.dbLevel + ' | ' + (combo.faculty?.label || 'default'));
-        const result = await runCombo(page, feeUrl, plan, combo, uniName);
-        if (!result?.fee_per_term) continue;
+        const baseResult = await runCombo(page, feeUrl, plan, combo, uniName);
 
-        const key = combo.level.dbLevel + '|' + (combo.faculty?.value || 'default');
-        if (seen.has(key)) continue;
-        seen.add(key);
+        const disciplineList = (plan.hasDiscipline && baseResult?.disciplineOptions?.length)
+          ? baseResult.disciplineOptions
+          : [{ value: null, label: null }];
 
-        const facLabel = combo.faculty?.label || 'default';
-        const pattern = facLabel === 'default' ? 'default_' + combo.level.dbLevel : (toPatternKeyword(facLabel) || facLabel.toLowerCase());
-        const annualFee = Math.round(result.fee_per_term * termsPerYear * 100) / 100;
+        const feeResultsToProcess = plan.hasDiscipline && baseResult?.disciplineOptions?.length
+          ? []
+          : [{ result: baseResult, discipline: null }];
 
-        feeRows.push({
-          university_id: universityId, program_level: combo.level.dbLevel, program_type: null,
-          fee_type: 'flat_annual', international_fee: annualFee, fee_per_instalment: result.fee_per_term,
-          instalments_per_year: termsPerYear, currency: result.currency || 'CAD',
-          program_name_pattern: pattern, faculty_name: facLabel === 'default' ? null : facLabel,
-          discipline_name: null, level_of_study: combo.level.dbLevel,
-          academic_year: plan.yearValue || '2025-2026',
-          notes: (result.raw_text || '').substring(0, 100), fee_page_url: feeUrl,
-        });
-        console.log('[fees5i] ✓ ' + combo.level.dbLevel + ' | ' + facLabel + ' → ' + result.fee_per_term + ' ' + (result.currency || 'CAD'));
+        for (const disc of disciplineList) {
+          if (disc.value) {
+            const discCombo = { ...combo, discipline: disc };
+            const discResult = await runCombo(page, feeUrl, plan, discCombo, uniName);
+            feeResultsToProcess.push({ result: discResult, discipline: disc });
+          } else if (!plan.hasDiscipline) {
+            feeResultsToProcess.push({ result: baseResult, discipline: null });
+          }
+        }
+
+        for (const { result, discipline } of feeResultsToProcess) {
+          if (!result?.fee_per_term) continue;
+
+          const facLabel = combo.faculty?.label || 'default';
+          const discLabel = discipline?.label || null;
+          const key = combo.level.dbLevel + '|' + (combo.faculty?.value || 'default') + '|' + (discipline?.value || 'default');
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          const patternBase = discLabel
+            ? (toPatternKeyword(discLabel) || toPatternKeyword(facLabel) || facLabel.toLowerCase())
+            : facLabel === 'default'
+              ? 'default_' + combo.level.dbLevel
+              : (toPatternKeyword(facLabel) || facLabel.toLowerCase());
+
+          const annualFee = Math.round(result.fee_per_term * termsPerYear * 100) / 100;
+
+          feeRows.push({
+            university_id: universityId, program_level: combo.level.dbLevel, program_type: null,
+            fee_type: 'flat_annual', international_fee: annualFee, fee_per_instalment: result.fee_per_term,
+            instalments_per_year: termsPerYear, currency: result.currency || 'CAD',
+            program_name_pattern: patternBase,
+            faculty_name: facLabel === 'default' ? null : facLabel,
+            discipline_name: discLabel,
+            level_of_study: combo.level.dbLevel,
+            academic_year: plan.yearValue || '2025-2026',
+            notes: (result.raw_text || '').substring(0, 100), fee_page_url: feeUrl,
+          });
+          console.log('[fees5i] ✓ ' + combo.level.dbLevel + ' | ' + facLabel + (discLabel ? '/' + discLabel : '') + ' → ' + result.fee_per_term + ' ' + (result.currency || 'CAD'));
+        }
       }
 
       await page.close(); await browser.disconnect();
