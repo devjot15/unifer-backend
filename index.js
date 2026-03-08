@@ -2977,9 +2977,48 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
               });
             });
             if (frameSelects.length > 0) {
-              console.log(`[fees5] Found ${frameSelects.length} dropdowns inside iframe: ${frame.url()}`);
+              const iframeUrl = frame.url();
+              console.log(`[fees5] Found ${frameSelects.length} dropdowns inside iframe: ${iframeUrl}`);
               selectsInfo = frameSelects;
-              feeUrl = frame.url();
+              feeUrl = iframeUrl;
+              await page.goto(iframeUrl, { waitUntil: "networkidle2", timeout: 30000 });
+              try { await page.waitForSelector("select", { timeout: 8000 }); } catch(e) {}
+              await new Promise(r => setTimeout(r, 2000));
+
+              const rereadSelects = await page.evaluate(() => {
+                const selects = document.querySelectorAll("select");
+                return Array.from(selects).map((sel, i) => {
+                  const id = sel.id || sel.name || `select_${i}`;
+                  let label = "";
+                  if (sel.id) {
+                    const labelEl = document.querySelector(`label[for="${sel.id}"]`);
+                    if (labelEl) label = labelEl.textContent.trim();
+                  }
+                  if (!label) {
+                    const parent = sel.closest("div, p, td, li, fieldset");
+                    if (parent) {
+                      const labelEl = parent.querySelector("label, th, legend");
+                      if (labelEl) label = labelEl.textContent.trim();
+                    }
+                  }
+                  if (!label) label = id;
+                  const options = Array.from(sel.options)
+                    .filter(o => o.value && o.value.trim() !== "")
+                    .map(o => ({ value: o.value, text: o.textContent.trim() }));
+                  const rawId = sel.id || "";
+                  const rawName = sel.name || "";
+                  const safeId = rawId.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
+                  const safeName = rawName.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
+                  const selector = rawId ? `#${safeId}` : rawName ? `select[name="${safeName}"]` : `select:nth-of-type(${i+1})`;
+                  return { id: rawId, name: rawName, index: i, label, selector, options };
+                });
+              });
+
+              if (rereadSelects.length > 0) {
+                console.log(`[fees5] Re-read ${rereadSelects.length} dropdowns from iframe URL`);
+                selectsInfo = rereadSelects;
+              }
+              renderedHtml = await page.content();
               break;
             }
           } catch (e) {}
@@ -3047,8 +3086,25 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
     }
 
     let facultyOptions = [];
-    if (roles.faculty_selector) {
+    if (roles.faculty_selector && (roles.level_masters_values?.length > 0 || roles.level_doctoral_values?.length > 0)) {
       try {
+        await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
+        try { await page.waitForSelector("select", { timeout: 8000 }); } catch(e) {}
+        await new Promise(r => setTimeout(r, 1500));
+
+        if (roles.student_type_selector && roles.student_type_international_value) {
+          try { await safeSelect(page, roles.student_type_selector, roles.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+        }
+        if (roles.academic_year_selector && roles.academic_year_latest_value) {
+          try { await safeSelect(page, roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+        }
+
+        const firstLevel = (roles.level_masters_values || roles.level_doctoral_values || [])[0];
+        if (firstLevel) {
+          await safeSelect(page, roles.level_selector, firstLevel);
+          await new Promise(r => setTimeout(r, 1500));
+        }
+
         facultyOptions = await page.evaluate((selector) => {
           const idMatch = selector.match(/^#(.+)$/);
           let el = null;
@@ -3063,6 +3119,7 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
             .filter(o => o.value && o.value.trim() !== "")
             .map(o => ({ value: o.value, text: o.textContent.trim() }));
         }, roles.faculty_selector);
+
         console.log(`[fees5] ${facultyOptions.length} faculty options found`);
       } catch (e) { console.warn(`[fees5] Could not read faculty options:`, e.message); }
     }
