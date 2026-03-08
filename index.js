@@ -3256,6 +3256,24 @@ ${feeText}
   }
 }
 
+async function getBaseUrlsForUniversity(universityId) {
+  const { data: sample } = await supabase
+    .schema('ingestion')
+    .from('scrape_queue')
+    .select('program_url')
+    .eq('university_id', universityId)
+    .limit(1)
+    .single();
+  if (!sample?.program_url) return null;
+  const parsed = new URL(sample.program_url);
+  const baseUrl = parsed.origin;
+  const hostParts = parsed.hostname.split('.');
+  const rootDomain = hostParts.length > 2
+    ? `${parsed.protocol}//${hostParts.slice(-2).join('.')}`
+    : baseUrl;
+  return [...new Set([baseUrl, rootDomain])];
+}
+
 async function scrapeFeeStructure(universityId) {
   const { data: existing } = await supabase
     .schema("ingestion")
