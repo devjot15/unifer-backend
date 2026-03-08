@@ -2871,7 +2871,19 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
 
     try {
       await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 45000 });
-      await new Promise(r => setTimeout(r, 2000));
+
+      try {
+        await page.waitForSelector("select", { timeout: 10000 });
+        console.log(`[fees5] Select elements detected in DOM`);
+      } catch (e) {
+        console.log(`[fees5] No selects yet — scrolling to trigger lazy load...`);
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+        await new Promise(r => setTimeout(r, 3000));
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      await new Promise(r => setTimeout(r, 3000));
 
       selectsInfo = await page.evaluate(() => {
         const selects = document.querySelectorAll("select");
@@ -2901,6 +2913,44 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
 
       renderedHtml = await page.content();
       console.log(`[fees5] Found ${selectsInfo.length} dropdowns for ${universityName}`);
+
+      if (selectsInfo.length === 0) {
+        console.log(`[fees5] Checking for iframes containing fee form...`);
+        const iframes = await page.frames();
+        for (const frame of iframes) {
+          try {
+            const frameSelects = await frame.evaluate(() => {
+              const selects = document.querySelectorAll("select");
+              return Array.from(selects).map((sel, i) => {
+                const id = sel.id || sel.name || `select_${i}`;
+                let label = "";
+                if (sel.id) {
+                  const labelEl = document.querySelector(`label[for="${sel.id}"]`);
+                  if (labelEl) label = labelEl.textContent.trim();
+                }
+                if (!label) {
+                  const parent = sel.closest("div, p, td, li, fieldset");
+                  if (parent) {
+                    const labelEl = parent.querySelector("label, th, legend");
+                    if (labelEl) label = labelEl.textContent.trim();
+                  }
+                }
+                if (!label) label = id;
+                const options = Array.from(sel.options)
+                  .filter(o => o.value && o.value.trim() !== "")
+                  .map(o => ({ value: o.value, text: o.textContent.trim() }));
+                return { id: sel.id || "", name: sel.name || "", index: i, label, selector: sel.id ? `#${sel.id}` : (sel.name ? `[name="${sel.name}"]` : `select:nth-of-type(${i+1})`), options };
+              });
+            });
+            if (frameSelects.length > 0) {
+              console.log(`[fees5] Found ${frameSelects.length} dropdowns inside iframe: ${frame.url()}`);
+              selectsInfo = frameSelects;
+              feeUrl = frame.url();
+              break;
+            }
+          } catch (e) {}
+        }
+      }
 
     } catch (err) {
       console.error(`[fees5] Puppeteer fetch failed for ${universityName}:`, err.message);
@@ -2988,7 +3038,8 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
       for (const faculty of facultyOptions) {
         try {
           await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
-          await new Promise(r => setTimeout(r, 1000));
+          try { await page.waitForSelector("select", { timeout: 8000 }); } catch (e) {}
+          await new Promise(r => setTimeout(r, 1500));
 
           if (roles.student_type_selector && roles.student_type_international_value) {
             try { await page.select(roles.student_type_selector, roles.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
