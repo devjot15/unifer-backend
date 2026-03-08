@@ -2961,7 +2961,9 @@ Return STRICT JSON array only. Each entry is one fee row:
 ]
 
 RULES:
-- international_fee should be the ANNUAL total (multiply per-term by instalments_per_year)
+- international_fee should be the ANNUAL total for a FIRST YEAR student (use the first/lowest progression level only)
+- If the table shows multiple progression levels (term 1, term 2, A1, A2, B1 etc.), use ONLY the first level
+- Multiply per-term fee by instalments_per_year to get annual total
 - If you see "per term" fees, set fee_type to "per_instalment" and set instalments_per_year accordingly
 - Graduate year = 3 terms for Canadian universities, 2 for UK/Australian
 - program_name_pattern = null for default fees, or lowercase keyword for program-specific (e.g. "mba", "engineering")
@@ -2998,7 +3000,9 @@ FIELDS:
 - program_level: "masters" or "doctoral"
 - program_type: "research", "professional", or null
 - fee_type: "flat_annual" or "per_instalment"
-- international_fee: numeric annual fee (multiply per-term by instalments if needed)
+- international_fee: numeric annual fee for a FIRST YEAR student (use the first/lowest progression level only)
+- If the table shows multiple progression levels (term 1, term 2, A1, A2, B1 etc.), use ONLY the first level
+- Multiply per-term fee by instalments_per_year to get annual total
 - instalments_per_year: 1 | 2 | 3
 - currency: "CAD", "USD", "GBP", "EUR", "AUD"
 - program_name_pattern: null for defaults, or lowercase keyword for specific programs
