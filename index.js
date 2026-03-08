@@ -2947,7 +2947,6 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
       .select("*")
       .eq("university_id", university_id)
       .eq("validation_status", "pending")
-      .not("duration_years", "is", null)
       .not("field_category", "is", null);
 
     if (error) throw error;
