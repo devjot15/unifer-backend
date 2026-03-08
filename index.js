@@ -2137,7 +2137,6 @@ async function runWorker() {
       .select("*", { count: "exact", head: true })
       .eq("university_id", job.university_id)
       .eq("validation_status", "pending")
-      .not("duration_years", "is", null)
       .not("field_category", "is", null);
 
     await supabase
@@ -2471,6 +2470,64 @@ async function parsePagesForUniversity(universityId) {
 }
 
 async function autoFixFieldCategories(universityId) {
+  const JUNK_NAMES = [
+    "Graduate Program", "Graduate Co-op Program", "Graduate Co-op (PG)",
+    "Master's Degree", "Doctoral Studies", "Graduate Certificate",
+    "Graduate Diploma", "Postdoctoral Fellowship",
+    "Master's thesis programs", "Master's non-thesis programs (MSc)",
+    "Individualized Program (MA)", "Individualized Program (MSc)",
+    "Individualized Program (PhD)", "Individualized Program (Master's)",
+    "Individualized Program (Doctoral)", "Individualized Program (INDI) PhD",
+    "Individualized Program (INDI) MSc", "Individualized Program (INDI) MA",
+    "Individualized Program (INDI) MA/MSc", "Individualized Program (MA, MSc)",
+    "Individualized Program (MA, MSc) Thesis", "Individualized Program (PG)",
+    "Individualized Program (Master's)", "Arts / Education / Science",
+    "Traduction (PG)", "Health Services (PG)",
+    "Principles of Nanoscience and Nanotechnology (PG)",
+    "Lettres et sciences humaines+ (PG)", "Graduate Co-op Program",
+    "Master's Degree", "Doctoral Studies",
+  ];
+
+  await supabase
+    .schema("ingestion")
+    .from("parsed_programs")
+    .delete()
+    .eq("university_id", universityId)
+    .eq("validation_status", "pending")
+    .in("program_name", JUNK_NAMES);
+
+  console.log(`[fix] Deleted junk program names for ${universityId}`);
+
+  await supabase.schema("ingestion").from("parsed_programs")
+    .update({ duration_years: 1 })
+    .eq("university_id", universityId)
+    .eq("validation_status", "pending")
+    .is("duration_years", null)
+    .eq("program_type", "professional");
+
+  await supabase.schema("ingestion").from("parsed_programs")
+    .update({ duration_years: 2 })
+    .eq("university_id", universityId)
+    .eq("validation_status", "pending")
+    .is("duration_years", null)
+    .eq("program_type", "research");
+
+  await supabase.schema("ingestion").from("parsed_programs")
+    .update({ duration_years: 4 })
+    .eq("university_id", universityId)
+    .eq("validation_status", "pending")
+    .is("duration_years", null)
+    .eq("program_type", "doctoral");
+
+  await supabase.schema("ingestion").from("parsed_programs")
+    .update({ duration_years: 1 })
+    .eq("university_id", universityId)
+    .eq("validation_status", "pending")
+    .is("duration_years", null)
+    .or("program_name.ilike.%certificate%,program_name.ilike.%diploma%,program_name.ilike.%grad. cert%");
+
+  console.log(`[fix] Set duration defaults for ${universityId}`);
+
   const { data: programs } = await supabase
     .schema("ingestion")
     .from("parsed_programs")
@@ -2906,7 +2963,6 @@ app.get("/worker/review/:university_id", async (req, res) => {
       .select("program_type, field_category, degree_level")
       .eq("university_id", university_id)
       .eq("validation_status", "pending")
-      .not("duration_years", "is", null)
       .not("field_category", "is", null);
 
     if (!summary) return res.json({ message: "No programs ready" });

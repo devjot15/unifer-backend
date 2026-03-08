@@ -1,0 +1,181 @@
+/**
+
+- UNIFER index.js — Worker Improvement Patch
+- Run: node patch2.js
+- Applies 4 worker fixes without replacing the whole file.
+  */
+
+const fs = require(‘fs’);
+const path = require(‘path’);
+
+const FILE = path.join(__dirname, ‘index.js’);
+let code = fs.readFileSync(FILE, ‘utf8’);
+let patchCount = 0;
+
+function patch(description, find, replace) {
+if (!code.includes(find)) {
+console.warn(`⚠️  SKIP — not found: ${description}`);
+return;
+}
+code = code.replace(find, replace);
+patchCount++;
+console.log(`✅  ${description}`);
+}
+
+// ─────────────────────────────────────────────────────────────
+// PATCH 1: Remove duration_years filter from review endpoint
+// ─────────────────────────────────────────────────────────────
+patch(
+‘Remove duration_years filter from review endpoint’,
+`    const { data: summary } = await supabase .schema("ingestion") .from("parsed_programs") .select("program_type, field_category, degree_level") .eq("university_id", university_id) .eq("validation_status", "pending") .not("duration_years", "is", null) .not("field_category", "is", null);`,
+`    const { data: summary } = await supabase .schema("ingestion") .from("parsed_programs") .select("program_type, field_category, degree_level") .eq("university_id", university_id) .eq("validation_status", "pending") .not("field_category", "is", null);`
+);
+
+// ─────────────────────────────────────────────────────────────
+// PATCH 2: Remove duration_years filter from worker step 6 count
+// ─────────────────────────────────────────────────────────────
+patch(
+‘Remove duration_years filter from worker ready count’,
+`    const { count } = await supabase .schema("ingestion") .from("parsed_programs") .select("*", { count: "exact", head: true }) .eq("university_id", job.university_id) .eq("validation_status", "pending") .not("duration_years", "is", null) .not("field_category", "is", null);`,
+`    const { count } = await supabase .schema("ingestion") .from("parsed_programs") .select("*", { count: "exact", head: true }) .eq("university_id", job.university_id) .eq("validation_status", "pending") .not("field_category", "is", null);`
+);
+
+// ─────────────────────────────────────────────────────────────
+// PATCH 3: Add duration defaults + junk deletion to autoFixFieldCategories
+// ─────────────────────────────────────────────────────────────
+patch(
+‘Add duration defaults and junk deletion to autoFixFieldCategories’,
+`async function autoFixFieldCategories(universityId) {
+const { data: programs } = await supabase
+.schema(“ingestion”)
+.from(“parsed_programs”)
+.select(“id, program_name”)
+.eq(“university_id”, universityId)
+.is(“field_category”, null)
+.eq(“validation_status”, “pending”);
+
+if (!programs || programs.length === 0) return 0;
+
+let fixed = 0;
+for (const p of programs) {
+const assigned = autoAssignFieldCategory(p.program_name);
+if (assigned) {
+await supabase
+.schema(“ingestion”)
+.from(“parsed_programs”)
+.update({ field_category: assigned })
+.eq(“id”, p.id);
+fixed++;
+console.log(`[fix] “${p.program_name}” → “${assigned}”`);
+} else {
+console.log(`[fix] Could not assign category for: “${p.program_name}”`);
+}
+}
+return fixed;
+}`, `async function autoFixFieldCategories(universityId) {
+// PATCH: Delete generic junk program names before fixing
+const JUNK_NAMES = [
+“Graduate Program”, “Graduate Co-op Program”, “Graduate Co-op (PG)”,
+“Master’s Degree”, “Doctoral Studies”, “Graduate Certificate”,
+“Graduate Diploma”, “Postdoctoral Fellowship”,
+“Master’s thesis programs”, “Master’s non-thesis programs (MSc)”,
+“Individualized Program (MA)”, “Individualized Program (MSc)”,
+“Individualized Program (PhD)”, “Individualized Program (Master’s)”,
+“Individualized Program (Doctoral)”, “Individualized Program (INDI) PhD”,
+“Individualized Program (INDI) MSc”, “Individualized Program (INDI) MA”,
+“Individualized Program (INDI) MA/MSc”, “Individualized Program (MA, MSc)”,
+“Individualized Program (MA, MSc) Thesis”, “Individualized Program (PG)”,
+“Individualized Program (Master’s)”, “Arts / Education / Science”,
+“Traduction (PG)”, “Health Services (PG)”,
+“Principles of Nanoscience and Nanotechnology (PG)”,
+“Lettres et sciences humaines+ (PG)”, “Graduate Co-op Program”,
+“Master’s Degree”, “Doctoral Studies”,
+];
+
+await supabase
+.schema(“ingestion”)
+.from(“parsed_programs”)
+.delete()
+.eq(“university_id”, universityId)
+.eq(“validation_status”, “pending”)
+.in(“program_name”, JUNK_NAMES);
+
+console.log(`[fix] Deleted junk program names for ${universityId}`);
+
+// PATCH: Set duration defaults for programs with null duration_years
+await supabase.schema(“ingestion”).from(“parsed_programs”)
+.update({ duration_years: 1 })
+.eq(“university_id”, universityId)
+.eq(“validation_status”, “pending”)
+.is(“duration_years”, null)
+.eq(“program_type”, “professional”);
+
+await supabase.schema(“ingestion”).from(“parsed_programs”)
+.update({ duration_years: 2 })
+.eq(“university_id”, universityId)
+.eq(“validation_status”, “pending”)
+.is(“duration_years”, null)
+.eq(“program_type”, “research”);
+
+await supabase.schema(“ingestion”).from(“parsed_programs”)
+.update({ duration_years: 4 })
+.eq(“university_id”, universityId)
+.eq(“validation_status”, “pending”)
+.is(“duration_years”, null)
+.eq(“program_type”, “doctoral”);
+
+// PATCH: Set duration defaults for certificates/diplomas with null duration
+await supabase.schema(“ingestion”).from(“parsed_programs”)
+.update({ duration_years: 1 })
+.eq(“university_id”, universityId)
+.eq(“validation_status”, “pending”)
+.is(“duration_years”, null)
+.or(“program_name.ilike.%certificate%,program_name.ilike.%diploma%,program_name.ilike.%grad. cert%”);
+
+console.log(`[fix] Set duration defaults for ${universityId}`);
+
+// Fix field categories
+const { data: programs } = await supabase
+.schema(“ingestion”)
+.from(“parsed_programs”)
+.select(“id, program_name”)
+.eq(“university_id”, universityId)
+.is(“field_category”, null)
+.eq(“validation_status”, “pending”);
+
+if (!programs || programs.length === 0) return 0;
+
+let fixed = 0;
+for (const p of programs) {
+const assigned = autoAssignFieldCategory(p.program_name);
+if (assigned) {
+await supabase
+.schema(“ingestion”)
+.from(“parsed_programs”)
+.update({ field_category: assigned })
+.eq(“id”, p.id);
+fixed++;
+console.log(`[fix] “${p.program_name}” → “${assigned}”`);
+} else {
+console.log(`[fix] Could not assign category for: “${p.program_name}”`);
+}
+}
+return fixed;
+}`
+);
+
+// ─────────────────────────────────────────────────────────────
+// PATCH 4: Remove duration_years filter from migrate route
+// ─────────────────────────────────────────────────────────────
+patch(
+‘Remove duration_years filter from migrate route’,
+`    const { data: programs, error } = await supabase .schema("ingestion") .from("parsed_programs") .select("*") .eq("university_id", university_id) .eq("validation_status", "pending") .not("duration_years", "is", null) .not("field_category", "is", null);`,
+`    const { data: programs, error } = await supabase .schema("ingestion") .from("parsed_programs") .select("*") .eq("university_id", university_id) .eq("validation_status", "pending") .not("field_category", "is", null);`
+);
+
+// ─────────────────────────────────────────────────────────────
+// DONE
+// ─────────────────────────────────────────────────────────────
+fs.writeFileSync(FILE, code, ‘utf8’);
+console.log(`\n🎯 ${patchCount} patches applied to index.js`);
+console.log(‘✔  Ready to deploy — git add index.js && git commit -m “fix: worker improvements” && git push’);
