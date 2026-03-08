@@ -2815,7 +2815,7 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       while (Date.now() - start < timeoutMs) {
         const found = await page.evaluate(() => {
           const text = document.body.innerText;
-          const matches = [...text.matchAll(/\$\s?([\d,]+\.?\d*)/g)];
+          const matches = [...text.matchAll(/(?:CA)?\$\s?([\d,]+\.?\d*)/g)];
           for (const m of matches) {
             const n = parseFloat(m[1].replace(/,/g, ''));
             if (n > 1000 && n < 100000) return true;
@@ -2830,12 +2830,12 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 
     async function readFeeFromDOM(page) {
       const result = await page.evaluate(() => {
-        const CAD = /\$\s?([\d,]+\.?\d*)/g;
+        const CAD = /(?:CA)?\$\s?([\d,]+\.?\d*)/g;
 
         const cells = Array.from(document.querySelectorAll('td, th'));
         for (const cell of cells) {
           const text = (cell.innerText || cell.textContent || '').trim();
-          const m = text.match(/\$\s?([\d,]+\.?\d*)/);
+          const m = text.match(/(?:CA)?\$\s?([\d,]+\.?\d*)/);
           if (m) {
             const n = parseFloat(m[1].replace(/,/g, ''));
             if (n > 1000 && n < 100000) {
@@ -3105,18 +3105,14 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
                 }
               }
 
+              console.log('[fees] Clicking Submit...');
+              await page.evaluate(() => {
+                const btn = document.querySelector("input[type='submit'], button[type='submit'], input[type='button'][value*='Calculate'], a[href*='__doPostBack']");
+                if (btn) btn.click();
+                else { const form = document.querySelector('form'); if (form) form.submit(); }
+              });
               console.log('[fees] Waiting for fee to appear...');
               let feeAppeared = await waitForFee(page, 8000);
-
-              if (!feeAppeared) {
-                console.log('[fees] No auto-fee — trying submit button fallback...');
-                await page.evaluate(() => {
-                  const btn = document.querySelector("input[type='submit'], button[type='submit'], input[type='button'][value*='Calculate'], a[href*='__doPostBack']");
-                  if (btn) btn.click();
-                  else { const form = document.querySelector('form'); if (form) form.submit(); }
-                });
-                feeAppeared = await waitForFee(page, 6000);
-              }
 
               if (!feeAppeared) {
                 console.log('[fees] No fee appeared for: ' + level.dbLevel + ' | ' + faculty.label + (discipline.label ? ' | ' + discipline.label : ''));
