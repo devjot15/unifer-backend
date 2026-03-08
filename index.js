@@ -2860,74 +2860,222 @@ RULES:
   }
 }
 
-async function executeFormPlan(feeUrl, plan) {
+async function identifyFormSelectors(html, universityName) {
+  const $ = cheerio.load(html);
+  const selects = [];
+  $("select").each(function(i) {
+    const id = $(this).attr("id") || $(this).attr("name") || `select_${i}`;
+    const labelEl = $(`label[for='${$(this).attr("id") || ""}']`).text().trim()
+      || $(this).closest("div, p, tr").find("label, th, td").first().text().trim()
+      || id;
+    const options = [];
+    $(this).find("option").each(function() {
+      const val = $(this).attr("value");
+      const text = $(this).text().trim();
+      if (val !== undefined && val !== "" && text) options.push({ value: val, text });
+    });
+    selects.push({ selector: id.startsWith("select_") ? `select:nth-of-type(${i+1})` : `#${id}`, label: labelEl, options });
+  });
+
+  let submitSelector = null;
+  const submitCandidates = ["input[type='submit']", "button[type='submit']", "button.btn-primary"];
+  for (const s of submitCandidates) {
+    if ($(s).length) { submitSelector = s; break; }
+  }
+
+  let resultSelector = "table";
+  if ($(".views-table").length) resultSelector = ".views-table";
+  else if ($("#fee-results").length) resultSelector = "#fee-results";
+
+  const prompt = `
+University: ${universityName}
+You are identifying form fields on a university tuition fee calculator page.
+
+Here are the select dropdowns found on the page:
+${JSON.stringify(selects, null, 2)}
+
+Return STRICT JSON only:
+{
+  "level_selector": "CSS selector for the 'level of study' dropdown",
+  "level_masters_values": ["array of option values that mean masters/graduate diploma"],
+  "level_doctoral_values": ["array of option values that mean PhD/doctoral"],
+  "faculty_selector": "CSS selector for faculty/school dropdown, or null if not present",
+  "discipline_selector": "CSS selector for discipline/program dropdown, or null",
+  "student_type_selector": "CSS selector for domestic/international selector, or null",
+  "student_type_international_value": "option value for international students, or null",
+  "submit_selector": "${submitSelector || "input[type='submit']"}",
+  "result_selector": "${resultSelector}",
+  "cascading": true or false (true if changing faculty updates discipline options)
+}
+
+RULES:
+- Use the exact CSS selectors from the selects array above
+- If no faculty dropdown exists, set faculty_selector to null
+- Only include values that clearly mean masters/doctoral — skip blank/placeholder options
+`;
+
+  try {
+    const completion = await Promise.race([
+      openai.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
+    ]);
+    return JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
+  } catch (err) {
+    console.error("[fees-enum] GPT selector identification failed:", err.message);
+    return null;
+  }
+}
+
+async function executeFullEnumeration(feeUrl, selectors, universityName) {
   const browser = await puppeteer.connect({ browserWSEndpoint });
   const page = await browser.newPage();
   const results = [];
 
   try {
     await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
+    await new Promise(r => setTimeout(r, 2000));
 
-    for (const combo of plan.combinations) {
+    if (selectors.student_type_selector && selectors.student_type_international_value) {
       try {
-        await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
-        await new Promise(r => setTimeout(r, 1000));
+        await page.select(selectors.student_type_selector, selectors.student_type_international_value);
+        await new Promise(r => setTimeout(r, 500));
+      } catch (e) { console.warn("[fees-enum] Could not set student type:", e.message); }
+    }
 
-        for (const field of combo.fields) {
-          try {
-            if (field.type === "select") {
-              await page.select(field.selector, field.value);
-            } else if (field.type === "radio" || field.type === "checkbox") {
-              try {
-                await page.click(field.selector);
-              } catch {
-                await page.evaluate((sel, val) => {
-                  const el = document.querySelector(`${sel}[value="${val}"]`) || document.querySelector(sel);
-                  if (el) el.click();
-                }, field.selector, field.value);
-              }
-            }
-            await new Promise(r => setTimeout(r, 300));
-          } catch (fieldErr) {
-            console.warn(`[fees-intelligent] Field fill failed (${field.selector}): ${fieldErr.message}`);
+    let facultyOptions = [{ value: null, text: "default" }];
+    if (selectors.faculty_selector) {
+      try {
+        facultyOptions = await page.$$eval(`${selectors.faculty_selector} option`, opts =>
+          opts.filter(o => o.value && o.value !== "").map(o => ({ value: o.value, text: o.textContent.trim() }))
+        );
+        console.log(`[fees-enum] Found ${facultyOptions.length} faculties for ${universityName}`);
+      } catch (e) { console.warn("[fees-enum] Could not read faculty options:", e.message); }
+    }
+
+    const levelCombos = [
+      { values: selectors.level_masters_values || [], label: "masters" },
+      { values: selectors.level_doctoral_values || [], label: "doctoral" },
+    ];
+
+    for (const levelCombo of levelCombos) {
+      if (!levelCombo.values.length) continue;
+      const levelValue = levelCombo.values[0];
+
+      for (const faculty of facultyOptions) {
+        try {
+          await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
+          await new Promise(r => setTimeout(r, 1000));
+
+          if (selectors.student_type_selector && selectors.student_type_international_value) {
+            try { await page.select(selectors.student_type_selector, selectors.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
           }
-        }
 
-        if (plan.submit_selector) {
+          await page.select(selectors.level_selector, levelValue);
+          await new Promise(r => setTimeout(r, 800));
+
+          if (selectors.faculty_selector && faculty.value) {
+            try {
+              await page.select(selectors.faculty_selector, faculty.value);
+              await new Promise(r => setTimeout(r, 800));
+            } catch (e) { continue; }
+          }
+
+          const billingSelectors = ["select[name*='billing']", "select[name*='load']", "select[name*='status']"];
+          for (const bs of billingSelectors) {
+            try {
+              const opts = await page.$$eval(`${bs} option`, o => o.map(x => x.value));
+              const ftOpt = opts.find(v => v && (v.includes("full") || v.includes("flat") || v.includes("FT")));
+              if (ftOpt) { await page.select(bs, ftOpt); await new Promise(r => setTimeout(r, 300)); break; }
+            } catch (e) {}
+          }
+
           try {
-            await page.click(plan.submit_selector);
+            await page.click(selectors.submit_selector);
             await new Promise(r => setTimeout(r, 2000));
-          } catch (submitErr) {
-            console.warn(`[fees-intelligent] Submit failed: ${submitErr.message}`);
-          }
-        } else {
-          await new Promise(r => setTimeout(r, 1500));
-        }
-
-        let resultHtml = "";
-        if (plan.result_selector) {
-          try {
-            await page.waitForSelector(plan.result_selector, { timeout: 5000 });
-            resultHtml = await page.$eval(plan.result_selector, el => el.innerHTML);
           } catch (e) {
-            resultHtml = await page.content();
+            try { await page.keyboard.press("Enter"); await new Promise(r => setTimeout(r, 2000)); } catch (e2) {}
           }
-        } else {
-          resultHtml = await page.content();
-        }
 
-        results.push({ label: combo.label, html: resultHtml.substring(0, 3000) });
-        console.log(`[fees-intelligent] Got result for: ${combo.label}`);
-      } catch (comboErr) {
-        console.warn(`[fees-intelligent] Combo failed (${combo.label}): ${comboErr.message}`);
+          let feeAmount = null;
+          let feeText = "";
+          try {
+            await page.waitForSelector(selectors.result_selector, { timeout: 5000 });
+            feeText = await page.$eval(selectors.result_selector, el => {
+              const rows = el.querySelectorAll("tr");
+              for (const row of rows) {
+                const cells = row.querySelectorAll("td");
+                if (cells.length >= 2) {
+                  return Array.from(cells).map(c => c.textContent.trim()).join(" | ");
+                }
+              }
+              return el.textContent.replace(/\s+/g, " ").trim().substring(0, 200);
+            });
+
+            const feeMatch = feeText.match(/[\$£€]?([\d,]+\.?\d*)/);
+            if (feeMatch) feeAmount = parseFloat(feeMatch[1].replace(/,/g, ""));
+          } catch (e) {
+            console.warn(`[fees-enum] Could not extract result for ${levelCombo.label} / ${faculty.text}`);
+            continue;
+          }
+
+          if (feeAmount && feeAmount > 100) {
+            const label = `${levelCombo.label} | ${faculty.text}`;
+            results.push({ label, level: levelCombo.label, faculty: faculty.text, feePerTerm: feeAmount });
+            console.log(`[fees-enum] ${label}: ${feeAmount}/term`);
+          }
+
+        } catch (comboErr) {
+          console.warn(`[fees-enum] Combo failed (${levelCombo.label}/${faculty.text}):`, comboErr.message);
+        }
       }
     }
+
   } finally {
-    await page.close();
-    await browser.disconnect();
+    try { await page.close(); } catch (e) {}
+    try { await browser.disconnect(); } catch (e) {}
   }
 
   return results;
+}
+
+function buildFeeRowsFromEnumeration(results, universityId, feeUrl, instalmentsPerYear = 3) {
+  const feeRows = [];
+  const seen = new Set();
+
+  for (const r of results) {
+    const annualFee = Math.round(r.feePerTerm * instalmentsPerYear * 100) / 100;
+
+    const facultyLower = r.faculty.toLowerCase();
+    let pattern = null;
+    if (facultyLower === "default") {
+      pattern = `default_${r.level === "masters" ? "masters" : "doctoral"}`;
+    } else {
+      pattern = facultyLower
+        .replace(/faculty of |school of |telfer |department of /gi, "")
+        .replace(/[^a-z0-9 ]/g, "")
+        .trim()
+        .split(" ")[0];
+    }
+
+    const key = `${r.level}|${pattern}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    feeRows.push({
+      university_id: universityId,
+      program_level: r.level === "masters" ? "masters" : "doctoral",
+      program_type: null,
+      fee_type: "flat_annual",
+      international_fee: annualFee,
+      instalments_per_year: instalmentsPerYear,
+      currency: "CAD",
+      program_name_pattern: pattern,
+      notes: `Per term: ${r.feePerTerm} CAD × ${instalmentsPerYear} terms`,
+      fee_page_url: feeUrl,
+    });
+  }
+
+  return feeRows;
 }
 
 async function parseFormResults(results, universityName) {
@@ -3114,18 +3262,30 @@ async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) 
   let fees = [];
 
   if (analysis.isFormBased) {
-    console.log(`[fees-intelligent] Building form-filling plan for ${universityName}...`);
-    const plan = await buildFormFillingPlan(html, feeUrl, universityName);
-    console.log(`[fees-intelligent] Plan: ${plan.page_type}, ${plan.combinations?.length || 0} combinations`);
+    console.log(`[fees-intelligent] Identifying form selectors for ${universityName}...`);
+    const selectors = await identifyFormSelectors(html, universityName);
 
-    if (plan.page_type !== "unknown" && plan.combinations?.length > 0) {
-      const results = await executeFormPlan(feeUrl, plan);
-      fees = await parseFormResults(results, universityName);
+    if (selectors && selectors.level_selector) {
+      console.log(`[fees-intelligent] Starting full enumeration for ${universityName}...`);
+      const enumResults = await executeFullEnumeration(feeUrl, selectors, universityName);
+      console.log(`[fees-intelligent] Enumeration complete: ${enumResults.length} combinations extracted`);
+      if (enumResults.length > 0) {
+        const instalmentsPerYear = 3;
+        const feeRows = buildFeeRowsFromEnumeration(enumResults, universityId, feeUrl, instalmentsPerYear);
+
+        if (feeRows.length > 0) {
+          const { error } = await supabase.schema("ingestion").from("university_fee_structure")
+            .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern,program_type" });
+          if (error) { console.error(`[fees-intelligent] Insert error:`, error.message); }
+          else {
+            console.log(`[fees-intelligent] Inserted ${feeRows.length} fee rows from form enumeration`);
+            return true;
+          }
+        }
+      }
     }
 
-    if (fees.length === 0) {
-      console.log(`[fees-intelligent] Form approach yielded nothing, falling back to static extraction`);
-    }
+    console.log(`[fees-intelligent] Form approach yielded nothing, falling back to static extraction`);
   }
 
   if (fees.length === 0) {
