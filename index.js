@@ -3165,6 +3165,47 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
     return true;
   }
 
+async function extractFeesFromText(feeText, universityName) {
+  const prompt = `
+You are extracting university fee structures from a tuition page.
+Return STRICT JSON array only. No markdown, no explanation.
+University: ${universityName}
+
+Extract ALL distinct fee entries for INTERNATIONAL students.
+
+FIELDS:
+- program_level: "masters" or "doctoral"
+- program_type: "research", "professional", or null
+- fee_type: "flat_annual" or "per_instalment"
+- international_fee: numeric annual fee for a FIRST YEAR student (use the first/lowest progression level only)
+- If the table shows multiple progression levels (term 1, term 2, A1, A2, B1 etc.), use ONLY the first level
+- Multiply per-term fee by instalments_per_year to get annual total
+- instalments_per_year: 1 | 2 | 3
+- currency: "CAD", "USD", "GBP", "EUR", "AUD"
+- program_name_pattern: "default_masters" or "default_doctoral" for general fees, or lowercase keyword for specific programs
+- notes: any relevant notes
+
+RULES:
+- Only international student fees
+- Graduate year = 3 terms for Canadian, 2 for UK/Australian universities
+- If fee shown per term, multiply by instalments_per_year to get annual
+- Return [] if no clear fee structure found
+
+Content:
+${feeText}
+`;
+  try {
+    const completion = await Promise.race([
+      openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 60000)),
+    ]);
+    return JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
+  } catch (err) {
+    console.error("[fees] extractFeesFromText failed:", err.message);
+    return [];
+  }
+}
+
 async function scrapeFeeStructure(universityId) {
   const { data: existing } = await supabase
     .schema("ingestion")
