@@ -2793,7 +2793,6 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     return buf.toString('base64');
   }
 
-  // Phase 1: For each dropdown, select each option → screenshot → GPT classifies
   async function exploreDropdowns(page, feeUrl, universityName) {
     const selects = await page.evaluate(() =>
       Array.from(document.querySelectorAll('select')).map((el, i) => {
@@ -2807,70 +2806,72 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       })
     );
 
-    console.log('[fees5i] Exploring ' + selects.length + ' dropdowns...');
+    console.log('[fees5i] Classifying ' + selects.length + ' dropdowns by keyword...');
     const classified = [];
 
     for (const sel of selects) {
-      if (!sel.id || !sel.options.length) continue;
-      const sample = sel.options.length <= 12 ? sel.options : sel.options.slice(0, 10);
-      console.log('[fees5i] Dropdown "' + sel.label + '" (' + sel.options.length + ' options, sampling ' + sample.length + ')');
+      if (!sel.id) continue;
 
-      const screenshots = [];
-      for (const opt of sample) {
-        try {
-          await safeSelect(page, sel.id, opt.value);
-          await new Promise(r => setTimeout(r, 700));
-          screenshots.push({ value: opt.value, label: opt.label, b64: await snap(page) });
-        } catch(e) { console.warn('[fees5i] Could not select ' + opt.value + ':', e.message); }
+      const idLow = sel.id.toLowerCase();
+      const lblLow = sel.label.toLowerCase();
+
+      let role = 'unknown';
+      let iterate_all = false;
+
+      if (idLow.includes('level') || lblLow.includes('level') || lblLow.includes('level of study') || lblLow.includes('cycle')) {
+        role = 'level_of_study';
+      } else if (idLow.includes('faculty') || lblLow.includes('faculty') || lblLow.includes('school') || lblLow.includes('département') || lblLow.includes('department')) {
+        role = 'faculty_or_school';
+        iterate_all = true;
+      } else if (idLow.includes('discipline') || lblLow.includes('discipline') || lblLow.includes('program') || lblLow.includes('field')) {
+        role = 'discipline';
+        iterate_all = true;
+      } else if (idLow.includes('student') || idLow.includes('status') || lblLow.includes('student') || lblLow.includes('status') || lblLow.includes('citizenship')) {
+        role = 'student_type';
+      } else if (idLow.includes('year') || lblLow.includes('year') || lblLow.includes('academic') || lblLow.includes('session')) {
+        role = 'academic_year';
+      } else if (idLow.includes('load') || idLow.includes('time') || lblLow.includes('course load') || lblLow.includes('full-time') || lblLow.includes('regime')) {
+        role = 'course_load';
+      } else if (idLow.includes('billing') || lblLow.includes('billing') || lblLow.includes('fee type') || lblLow.includes('assessment')) {
+        role = 'course_load';
       }
 
-      if (!screenshots.length) continue;
+      const options = sel.options.map(o => {
+        const t = o.label.toLowerCase();
+        let meaning = 'skip';
 
-      const content = [];
-      content.push({ type: 'text', text:
-        'University: ' + universityName + '\n' +
-        'Dropdown id="' + sel.id + '" label="' + sel.label + '"\n\n' +
-        'Below are screenshots of the page after selecting each option in this dropdown one by one.\n' +
-        'For each screenshot I tell you which option was selected (value and label).\n\n' +
-        'Based on what you see:\n' +
-        '1. What is the ROLE of this dropdown?\n' +
-        '   Options: "level_of_study" | "faculty_or_school" | "discipline" | "student_type" | "course_load" | "academic_year" | "billing_method" | "unknown"\n' +
-        '2. For each option, assign a meaning:\n' +
-        '   level_of_study → "masters" | "doctoral" | "undergraduate" | "skip"\n' +
-        '   faculty_or_school → "faculty:<name>" (e.g. "faculty:Engineering")\n' +
-        '   discipline → "discipline:<name>"\n' +
-        '   student_type → "international" | "domestic" | "skip"\n' +
-        '   course_load → "fulltime" | "parttime" | "skip"\n' +
-        '   academic_year → "year:<value>" (e.g. "year:2025-2026") — pick most recent\n\n' +
-        'Return STRICT JSON only:\n' +
-        '{\n' +
-        '  "element_id": "' + sel.id + '",\n' +
-        '  "role": "<role>",\n' +
-        '  "iterate_all": true or false,\n' +
-        '  "options": [{ "value": "<exact value>", "label": "<text>", "meaning": "<meaning>" }]\n' +
-        '}\n\n' +
-        'iterate_all = true only for faculty_or_school and discipline (we cycle all).'
+        if (role === 'level_of_study') {
+          if (t.includes('master') || t.includes('maîtrise') || t.includes('maitrise') || t.includes('graduate diploma') || t.includes('grad dip')) meaning = 'masters';
+          else if (t.includes('doctor') || t.includes('phd') || t.includes('ph.d') || t.includes('doctorat')) meaning = 'doctoral';
+          else if (t.includes('bachelor') || t.includes('undergrad') || t.includes('baccalaur')) meaning = 'undergraduate';
+        } else if (role === 'faculty_or_school') {
+          meaning = 'faculty:' + o.label;
+        } else if (role === 'discipline') {
+          meaning = 'discipline:' + o.label;
+        } else if (role === 'student_type') {
+          if (t.includes('international') || t.includes('visa') || t.includes('foreign')) meaning = 'international';
+          else if (t.includes('domestic') || t.includes('canadian') || t.includes('resident')) meaning = 'domestic';
+        } else if (role === 'academic_year') {
+          const yearMatch = o.label.match(/\d{4}/);
+          meaning = yearMatch ? 'year:' + o.label : 'skip';
+        } else if (role === 'course_load') {
+          if (t.includes('full') && !t.includes('part')) meaning = 'fulltime';
+          else if (t.includes('part')) meaning = 'parttime';
+          else if (t.includes('flat') || t.includes('per term') || t.includes('per session')) meaning = 'fulltime';
+        }
+
+        return { value: o.value, label: o.label, meaning };
       });
 
-      for (const s of screenshots) {
-        content.push({ type: 'text', text: 'Selected: value="' + s.value + '" label="' + s.label + '"' });
-        content.push({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + s.b64, detail: 'low' } });
-      }
+      console.log('[fees5i] "' + sel.label + '" (id=' + sel.id + ') → role=' + role + ', options=' + options.length);
 
-      try {
-        const completion = await Promise.race([
-          openai.chat.completions.create({ model: 'gpt-4o', messages: [{ role: 'user', content }], temperature: 0, max_tokens: 800 }),
-          new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 60000)),
-        ]);
-        const parsed = JSON.parse(completion.choices[0].message.content.replace(/\`\`\`json|\`\`\`/g, '').trim());
-        parsed.all_options = sel.options;
-        classified.push(parsed);
-        console.log('[fees5i] "' + sel.label + '" → role=' + parsed.role + ', iterate_all=' + parsed.iterate_all);
-      } catch(e) { console.error('[fees5i] classify failed for ' + sel.id + ':', e.message); }
-
-      await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-      try { await page.waitForSelector('select', { timeout: 8000 }); } catch(e) {}
-      await new Promise(r => setTimeout(r, 800));
+      classified.push({
+        element_id: sel.id,
+        role,
+        iterate_all,
+        options,
+        all_options: sel.options,
+      });
     }
 
     return classified;
@@ -2973,23 +2974,45 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     if (plan.studentTypeId && plan.studentTypeIntlValue) { try { await safeSelect(page, plan.studentTypeId, plan.studentTypeIntlValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
     if (plan.yearId && plan.yearValue) { try { await safeSelect(page, plan.yearId, plan.yearValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
 
-    if (plan.levelId && combo.level?.value) { try { await safeSelect(page, plan.levelId, combo.level.value); await new Promise(r => setTimeout(r, 1200)); } catch(e) {} }
+    if (plan.levelId && combo.level?.value) {
+      try { await safeSelect(page, plan.levelId, combo.level.value); await new Promise(r => setTimeout(r, 1200)); } catch(e) {}
 
-    if (plan.facultyId && combo.faculty?.value) { try { await safeSelect(page, plan.facultyId, combo.faculty.value); await new Promise(r => setTimeout(r, 800)); } catch(e) {} }
-
-    let disciplineOptionsForCombo = [];
-    if (plan.hasDiscipline && plan.disciplineId) {
-      try {
-        disciplineOptionsForCombo = await page.evaluate((id) => {
-          const el = document.getElementById(id);
-          if (!el) return [];
-          return Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
-        }, plan.disciplineId);
-        console.log('[fees5i] Discipline options for this faculty: ' + disciplineOptionsForCombo.length);
-      } catch(e) {}
+      if (plan.facultyId) {
+        try {
+          const liveFaculty = await page.evaluate((id) => {
+            const el = document.getElementById(id);
+            if (!el) return [];
+            return Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
+          }, plan.facultyId);
+          if (liveFaculty.length > 0) {
+            console.log('[fees5i] Live faculty options after level set: ' + liveFaculty.map(f => f.label).slice(0, 5).join(', '));
+            plan._liveFaculty = liveFaculty;
+          }
+        } catch(e) {}
+      }
     }
 
-    if (combo.discipline?.value) {
+    const facultyValue = combo.faculty?.value || null;
+    let disciplineOptionsForCombo = [];
+    if (plan.facultyId && facultyValue) {
+      try { await safeSelect(page, plan.facultyId, facultyValue); await new Promise(r => setTimeout(r, 800)); } catch(e) {}
+
+      if (plan.disciplineId) {
+        try {
+          const liveDiscipline = await page.evaluate((id) => {
+            const el = document.getElementById(id);
+            if (!el) return [];
+            return Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
+          }, plan.disciplineId);
+          if (liveDiscipline.length > 0) {
+            console.log('[fees5i] Live discipline options: ' + liveDiscipline.map(d => d.label).slice(0, 5).join(', '));
+            disciplineOptionsForCombo = liveDiscipline;
+          }
+        } catch(e) {}
+      }
+    }
+
+    if (plan.disciplineId && combo.discipline?.value) {
       try { await safeSelect(page, plan.disciplineId, combo.discipline.value); await new Promise(r => setTimeout(r, 500)); } catch(e) {}
     }
 
@@ -3121,6 +3144,25 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       // Phase 3: Execute
       const feeRows = [];
       const seen = new Set();
+
+      if (plan.combinations.length > 0 && plan.facultyId &&
+          (plan.combinations[0].faculty.value === null || !plan.combinations[0].faculty.value)) {
+        console.log('[fees5i] Faculty appears cascading — probing with first level to discover live options...');
+        const probeCombo = plan.combinations[0];
+        await runCombo(page, feeUrl, plan, probeCombo, uniName);
+
+        if (plan._liveFaculty && plan._liveFaculty.length > 1) {
+          console.log('[fees5i] Rebuilding combinations with ' + plan._liveFaculty.length + ' live faculty options');
+          const levels = [...new Set(plan.combinations.map(c => JSON.stringify(c.level)))].map(s => JSON.parse(s));
+          plan.combinations = [];
+          for (const lv of levels) {
+            for (const fac of plan._liveFaculty) {
+              plan.combinations.push({ level: lv, faculty: fac, discipline: null, loadDiscipline: plan.hasDiscipline });
+            }
+          }
+          console.log('[fees5i] Rebuilt plan: ' + plan.combinations.length + ' combos');
+        }
+      }
 
       for (const combo of plan.combinations) {
         console.log('[fees5i] → ' + combo.level.dbLevel + ' | ' + (combo.faculty?.label || 'default'));
