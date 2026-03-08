@@ -3121,15 +3121,24 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
         }, roles.faculty_selector);
 
         console.log(`[fees5] ${facultyOptions.length} faculty options found`);
+        if (facultyOptions.length > 0) {
+          console.log(`[fees5] Faculty options: ${facultyOptions.slice(0, 5).map(f => f.text).join(", ")}${facultyOptions.length > 5 ? "..." : ""}`);
+        }
       } catch (e) { console.warn(`[fees5] Could not read faculty options:`, e.message); }
     }
 
-    if (facultyOptions.length === 0) facultyOptions = [{ value: null, text: "default" }];
+    if (facultyOptions.length === 0) {
+      console.log(`[fees5] No faculty options found — will try single default combination`);
+      facultyOptions = [{ value: null, text: "default" }];
+    }
 
     const levelCombos = [
       { values: roles.level_masters_values || [], label: "masters", dbLevel: "masters" },
       { values: roles.level_doctoral_values || [], label: "doctoral", dbLevel: "doctoral" },
     ].filter(l => l.values.length > 0);
+
+    console.log(`[fees5] Level combos: ${levelCombos.map(l => `${l.label}=${l.values[0]}`).join(", ")}`);
+    console.log(`[fees5] Faculty count: ${facultyOptions.length}, starting enumeration...`);
 
     const feeRows = [];
     const seen = new Set();
@@ -3151,8 +3160,10 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
             try { await safeSelect(page, roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
           }
 
+          console.log(`[fees5] Combo: ${levelCombo.label} | ${faculty.text}`);
+
           await safeSelect(page, roles.level_selector, levelValue);
-          await new Promise(r => setTimeout(r, 800));
+          await new Promise(r => setTimeout(r, 1200));
 
           let disciplineOptions = [];
           if (roles.faculty_selector && faculty.value) {
@@ -3193,12 +3204,22 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
                 try { await safeSelect(page, roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 300)); } catch (e) {}
               }
 
-              if (submitSelector) {
-                try { await page.click(submitSelector); await new Promise(r => setTimeout(r, 2000)); } catch (e) {
-                  try { await page.keyboard.press("Enter"); await new Promise(r => setTimeout(r, 2000)); } catch (e2) {}
+              try {
+                const postbackResult = await page.evaluate(() => {
+                  const submitEl = document.querySelector("input[type='submit'], button[type='submit']");
+                  if (!submitEl) return false;
+                  submitEl.click();
+                  return true;
+                });
+                if (!postbackResult) {
+                  await page.evaluate(() => {
+                    const form = document.querySelector("form");
+                    if (form) form.submit();
+                  });
                 }
-              } else {
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 3000));
+              } catch (e) {
+                console.warn(`[fees5] Submit failed:`, e.message);
               }
 
               let feePerTerm = null;
@@ -3225,8 +3246,12 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
 
                 if (result) {
                   rawFeeText = result.rowText || result.allText;
+                  console.log(`[fees5] Raw result text: ${rawFeeText.substring(0, 150)}`);
                   const feeMatch = rawFeeText.match(/(?:CA\$|C\$|\$|£|€|AUD\s*)?([\d,]+\.?\d*)/);
                   if (feeMatch) feePerTerm = parseFloat(feeMatch[1].replace(/,/g, ""));
+                  console.log(`[fees5] Extracted fee: ${feePerTerm}`);
+                } else {
+                  console.log(`[fees5] No result element found with selector: ${resultSelector}`);
                 }
               } catch (e) {
                 console.warn(`[fees5] Result read failed (${levelCombo.label}/${faculty.text}/${discipline.text})`);
