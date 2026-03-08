@@ -2802,52 +2802,66 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 
   async function submitAndWait(page) {
     const before = await page.evaluate(() => document.body.innerText.length);
+
     await page.evaluate(() => {
-      const btn = document.querySelector("input[type='submit'], button[type='submit']");
+      const btn = document.querySelector("input[type='submit'], button[type='submit'], input[type='button'][value*='Calculate'], input[type='button'][value*='Search'], input[type='button'][value*='Submit']");
       if (btn) { btn.click(); return; }
+
+      const dnnBtn = document.querySelector("a[href*='__doPostBack'], input[value='Calculate'], input[value='Search'], a.dxbButton, a[class*='submit'], a[class*='button']");
+      if (dnnBtn) { dnnBtn.click(); return; }
+
+      const selects = document.querySelectorAll('select');
+      if (selects.length > 0) {
+        const last = selects[selects.length - 1];
+        last.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+
       const form = document.querySelector('form');
       if (form) { form.submit(); }
     });
-    for (let i = 0; i < 12; i++) {
+
+    for (let i = 0; i < 16; i++) {
       await new Promise(r => setTimeout(r, 500));
       const after = await page.evaluate(() => document.body.innerText.length);
       if (Math.abs(after - before) > 30) break;
     }
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 800));
   }
 
   async function readFeeFromDOM(page) {
-    return page.evaluate(() => {
-      const candidates = Array.from(document.querySelectorAll('table, .fee-result, .tuition-result, .results, #results'));
-      const CAD_PATTERN = /\$\s?([\d,]+\.?\d*)/;
+    const result = await page.evaluate(() => {
+      const CAD_PATTERN = /\$\s?([\d,]+\.?\d*)/g;
 
-      for (const el of candidates) {
-        const text = el.innerText || el.textContent || '';
-        if (text.trim().length < 20) continue;
-        const rows = text.split(/\n/).filter(r => r.trim());
-        for (const row of rows) {
-          const match = row.match(CAD_PATTERN);
-          if (match) {
-            const amount = parseFloat(match[1].replace(/,/g, ''));
-            if (amount > 1000 && amount < 100000) {
-              return { fee_per_term: amount, raw_text: row.trim() };
-            }
+      const sources = [
+        ...Array.from(document.querySelectorAll('table td, table th')),
+        ...Array.from(document.querySelectorAll('[class*="result"], [class*="fee"], [class*="tuition"], [class*="cost"], [id*="result"], [id*="fee"]')),
+        document.body,
+      ];
+
+      for (const el of sources) {
+        const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ');
+        const matches = [...text.matchAll(CAD_PATTERN)];
+        for (const m of matches) {
+          const amount = parseFloat(m[1].replace(/,/g, ''));
+          if (amount > 1000 && amount < 100000) {
+            const ctx = text.substring(Math.max(0, m.index - 60), m.index + 80).trim();
+            return { fee_per_term: amount, raw_text: ctx };
           }
         }
       }
-
-      const bodyText = document.body.innerText;
-      const allMatches = [...bodyText.matchAll(/\$\s?([\d,]+\.?\d*)/g)];
-      for (const m of allMatches) {
-        const amount = parseFloat(m[1].replace(/,/g, ''));
-        if (amount > 1000 && amount < 100000) {
-          const ctx = bodyText.substring(Math.max(0, m.index - 40), m.index + 60).trim();
-          return { fee_per_term: amount, raw_text: ctx };
-        }
-      }
-
       return null;
     });
+
+    if (!result) {
+      const snapshot = await page.evaluate(() => {
+        const text = document.body.innerText.replace(/\s+/g, ' ').trim();
+        return text.substring(0, 600);
+      });
+      console.log('[fees] DOM snapshot after submit: ' + snapshot);
+    }
+
+    return result;
   }
 
   function classifyDropdownRole(id, label, optionLabels) {
