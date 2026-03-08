@@ -94,9 +94,13 @@ Preferred communication style: Simple, everyday language.
   - GPT fallback for unresolved `field_category` nulls — after keyword matching, remaining nulls sent to GPT for classification (index-based matching)
   - Fee scraping failure alerting — sets `error_message` on job when fee scraping fails
   - UG mis-classification guard — GPT prompt explicitly warns graduate school pages → PG only
-  - **Intelligent fee scraper** (`scrapeFeeStructureIntelligent`): fully Puppeteer-driven — fetches fee page with Puppeteer (JS renders fully), GPT identifies dropdown roles (level, faculty, discipline, student type, billing, academic year), Puppeteer enumerates ALL options live and cycles every level × faculty × discipline combination, reads first data row only (Year 1 fee), stores faculty_name/discipline_name/fee_per_instalment/academic_year/level_of_study per row
-  - New helpers: `identifyDropdownRoles`, `toPatternKeyword`, `extractFeesFromStaticPage`, `extractFeesFromText`, `findFeePageUrl`, `getBaseUrlsForUniversity`
-  - Falls back to `extractFeesFromStaticPage` if no dropdowns found or form enumeration yields nothing
+  - **Intelligent fee scraper v2** (`scrapeFeeStructureIntelligent`): THREE-PHASE screenshot-based approach:
+    - Phase 1 (Explore): For each dropdown, selects each option one by one, screenshots the page, sends all screenshots to GPT-4o Vision which classifies the dropdown role and option meanings
+    - Phase 2 (Plan): Builds level × faculty iteration matrix from classified dropdowns
+    - Phase 3 (Execute): For each combination, sets all selectors, submits form, screenshots result, GPT-4o reads fee from the result table
+  - Uses `safeSelect` (getElementById-based) for .NET WebForms $ IDs, `snap` for screenshots, `exploreDropdowns` for Phase 1, `buildIterationPlan` for Phase 2, `runCombo` for Phase 3
+  - New helpers: `toPatternKeyword`, `extractFeesFromStaticPage`, `extractFeesFromText`
+  - Falls back to `extractFeesFromStaticPage` if no dropdowns classified or no combinations found
   - Refactored `scrapeFeeStructure` to use shared `extractFeesFromText` helper
   - New endpoint: `POST /worker/scrape-fees-intelligent/:university_id` (optional body: `{ fee_url: "..." }`)
   - Worker step 4 now uses `scrapeFeeStructureIntelligent` instead of `scrapeFeeStructure`

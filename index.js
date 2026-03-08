@@ -2768,592 +2768,395 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
   return null;
 }
 
-async function identifyDropdownRoles(selectsInfo, universityName) {
-    const prompt = `
-  University: ${universityName}
-  The following select dropdowns were found on a university fee calculator page.
-  Each has an id/name, a label, and its available options.
+// ═══════════════════════════════════════════════════════════════
+  // INTELLIGENT FEE SCRAPER v2 — THREE-PHASE (patch5i)
+  // ═══════════════════════════════════════════════════════════════
 
-  ${JSON.stringify(selectsInfo, null, 2)}
-
-  Return STRICT JSON only (no markdown):
-  {
-    "level_selector": "exact id or name of the level of study dropdown",
-    "level_masters_values": ["exact option values that mean masters or graduate diploma"],
-    "level_doctoral_values": ["exact option values that mean PhD or doctoral"],
-    "faculty_selector": "exact id or name of faculty/school dropdown, or null",
-    "discipline_selector": "exact id or name of discipline/program dropdown, or null",
-    "student_type_selector": "exact id or name of domestic/international dropdown, or null",
-    "student_type_international_value": "exact option value for international students, or null",
-    "billing_selector": "exact id or name of course load/billing method dropdown, or null",
-    "billing_fulltime_value": "exact option value for full time flat rate, or null",
-    "academic_year_selector": "exact id or name of academic year dropdown, or null",
-    "academic_year_latest_value": "exact option value for the most recent year, or null",
-    "cascading_faculty_discipline": true or false
+  async function safeSelect(page, elementId, value) {
+    const ok = await page.evaluate((id, val) => {
+      let el = document.getElementById(id);
+      if (!el) { try { el = document.querySelector('#' + CSS.escape(id)); } catch(e) {} }
+      if (!el) { try { el = document.querySelector(`select[name="${id}"]`); } catch(e) {} }
+      if (!el) { try { el = document.querySelector(id); } catch(e) {} }
+      if (!el) return false;
+      el.value = val;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    }, elementId, value);
+    if (!ok) throw new Error('safeSelect: not found: ' + elementId);
   }
 
-  RULES:
-  - Use the EXACT id/name values from the JSON above
-  - If a dropdown doesn't exist, use null
-  - Only include option values that clearly match the description — skip blank/placeholder options
-  - level_masters_values and level_doctoral_values should each have 1-3 values max
-  `;
+  // Screenshot → base64 JPEG
+  async function snap(page) {
+    const buf = await page.screenshot({ type: 'jpeg', quality: 75, fullPage: false });
+    return buf.toString('base64');
+  }
 
-    try {
-      const completion = await Promise.race([
-        openai.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0 }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
-      ]);
-      return JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
-    } catch (err) {
-      console.error("[fees5] GPT dropdown identification failed:", err.message);
-      return null;
+  // Phase 1: For each dropdown, select each option → screenshot → GPT classifies
+  async function exploreDropdowns(page, feeUrl, universityName) {
+    const selects = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('select')).map((el, i) => {
+        const id = el.id || '';
+        let label = '';
+        if (id) { const l = document.querySelector('label[for="' + id + '"]'); if (l) label = l.textContent.trim(); }
+        if (!label) { const p = el.closest('div,p,td,fieldset,li'); if (p) { const l = p.querySelector('label,th,legend'); if (l) label = l.textContent.trim(); } }
+        if (!label) label = id || el.name || ('dropdown_' + i);
+        const options = Array.from(el.options).filter(o => o.value.trim()).map(o => ({ value: o.value, label: o.textContent.trim() }));
+        return { id, name: el.name || '', label, options };
+      })
+    );
+
+    console.log('[fees5i] Exploring ' + selects.length + ' dropdowns...');
+    const classified = [];
+
+    for (const sel of selects) {
+      if (!sel.id || !sel.options.length) continue;
+      const sample = sel.options.length <= 12 ? sel.options : sel.options.slice(0, 10);
+      console.log('[fees5i] Dropdown "' + sel.label + '" (' + sel.options.length + ' options, sampling ' + sample.length + ')');
+
+      const screenshots = [];
+      for (const opt of sample) {
+        try {
+          await safeSelect(page, sel.id, opt.value);
+          await new Promise(r => setTimeout(r, 700));
+          screenshots.push({ value: opt.value, label: opt.label, b64: await snap(page) });
+        } catch(e) { console.warn('[fees5i] Could not select ' + opt.value + ':', e.message); }
+      }
+
+      if (!screenshots.length) continue;
+
+      const content = [];
+      content.push({ type: 'text', text:
+        'University: ' + universityName + '\n' +
+        'Dropdown id="' + sel.id + '" label="' + sel.label + '"\n\n' +
+        'Below are screenshots of the page after selecting each option in this dropdown one by one.\n' +
+        'For each screenshot I tell you which option was selected (value and label).\n\n' +
+        'Based on what you see:\n' +
+        '1. What is the ROLE of this dropdown?\n' +
+        '   Options: "level_of_study" | "faculty_or_school" | "discipline" | "student_type" | "course_load" | "academic_year" | "billing_method" | "unknown"\n' +
+        '2. For each option, assign a meaning:\n' +
+        '   level_of_study → "masters" | "doctoral" | "undergraduate" | "skip"\n' +
+        '   faculty_or_school → "faculty:<name>" (e.g. "faculty:Engineering")\n' +
+        '   discipline → "discipline:<name>"\n' +
+        '   student_type → "international" | "domestic" | "skip"\n' +
+        '   course_load → "fulltime" | "parttime" | "skip"\n' +
+        '   academic_year → "year:<value>" (e.g. "year:2025-2026") — pick most recent\n\n' +
+        'Return STRICT JSON only:\n' +
+        '{\n' +
+        '  "element_id": "' + sel.id + '",\n' +
+        '  "role": "<role>",\n' +
+        '  "iterate_all": true or false,\n' +
+        '  "options": [{ "value": "<exact value>", "label": "<text>", "meaning": "<meaning>" }]\n' +
+        '}\n\n' +
+        'iterate_all = true only for faculty_or_school and discipline (we cycle all).'
+      });
+
+      for (const s of screenshots) {
+        content.push({ type: 'text', text: 'Selected: value="' + s.value + '" label="' + s.label + '"' });
+        content.push({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + s.b64, detail: 'low' } });
+      }
+
+      try {
+        const completion = await Promise.race([
+          openai.chat.completions.create({ model: 'gpt-4o', messages: [{ role: 'user', content }], temperature: 0, max_tokens: 800 }),
+          new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 60000)),
+        ]);
+        const parsed = JSON.parse(completion.choices[0].message.content.replace(/\`\`\`json|\`\`\`/g, '').trim());
+        parsed.all_options = sel.options;
+        classified.push(parsed);
+        console.log('[fees5i] "' + sel.label + '" → role=' + parsed.role + ', iterate_all=' + parsed.iterate_all);
+      } catch(e) { console.error('[fees5i] classify failed for ' + sel.id + ':', e.message); }
+
+      await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      try { await page.waitForSelector('select', { timeout: 8000 }); } catch(e) {}
+      await new Promise(r => setTimeout(r, 800));
     }
+
+    return classified;
   }
 
-  function toPatternKeyword(label) {
-    if (!label) return null;
-    const lower = label.toLowerCase()
-      .replace(/faculty of |school of |telfer |department of |faculty |college of /gi, "")
-      .replace(/[^a-z0-9 ]/g, "")
-      .trim();
-    const mappings = {
-      "arts": "arts", "science": "science", "engineering": "engineering",
-      "management": "management", "law": "law", "medicine": "medicine",
-      "health": "health", "education": "education", "social sciences": "social",
-      "social science": "social", "computer science": "computer science",
-      "information": "information", "environment": "environment",
-      "architecture": "architecture", "pharmacy": "pharmacy",
-      "nursing": "nursing", "business": "business", "economics": "economics",
-      "psychology": "psychology",
-    };
-    for (const [key, val] of Object.entries(mappings)) {
-      if (lower.includes(key)) return val;
-    }
-    return lower.split(" ")[0];
-  }
+  // Phase 2: Build iteration plan from classified dropdowns
+  function buildIterationPlan(classified) {
+    let levelId = null, mastersValues = [], doctoralValues = [];
+    let facultyId = null, facultyOptions = [];
+    let disciplineId = null, disciplineOptions = [];
+    let studentTypeId = null, studentTypeIntlValue = null;
+    let yearId = null, yearValue = null;
+    let loadId = null, loadValue = null;
 
-  async function safeSelect(page, selector, value) {
-    try {
-      await page.select(selector, value);
-      return;
-    } catch (e) {
-      const result = await page.evaluate((sel, val) => {
-        const idMatch = sel.match(/^#(.+)$/);
-        let el = null;
-        if (idMatch) el = document.getElementById(idMatch[1]);
-        if (!el) { try { el = document.querySelector(sel); } catch(e2) {} }
-        if (!el) {
-          const nameMatch = sel.match(/\[name="(.+)"\]/);
-          if (nameMatch) el = document.querySelector(`select[name="${nameMatch[1]}"]`);
-        }
-        if (!el) return false;
-        el.value = val;
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        return true;
-      }, selector, value);
-      if (!result) throw new Error(`safeSelect: could not find element for selector: ${selector}`);
-    }
-  }
-
-  async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) {
-    const { data: uni } = await supabase.schema("core").from("universities").select("name, terms_per_year").eq("id", universityId).single();
-    const universityName = uni?.name || universityId;
-    const instalmentsPerYear = uni?.terms_per_year || 3;
-
-    let feeUrl = manualFeeUrl;
-    if (!feeUrl) {
-      const { data: sampleUrl } = await supabase.schema("ingestion").from("scrape_queue").select("program_url").eq("university_id", universityId).limit(1).single();
-      if (!sampleUrl) { console.log(`[fees5] No URLs found for ${universityName}`); return false; }
-      const parsedUrl = new URL(sampleUrl.program_url);
-      const baseUrl = parsedUrl.origin;
-      const hostParts = parsedUrl.hostname.split(".");
-      const rootDomain = hostParts.length > 2 ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}` : baseUrl;
-      for (const base of [...new Set([baseUrl, rootDomain])]) {
-        for (const pattern of FEE_PAGE_PATTERNS) {
-          const testUrl = base + pattern;
-          try {
-            const res = await axios.get(testUrl, { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 15000, validateStatus: (s) => s < 404 });
-            if (res.status === 200 && res.data.length > 3000 && ["tuition","fee","international"].some(k => res.data.toLowerCase().includes(k))) {
-              feeUrl = testUrl; break;
+    for (const d of classified) {
+      switch(d.role) {
+        case 'level_of_study':
+          levelId = d.element_id;
+          mastersValues = (d.all_options || d.options || []).filter(o => o.meaning === 'masters').map(o => ({ value: o.value, label: o.label }));
+          doctoralValues = (d.all_options || d.options || []).filter(o => o.meaning === 'doctoral').map(o => ({ value: o.value, label: o.label }));
+          if (!mastersValues.length && !doctoralValues.length) {
+            const allOpts = d.all_options || d.options || [];
+            for (const o of allOpts) {
+              const t = (o.label || o.text || '').toLowerCase();
+              if (t.includes('master') || t.includes('maîtrise') || t.includes('maitrise')) mastersValues.push({ value: o.value, label: o.label || o.text });
+              else if (t.includes('doctor') || t.includes('phd') || t.includes('doctorat')) doctoralValues.push({ value: o.value, label: o.label || o.text });
             }
-          } catch (e) { continue; }
-        }
-        if (feeUrl) break;
+          }
+          break;
+        case 'faculty_or_school':
+          facultyId = d.element_id;
+          facultyOptions = (d.all_options || d.options || []).map(o => ({ value: o.value, label: o.label || o.text }));
+          break;
+        case 'discipline':
+          disciplineId = d.element_id;
+          disciplineOptions = (d.all_options || d.options || []).map(o => ({ value: o.value, label: o.label || o.text }));
+          break;
+        case 'student_type':
+          studentTypeId = d.element_id;
+          studentTypeIntlValue = (d.options || []).find(o => o.meaning === 'international')?.value || null;
+          if (!studentTypeIntlValue) {
+            const allOpts = d.all_options || d.options || [];
+            studentTypeIntlValue = allOpts.find(o => (o.label || o.text || '').toLowerCase().includes('international'))?.value || null;
+          }
+          break;
+        case 'academic_year':
+          yearId = d.element_id;
+          const yrs = (d.options || []).filter(o => o.meaning?.startsWith('year:')).sort((a,b) => b.meaning.localeCompare(a.meaning));
+          yearValue = yrs[0]?.value || null;
+          if (!yearValue) {
+            const allOpts = d.all_options || d.options || [];
+            yearValue = allOpts[allOpts.length - 1]?.value || null;
+          }
+          break;
+        case 'course_load':
+          loadId = d.element_id;
+          loadValue = (d.options || []).find(o => o.meaning === 'fulltime')?.value || null;
+          if (!loadValue) {
+            const allOpts = d.all_options || d.options || [];
+            loadValue = allOpts.find(o => (o.label || o.text || '').toLowerCase().includes('full'))?.value || null;
+          }
+          break;
       }
     }
 
-    if (!feeUrl) { console.log(`[fees5] Could not find fee page for ${universityName}`); return false; }
-    console.log(`[fees5] Fee URL: ${feeUrl}`);
+    const levels = [
+      ...mastersValues.map(v => ({ ...v, dbLevel: 'masters' })),
+      ...doctoralValues.map(v => ({ ...v, dbLevel: 'doctoral' })),
+    ];
+    const faculties = facultyOptions.length ? facultyOptions : [{ value: null, label: 'default' }];
 
-    console.log(`[fees5] Fetching fee page with Puppeteer for ${universityName}...`);
+    const combinations = [];
+    for (const lv of levels) {
+      for (const fac of faculties) {
+        combinations.push({ level: lv, faculty: fac });
+      }
+    }
+
+    console.log('[fees5i] Plan: ' + combinations.length + ' combos (' + levels.length + ' levels × ' + faculties.length + ' faculties)');
+
+    return { levelId, studentTypeId, studentTypeIntlValue, yearId, yearValue, loadId, loadValue, facultyId, disciplineId, disciplineOptions, combinations };
+  }
+
+  // Phase 3: Execute one combination → screenshot result → GPT reads fee
+  async function runCombo(page, feeUrl, plan, combo, universityName) {
+    await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    try { await page.waitForSelector('select', { timeout: 8000 }); } catch(e) {}
+    await new Promise(r => setTimeout(r, 800));
+
+    if (plan.studentTypeId && plan.studentTypeIntlValue) { try { await safeSelect(page, plan.studentTypeId, plan.studentTypeIntlValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
+    if (plan.yearId && plan.yearValue) { try { await safeSelect(page, plan.yearId, plan.yearValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
+
+    if (plan.levelId && combo.level?.value) { try { await safeSelect(page, plan.levelId, combo.level.value); await new Promise(r => setTimeout(r, 1200)); } catch(e) {} }
+
+    if (plan.facultyId && combo.faculty?.value) { try { await safeSelect(page, plan.facultyId, combo.faculty.value); await new Promise(r => setTimeout(r, 800)); } catch(e) {} }
+
+    if (plan.disciplineId && combo.discipline?.value) { try { await safeSelect(page, plan.disciplineId, combo.discipline.value); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
+
+    if (plan.loadId && plan.loadValue) { try { await safeSelect(page, plan.loadId, plan.loadValue); await new Promise(r => setTimeout(r, 500)); } catch(e) {} }
+
+    const htmlBefore = await page.evaluate(() => document.body.innerText.length);
+    await page.evaluate(() => { const b = document.querySelector("input[type='submit'],button[type='submit']"); if (b) b.click(); else { const f = document.querySelector('form'); if (f) f.submit(); } });
+
+    for (let w = 0; w < 10; w++) {
+      await new Promise(r => setTimeout(r, 500));
+      const htmlAfter = await page.evaluate(() => document.body.innerText.length);
+      if (Math.abs(htmlAfter - htmlBefore) > 50) break;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+
+    const b64 = await snap(page);
+    try {
+      const completion = await Promise.race([
+        openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: [
+            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64, detail: 'high' } },
+            { type: 'text', text:
+              'University: ' + universityName + '\n' +
+              'Selected: Level=' + combo.level.dbLevel + ', Faculty=' + (combo.faculty?.label || 'default') + '\n\n' +
+              'Look at the fee result table shown on screen.\n' +
+              'Extract the FIRST ROW fee (Year 1 / lowest progress level) for this international student.\n\n' +
+              'Return STRICT JSON only:\n' +
+              '{ "fee_per_term": 9720.89, "currency": "CAD", "raw_text": "exact fee text as shown" }\n' +
+              'Return { "fee_per_term": null } if no result table visible.'
+            }
+          ]}],
+          temperature: 0, max_tokens: 150,
+        }),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 30000)),
+      ]);
+      return JSON.parse(completion.choices[0].message.content.replace(/\`\`\`json|\`\`\`/g, '').trim());
+    } catch(e) { console.error('[fees5i] runCombo GPT failed:', e.message); return null; }
+  }
+
+  // Faculty label → short pattern keyword for resolveTuition
+  function toPatternKeyword(label) {
+    if (!label || label === 'default') return null;
+    const low = label.toLowerCase().replace(/faculty of |school of |telfer |department of |college of |faculty |/gi, '').replace(/[^a-z0-9 ]/g, '').trim();
+    const map = { engineering:'engineering', management:'management', arts:'arts', science:'science', law:'law', medicine:'medicine', health:'health', education:'education', business:'business', nursing:'nursing', pharmacy:'pharmacy', environment:'environment', architecture:'architecture', 'social science':'social', 'social sciences':'social', 'computer science':'computer science', information:'information', economics:'economics', psychology:'psychology' };
+    for (const [k,v] of Object.entries(map)) { if (low.includes(k)) return v; }
+    return low.split(' ')[0];
+  }
+
+  // Main intelligent scraper
+  async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) {
+    const { data: uni } = await supabase.schema('core').from('universities').select('name, terms_per_year').eq('id', universityId).single();
+    const uniName = uni?.name || universityId;
+    const termsPerYear = uni?.terms_per_year || 3;
+
+    let feeUrl = manualFeeUrl;
+    if (!feeUrl) {
+      const { data: sample } = await supabase.schema('ingestion').from('scrape_queue').select('program_url').eq('university_id', universityId).limit(1).single();
+      if (!sample) { console.log('[fees5i] No sample URL for ' + uniName); return false; }
+      const parsed = new URL(sample.program_url);
+      const bases = [...new Set([parsed.origin, parsed.hostname.split('.').length > 2 ? parsed.protocol + '//' + parsed.hostname.split('.').slice(-2).join('.') : null].filter(Boolean))];
+      outer: for (const base of bases) {
+        for (const pat of FEE_PAGE_PATTERNS) {
+          try {
+            const res = await axios.get(base + pat, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000, maxRedirects: 3 });
+            if (res.status === 200 && res.data.length > 3000 && ['tuition','fee','international'].some(w => res.data.toLowerCase().includes(w))) {
+              feeUrl = base + pat; break outer;
+            }
+          } catch(e) {}
+        }
+      }
+    }
+    if (!feeUrl) { console.log('[fees5i] Could not find fee page for ' + uniName); return false; }
+    console.log('[fees5i] Fee URL: ' + feeUrl);
+
     const browser = await puppeteer.connect({ browserWSEndpoint });
     const page = await browser.newPage();
     let renderedHtml = null;
-    let selectsInfo = [];
 
     try {
-      await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 45000 });
-
-      try {
-        await page.waitForSelector("select", { timeout: 10000 });
-        console.log(`[fees5] Select elements detected in DOM`);
-      } catch (e) {
-        console.log(`[fees5] No selects yet — scrolling to trigger lazy load...`);
+      await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+      try { await page.waitForSelector('select', { timeout: 10000 }); } catch(e) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
         await new Promise(r => setTimeout(r, 3000));
         await page.evaluate(() => window.scrollTo(0, 0));
         await new Promise(r => setTimeout(r, 2000));
       }
 
-      await new Promise(r => setTimeout(r, 3000));
-
-      selectsInfo = await page.evaluate(() => {
-        const selects = document.querySelectorAll("select");
-        return Array.from(selects).map((sel, i) => {
-          const id = sel.id || sel.name || `select_${i}`;
-          let label = "";
-          if (sel.id) {
-            const labelEl = document.querySelector(`label[for="${sel.id}"]`);
-            if (labelEl) label = labelEl.textContent.trim();
-          }
-          if (!label) {
-            const parent = sel.closest("div, p, td, li, fieldset");
-            if (parent) {
-              const labelEl = parent.querySelector("label, th, legend");
-              if (labelEl) label = labelEl.textContent.trim();
-            }
-          }
-          if (!label) label = id;
-
-          const options = Array.from(sel.options)
-            .filter(o => o.value && o.value.trim() !== "")
-            .map(o => ({ value: o.value, text: o.textContent.trim() }));
-
-          const rawId = sel.id || "";
-          const rawName = sel.name || "";
-          const safeId = rawId.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
-          const safeName = rawName.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
-          const selector = rawId ? `#${safeId}` : rawName ? `select[name="${safeName}"]` : `select:nth-of-type(${i+1})`;
-          return { id: rawId, name: rawName, index: i, label, selector, options };
-        });
-      });
-
-      renderedHtml = await page.content();
-      console.log(`[fees5] Found ${selectsInfo.length} dropdowns for ${universityName}`);
-
-      if (selectsInfo.length === 0) {
-        console.log(`[fees5] Checking for iframes containing fee form...`);
-        const iframes = await page.frames();
-        for (const frame of iframes) {
+      const mainCount = await page.evaluate(() => document.querySelectorAll('select').length);
+      if (mainCount === 0) {
+        for (const frame of page.frames()) {
           try {
-            const frameSelects = await frame.evaluate(() => {
-              const selects = document.querySelectorAll("select");
-              return Array.from(selects).map((sel, i) => {
-                const id = sel.id || sel.name || `select_${i}`;
-                let label = "";
-                if (sel.id) {
-                  const labelEl = document.querySelector(`label[for="${sel.id}"]`);
-                  if (labelEl) label = labelEl.textContent.trim();
-                }
-                if (!label) {
-                  const parent = sel.closest("div, p, td, li, fieldset");
-                  if (parent) {
-                    const labelEl = parent.querySelector("label, th, legend");
-                    if (labelEl) label = labelEl.textContent.trim();
-                  }
-                }
-                if (!label) label = id;
-                const options = Array.from(sel.options)
-                  .filter(o => o.value && o.value.trim() !== "")
-                  .map(o => ({ value: o.value, text: o.textContent.trim() }));
-                const rawId = sel.id || "";
-                const rawName = sel.name || "";
-                const safeId = rawId.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
-                const safeName = rawName.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
-                const selector = rawId ? `#${safeId}` : rawName ? `select[name="${safeName}"]` : `select:nth-of-type(${i+1})`;
-                return { id: rawId, name: rawName, index: i, label, selector, options };
-              });
-            });
-            if (frameSelects.length > 0) {
-              const iframeUrl = frame.url();
-              console.log(`[fees5] Found ${frameSelects.length} dropdowns inside iframe: ${iframeUrl}`);
-              selectsInfo = frameSelects;
-              feeUrl = iframeUrl;
-              await page.goto(iframeUrl, { waitUntil: "networkidle2", timeout: 30000 });
-              try { await page.waitForSelector("select", { timeout: 8000 }); } catch(e) {}
-              await new Promise(r => setTimeout(r, 2000));
-
-              const rereadSelects = await page.evaluate(() => {
-                const selects = document.querySelectorAll("select");
-                return Array.from(selects).map((sel, i) => {
-                  const id = sel.id || sel.name || `select_${i}`;
-                  let label = "";
-                  if (sel.id) {
-                    const labelEl = document.querySelector(`label[for="${sel.id}"]`);
-                    if (labelEl) label = labelEl.textContent.trim();
-                  }
-                  if (!label) {
-                    const parent = sel.closest("div, p, td, li, fieldset");
-                    if (parent) {
-                      const labelEl = parent.querySelector("label, th, legend");
-                      if (labelEl) label = labelEl.textContent.trim();
-                    }
-                  }
-                  if (!label) label = id;
-                  const options = Array.from(sel.options)
-                    .filter(o => o.value && o.value.trim() !== "")
-                    .map(o => ({ value: o.value, text: o.textContent.trim() }));
-                  const rawId = sel.id || "";
-                  const rawName = sel.name || "";
-                  const safeId = rawId.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
-                  const safeName = rawName.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
-                  const selector = rawId ? `#${safeId}` : rawName ? `select[name="${safeName}"]` : `select:nth-of-type(${i+1})`;
-                  return { id: rawId, name: rawName, index: i, label, selector, options };
-                });
-              });
-
-              if (rereadSelects.length > 0) {
-                console.log(`[fees5] Re-read ${rereadSelects.length} dropdowns from iframe URL`);
-                selectsInfo = rereadSelects;
-              }
-              renderedHtml = await page.content();
+            const cnt = await frame.evaluate(() => document.querySelectorAll('select').length);
+            if (cnt > 0) {
+              feeUrl = frame.url();
+              console.log('[fees5i] Form in iframe: ' + feeUrl);
+              await page.goto(feeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+              try { await page.waitForSelector('select', { timeout: 8000 }); } catch(e) {}
+              await new Promise(r => setTimeout(r, 1500));
               break;
             }
-          } catch (e) {}
+          } catch(e) {}
         }
       }
 
-    } catch (err) {
-      console.error(`[fees5] Puppeteer fetch failed for ${universityName}:`, err.message);
-      await page.close();
-      await browser.disconnect();
-      const staticHtml = await fetchWithPuppeteer(feeUrl).catch(() => null);
-      if (!staticHtml) { console.log(`[fees5] No HTML for ${universityName}`); return false; }
-      return await extractFeesFromStaticPage(staticHtml, universityName, universityId, feeUrl);
-    }
+      renderedHtml = await page.content();
 
-    if (selectsInfo.length === 0) {
-      console.log(`[fees5] No dropdowns found — using static extraction for ${universityName}`);
-      await page.close();
-      await browser.disconnect();
-      return await extractFeesFromStaticPage(renderedHtml, universityName, universityId, feeUrl);
-    }
-
-    console.log(`[fees5] Identifying dropdown roles for ${universityName}...`);
-    const roles = await identifyDropdownRoles(selectsInfo, universityName);
-
-    if (!roles || !roles.level_selector) {
-      console.log(`[fees5] Could not identify level dropdown for ${universityName} — falling back to static`);
-      await page.close();
-      await browser.disconnect();
-      return await extractFeesFromStaticPage(renderedHtml, universityName, universityId, feeUrl);
-    }
-
-    console.log(`[fees5] Roles identified: level=${roles.level_selector}, faculty=${roles.faculty_selector}, discipline=${roles.discipline_selector}`);
-
-    const resultSelector = await page.evaluate(() => {
-      if (document.querySelector(".views-table")) return ".views-table";
-      if (document.querySelector(".fee-results")) return ".fee-results";
-      if (document.querySelector("#fee-result")) return "#fee-result";
-      if (document.querySelector("table")) return "table";
-      return "table";
-    });
-
-    const submitSelector = await page.evaluate(() => {
-      const candidates = ["input[type='submit']", "button[type='submit']", ".form-submit", "button.btn", "input.btn"];
-      for (const s of candidates) {
-        if (document.querySelector(s)) return s;
+      // Phase 1: Explore
+      const classified = await exploreDropdowns(page, feeUrl, uniName);
+      if (!classified.length) {
+        console.log('[fees5i] No dropdowns classified — static fallback');
+        await page.close(); await browser.disconnect();
+        return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
       }
-      return null;
-    });
 
-    if (roles.student_type_selector && roles.student_type_international_value) {
-      try {
-        await safeSelect(page, roles.student_type_selector, roles.student_type_international_value);
-        await new Promise(r => setTimeout(r, 500));
-        console.log(`[fees5] Set student type to international`);
-      } catch (e) { console.warn(`[fees5] Could not set student type:`, e.message); }
-    }
-
-    if (roles.academic_year_selector && roles.academic_year_latest_value) {
-      try { await safeSelect(page, roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
-    }
-
-    if (roles.billing_selector && roles.billing_fulltime_value) {
-      try { await safeSelect(page, roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
-    }
-
-    let facultyOptions = [];
-    if (roles.faculty_selector && (roles.level_masters_values?.length > 0 || roles.level_doctoral_values?.length > 0)) {
-      try {
-        await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
-        try { await page.waitForSelector("select", { timeout: 8000 }); } catch(e) {}
-        await new Promise(r => setTimeout(r, 1500));
-
-        if (roles.student_type_selector && roles.student_type_international_value) {
-          try { await safeSelect(page, roles.student_type_selector, roles.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
-        }
-        if (roles.academic_year_selector && roles.academic_year_latest_value) {
-          try { await safeSelect(page, roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
-        }
-
-        const firstLevel = (roles.level_masters_values || roles.level_doctoral_values || [])[0];
-        if (firstLevel) {
-          await safeSelect(page, roles.level_selector, firstLevel);
-          await new Promise(r => setTimeout(r, 1500));
-        }
-
-        facultyOptions = await page.evaluate((selector) => {
-          const idMatch = selector.match(/^#(.+)$/);
-          let el = null;
-          if (idMatch) el = document.getElementById(idMatch[1]);
-          if (!el) { try { el = document.querySelector(selector); } catch(e) {} }
-          if (!el) {
-            const nameMatch = selector.match(/\[name="(.+)"\]/);
-            if (nameMatch) el = document.querySelector(`select[name="${nameMatch[1]}"]`);
-          }
-          if (!el) return [];
-          return Array.from(el.options)
-            .filter(o => o.value && o.value.trim() !== "")
-            .map(o => ({ value: o.value, text: o.textContent.trim() }));
-        }, roles.faculty_selector);
-
-        console.log(`[fees5] ${facultyOptions.length} faculty options found`);
-        if (facultyOptions.length > 0) {
-          console.log(`[fees5] Faculty options: ${facultyOptions.slice(0, 5).map(f => f.text).join(", ")}${facultyOptions.length > 5 ? "..." : ""}`);
-        }
-      } catch (e) { console.warn(`[fees5] Could not read faculty options:`, e.message); }
-    }
-
-    if (facultyOptions.length === 0) {
-      console.log(`[fees5] No faculty options found — will try single default combination`);
-      facultyOptions = [{ value: null, text: "default" }];
-    }
-
-    const levelCombos = [
-      { values: roles.level_masters_values || [], label: "masters", dbLevel: "masters" },
-      { values: roles.level_doctoral_values || [], label: "doctoral", dbLevel: "doctoral" },
-    ].filter(l => l.values.length > 0);
-
-    console.log(`[fees5] Level combos: ${levelCombos.map(l => `${l.label}=${l.values[0]}`).join(", ")}`);
-    console.log(`[fees5] Faculty count: ${facultyOptions.length}, starting enumeration...`);
-
-    const feeRows = [];
-    const seen = new Set();
-
-    for (const levelCombo of levelCombos) {
-      const levelValue = levelCombo.values[0];
-
-      for (const faculty of facultyOptions) {
-        try {
-          await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
-          try { await page.waitForSelector("select", { timeout: 8000 }); } catch (e) {}
-          await new Promise(r => setTimeout(r, 1500));
-
-          if (roles.student_type_selector && roles.student_type_international_value) {
-            try { await safeSelect(page, roles.student_type_selector, roles.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
-          }
-
-          if (roles.academic_year_selector && roles.academic_year_latest_value) {
-            try { await safeSelect(page, roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
-          }
-
-          console.log(`[fees5] Combo: ${levelCombo.label} | ${faculty.text}`);
-
-          await safeSelect(page, roles.level_selector, levelValue);
-          await new Promise(r => setTimeout(r, 1200));
-
-          let disciplineOptions = [];
-          if (roles.faculty_selector && faculty.value) {
-            try {
-              await safeSelect(page, roles.faculty_selector, faculty.value);
-              await new Promise(r => setTimeout(r, 800));
-            } catch (e) { console.warn(`[fees5] Could not set faculty ${faculty.text}:`, e.message); }
-          }
-
-          if (roles.discipline_selector) {
-            try {
-              disciplineOptions = await page.evaluate((selector) => {
-                const idMatch = selector.match(/^#(.+)$/);
-                let el = null;
-                if (idMatch) el = document.getElementById(idMatch[1]);
-                if (!el) { try { el = document.querySelector(selector); } catch(e) {} }
-                if (!el) {
-                  const nameMatch = selector.match(/\[name="(.+)"\]/);
-                  if (nameMatch) el = document.querySelector(`select[name="${nameMatch[1]}"]`);
-                }
-                if (!el) return [];
-                return Array.from(el.options)
-                  .filter(o => o.value && o.value.trim() !== "")
-                  .map(o => ({ value: o.value, text: o.textContent.trim() }));
-              }, roles.discipline_selector);
-            } catch (e) {}
-          }
-
-          if (disciplineOptions.length === 0) disciplineOptions = [{ value: null, text: null }];
-
-          for (const discipline of disciplineOptions) {
-            try {
-              if (roles.discipline_selector && discipline.value) {
-                try { await safeSelect(page, roles.discipline_selector, discipline.value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
-              }
-
-              if (roles.billing_selector && roles.billing_fulltime_value) {
-                try { await safeSelect(page, roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 300)); } catch (e) {}
-              }
-
-              try {
-                const postbackResult = await page.evaluate(() => {
-                  const submitEl = document.querySelector("input[type='submit'], button[type='submit']");
-                  if (!submitEl) return false;
-                  submitEl.click();
-                  return true;
-                });
-                if (!postbackResult) {
-                  await page.evaluate(() => {
-                    const form = document.querySelector("form");
-                    if (form) form.submit();
-                  });
-                }
-                await new Promise(r => setTimeout(r, 3000));
-              } catch (e) {
-                console.warn(`[fees5] Submit failed:`, e.message);
-              }
-
-              let feePerTerm = null;
-              let rawFeeText = "";
-              let academicYear = roles.academic_year_latest_value || "2025-2026";
-
-              try {
-                await page.waitForSelector(resultSelector, { timeout: 5000 });
-                const result = await page.evaluate((sel) => {
-                  const table = document.querySelector(sel);
-                  if (!table) return null;
-                  const rows = table.querySelectorAll("tr");
-                  for (const row of rows) {
-                    const cells = row.querySelectorAll("td");
-                    if (cells.length >= 2) {
-                      return {
-                        rowText: Array.from(cells).map(c => c.textContent.trim()).join(" | "),
-                        allText: table.innerText.replace(/\s+/g, " ").trim().substring(0, 500),
-                      };
-                    }
-                  }
-                  return { rowText: "", allText: table.innerText.replace(/\s+/g, " ").trim().substring(0, 500) };
-                }, resultSelector);
-
-                if (result) {
-                  rawFeeText = result.rowText || result.allText;
-                  console.log(`[fees5] Raw result text: ${rawFeeText.substring(0, 150)}`);
-                  const feeMatch = rawFeeText.match(/(?:CA\$|C\$|\$|£|€|AUD\s*)?([\d,]+\.?\d*)/);
-                  if (feeMatch) feePerTerm = parseFloat(feeMatch[1].replace(/,/g, ""));
-                  console.log(`[fees5] Extracted fee: ${feePerTerm}`);
-                } else {
-                  console.log(`[fees5] No result element found with selector: ${resultSelector}`);
-                }
-              } catch (e) {
-                console.warn(`[fees5] Result read failed (${levelCombo.label}/${faculty.text}/${discipline.text})`);
-                continue;
-              }
-
-              if (!feePerTerm || feePerTerm < 100) continue;
-
-              const annualFee = Math.round(feePerTerm * instalmentsPerYear * 100) / 100;
-              const pattern = faculty.text === "default" ? `default_${levelCombo.dbLevel}` : toPatternKeyword(faculty.text);
-
-              const dedupKey = `${levelCombo.dbLevel}|${faculty.text}|${discipline.text}`;
-              if (seen.has(dedupKey)) continue;
-              seen.add(dedupKey);
-
-              feeRows.push({
-                university_id: universityId,
-                program_level: levelCombo.dbLevel,
-                program_type: null,
-                fee_type: "flat_annual",
-                international_fee: annualFee,
-                fee_per_instalment: feePerTerm,
-                instalments_per_year: instalmentsPerYear,
-                currency: "CAD",
-                program_name_pattern: pattern,
-                faculty_name: faculty.text === "default" ? null : faculty.text,
-                discipline_name: discipline.text || null,
-                level_of_study: levelCombo.label,
-                academic_year: academicYear,
-                notes: `Per term: ${feePerTerm} | Raw: ${rawFeeText.substring(0, 100)}`,
-                fee_page_url: feeUrl,
-              });
-
-              console.log(`[fees5] ${levelCombo.label} | ${faculty.text} | ${discipline.text || "—"}: $${feePerTerm}/term → $${annualFee}/yr`);
-
-            } catch (discErr) {
-              console.warn(`[fees5] Discipline combo error:`, discErr.message);
-            }
-          }
-
-        } catch (facErr) {
-          console.warn(`[fees5] Faculty combo error (${faculty.text}):`, facErr.message);
-        }
+      // Phase 2: Plan
+      const plan = buildIterationPlan(classified);
+      if (!plan.combinations.length) {
+        console.log('[fees5i] No combinations — static fallback');
+        await page.close(); await browser.disconnect();
+        return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
       }
+
+      // Phase 3: Execute
+      const feeRows = [];
+      const seen = new Set();
+
+      for (const combo of plan.combinations) {
+        console.log('[fees5i] → ' + combo.level.dbLevel + ' | ' + (combo.faculty?.label || 'default'));
+        const result = await runCombo(page, feeUrl, plan, combo, uniName);
+        if (!result?.fee_per_term) continue;
+
+        const key = combo.level.dbLevel + '|' + (combo.faculty?.value || 'default');
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const facLabel = combo.faculty?.label || 'default';
+        const pattern = facLabel === 'default' ? 'default_' + combo.level.dbLevel : (toPatternKeyword(facLabel) || facLabel.toLowerCase());
+        const annualFee = Math.round(result.fee_per_term * termsPerYear * 100) / 100;
+
+        feeRows.push({
+          university_id: universityId, program_level: combo.level.dbLevel, program_type: null,
+          fee_type: 'flat_annual', international_fee: annualFee, fee_per_instalment: result.fee_per_term,
+          instalments_per_year: termsPerYear, currency: result.currency || 'CAD',
+          program_name_pattern: pattern, faculty_name: facLabel === 'default' ? null : facLabel,
+          discipline_name: null, level_of_study: combo.level.dbLevel,
+          academic_year: plan.yearValue || '2025-2026',
+          notes: (result.raw_text || '').substring(0, 100), fee_page_url: feeUrl,
+        });
+        console.log('[fees5i] ✓ ' + combo.level.dbLevel + ' | ' + facLabel + ' → ' + result.fee_per_term + ' ' + (result.currency || 'CAD'));
+      }
+
+      await page.close(); await browser.disconnect();
+
+      if (!feeRows.length) {
+        console.log('[fees5i] No fees — static fallback');
+        return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
+      }
+
+      await supabase.schema('ingestion').from('university_fee_structure').delete().eq('university_id', universityId);
+      const { error } = await supabase.schema('ingestion').from('university_fee_structure').insert(feeRows);
+      if (error) { console.error('[fees5i] Insert error:', error.message); return false; }
+      console.log('[fees5i] ' + feeRows.length + ' fee rows inserted for ' + uniName);
+      return true;
+
+    } catch(err) {
+      console.error('[fees5i] Fatal:', err.message);
+      try { await page.close(); await browser.disconnect(); } catch(e) {}
+      return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
     }
-
-    await page.close();
-    await browser.disconnect();
-
-    if (feeRows.length === 0) {
-      console.log(`[fees5] No fees found via form enumeration for ${universityName} — trying static`);
-      return await extractFeesFromStaticPage(renderedHtml, universityName, universityId, feeUrl);
-    }
-
-    await supabase.schema("ingestion").from("university_fee_structure").delete().eq("university_id", universityId);
-
-    const { error } = await supabase.schema("ingestion").from("university_fee_structure")
-      .insert(feeRows);
-
-    if (error) { console.error(`[fees5] Insert error for ${universityName}:`, error.message); return false; }
-    console.log(`[fees5] Inserted ${feeRows.length} fee rows for ${universityName}`);
-    return true;
   }
 
-  async function extractFeesFromStaticPage(html, universityName, universityId, feeUrl) {
+  // Static fallback
+  async function extractFeesFromStaticPage(html, uniName, universityId, feeUrl) {
     if (!html) return false;
     const $ = cheerio.load(html);
-    $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
-    let feeText = "";
-    const mainEl = $("main, article, .content, #content, [role='main']").first();
-    const targetEl = mainEl.length ? mainEl : $("body");
-    targetEl.find("table").each(function () {
-      $(this).find("tr").each(function () {
-        const cells = [];
-        $(this).find("th, td").each(function () { cells.push($(this).text().trim()); });
-        if (cells.length) feeText += cells.join(" | ") + "\n";
-      });
-      feeText += "\n";
-    });
-    const nonTableText = targetEl.clone().find("table").remove().end().text().replace(/\s+/g, " ").trim();
-    feeText = (feeText + "\n" + nonTableText).substring(0, 8000);
-    const fees = await extractFeesFromText(feeText, universityName);
-    if (!fees || fees.length === 0) { console.log(`[fees5] Static extraction found nothing for ${universityName}`); return false; }
-    const feeRows = fees.map(f => ({
-      university_id: universityId,
-      program_level: f.program_level,
-      program_type: f.program_type || null,
-      fee_type: f.fee_type || "flat_annual",
-      international_fee: f.international_fee,
-      instalments_per_year: f.instalments_per_year || 1,
-      currency: f.currency || "CAD",
-      program_name_pattern: f.program_name_pattern || `default_${f.program_level}`,
-      notes: f.notes || null,
-      fee_page_url: feeUrl,
-    }));
-    const { error } = await supabase.schema("ingestion").from("university_fee_structure")
-      .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern,program_type" });
-    if (error) { console.error(`[fees5] Static insert error:`, error.message); return false; }
-    console.log(`[fees5] Static extraction: ${feeRows.length} fee rows for ${universityName}`);
+    $('script,style,nav,footer,header,aside,.menu,.sidebar').remove();
+    let feeText = '';
+    const el = $('main,article,.content,#content,[role=main]').first().length ? $('main,article,.content,#content,[role=main]').first() : $('body');
+    el.find('table').each(function() { $(this).find('tr').each(function() { const c=[]; $(this).find('td,th').each(function(){ c.push($(this).text().trim()); }); feeText += c.join(' | ') + '\n'; }); });
+    feeText = (feeText + '\n' + el.clone().find('table').remove().end().text().replace(/\s+/g, ' ').trim()).substring(0, 6000);
+    const fees = await extractFeesFromText(feeText, uniName);
+    if (!fees?.length) { console.log('[fees5i] Static: nothing found for ' + uniName); return false; }
+    const rows = fees.map(f => ({ university_id: universityId, program_level: f.program_level, program_type: f.program_type || null, fee_type: f.fee_type || 'flat_annual', international_fee: f.international_fee, fee_per_instalment: f.international_fee / (f.instalments_per_year || 3), instalments_per_year: f.instalments_per_year || 3, currency: f.currency || 'CAD', program_name_pattern: f.program_name_pattern || 'default_' + f.program_level, notes: f.notes || null, fee_page_url: feeUrl }));
+    const { error } = await supabase.schema('ingestion').from('university_fee_structure').upsert(rows, { onConflict: 'university_id,program_level,program_name_pattern,program_type' });
+    if (error) { console.error('[fees5i] Static insert error:', error.message); return false; }
+    console.log('[fees5i] Static: ' + rows.length + ' rows for ' + uniName);
     return true;
   }
 
+  
 async function extractFeesFromText(feeText, universityName) {
   const prompt = `
 You are extracting university fee structures from a tuition page.
