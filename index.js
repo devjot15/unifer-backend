@@ -2968,6 +2968,12 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
 
     for (const p of programs) {
       try {
+        if (!p.duration_years) {
+          const name = p.program_name.toLowerCase();
+          if (name.includes('certificate') || name.includes('diploma') || name.includes('grad. cert')) {
+            p.duration_years = 1;
+          }
+        }
         let finalTuitionUSD = p.tuition_usd ? Math.round(p.tuition_usd) : null;
 
         if (!finalTuitionUSD) {
