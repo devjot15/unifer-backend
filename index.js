@@ -857,7 +857,8 @@ FIELDS TO EXTRACT:
   CORRECT: "Aerospace Engineering (MEng)", "Computer Science (MCompSc)", "Business Administration (MBA)"
   WRONG:   "Aerospace MEng", "Computer Science Masters", "Aerospace Engineering Master"
   Never shorten, abbreviate, or rearrange the subject area name.
-- degree_level: Must be exactly "UG" or "PG". Masters, PhD, Graduate Certificate, MBA = PG. Bachelor = UG.
+- degree_level: Must be exactly "UG" or "PG". Masters, PhD, Graduate Certificate, Graduate Diploma, MBA = PG. Bachelor = UG.
+  IMPORTANT: If this page is from a graduate studies or graduate programs section of a university website, ALL programs should be PG. Never classify a program as UG if the page context is clearly about graduate-level offerings.
 
 PROGRAM TYPE:
 - program_type: Must be exactly one of:
@@ -2123,7 +2124,13 @@ async function runWorker() {
 
     // ---- STEP 4: SCRAPE FEE STRUCTURE ----
     await updateJobStatus(job.id, "fee_scraping");
-    await scrapeFeeStructure(job.university_id);
+    const feeResult = await scrapeFeeStructure(job.university_id);
+    if (!feeResult) {
+      console.warn(`[worker] Fee scraping FAILED for ${job.university_id} — manual fee insertion needed`);
+      await supabase.schema("ingestion").from("university_jobs")
+        .update({ error_message: "Fee scraping failed — insert fees manually into university_fee_structure" })
+        .eq("id", job.id);
+    }
 
     // ---- STEP 5: AUTO-FIX field_category nulls ----
     await updateJobStatus(job.id, "fixing");
@@ -2498,6 +2505,50 @@ async function autoFixFieldCategories(universityId) {
 
   console.log(`[fix] Deleted junk program names for ${universityId}`);
 
+  const { data: allPrograms } = await supabase
+    .schema("ingestion")
+    .from("parsed_programs")
+    .select("id, program_name")
+    .eq("university_id", universityId)
+    .eq("validation_status", "pending");
+
+  const FRENCH_SIGNALS = [
+    'maîtrise', 'génie', 'chimie', 'biologie', 'traduction',
+    'thérapie', 'thérapies', 'études', 'analyse', 'sciences économiques',
+    'microprogramme', 'andragogie', 'musicothérapie', 'géographie',
+    'analytique', 'anthropologie', 'administration des affaires',
+    'technologies de', 'gestion et', 'informatique', 'histoire de l',
+    'arts plastiques', 'arts cinéma', 'génie de', 'génie environ',
+    'génie indus', 'génie logiciel', 'génie électrique', 'sociologie',
+    'philosophie', 'économique', 'évaluation', 'religions et', 'lettres',
+    'certificat', 'dipl. 2e c.', 'cert. 2e c.', '2e cycle', 'doctorat',
+    'linguistique', 'traductologie', 'didactique', 'enseignement',
+  ];
+
+  function isFrenchProgram(name) {
+    const lower = name.toLowerCase();
+    if (FRENCH_SIGNALS.some(s => lower.includes(s))) return true;
+    if (/[éèêëàâùûüôîïç]/.test(name)) {
+      const frenchStartWords = ['maî', 'géo', 'géni', 'chim', 'biol', 'trad',
+        'thér', 'étud', 'anal', 'soci', 'phil', 'écon', 'éval', 'ling'];
+      if (frenchStartWords.some(w => lower.startsWith(w))) return true;
+      if (/\b(des|les|une|aux|par|sur|pour|dans|avec|sans)\b/.test(lower)) return true;
+    }
+    return false;
+  }
+
+  const frenchIds = (allPrograms || [])
+    .filter(p => isFrenchProgram(p.program_name))
+    .map(p => p.id);
+
+  if (frenchIds.length > 0) {
+    await supabase.schema("ingestion").from("parsed_programs")
+      .delete()
+      .eq("university_id", universityId)
+      .in("id", frenchIds);
+    console.log(`[fix] Deleted ${frenchIds.length} French language programs for ${universityId}`);
+  }
+
   await supabase.schema("ingestion").from("parsed_programs")
     .update({ duration_years: 1 })
     .eq("university_id", universityId)
@@ -2553,6 +2604,65 @@ async function autoFixFieldCategories(universityId) {
       console.log(`[fix] Could not assign category for: "${p.program_name}"`);
     }
   }
+
+  const { data: stillNull } = await supabase
+    .schema("ingestion")
+    .from("parsed_programs")
+    .select("id, program_name")
+    .eq("university_id", universityId)
+    .is("field_category", null)
+    .eq("validation_status", "pending");
+
+  if (stillNull && stillNull.length > 0) {
+    console.log(`[fix] ${stillNull.length} programs still need GPT field category resolution`);
+    const names = stillNull.map(p => p.program_name).join('\n');
+    const categoryPrompt = `
+You are classifying university program names into field categories.
+Return STRICT JSON array only. One object per program in the same order as input.
+Each object: { "program_name": "...", "field_category": "..." }
+
+Field categories (use EXACTLY one of these):
+- engineering & tech
+- business, management and economics
+- science & applied science
+- medicine, health and life science
+- social science & humanities
+- arts, design & creative studies
+- law, public policy & governance
+- hospitality, tourism & service industry
+- education & teaching
+- agriculture, sustainability & environmental studies
+
+Programs to classify:
+${names}
+`;
+    try {
+      const completion = await Promise.race([
+        openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: categoryPrompt }],
+          temperature: 0,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
+      ]);
+      const result = JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
+      if (!Array.isArray(result)) throw new Error("GPT returned non-array");
+      for (let i = 0; i < Math.min(result.length, stillNull.length); i++) {
+        const item = result[i];
+        const target = stillNull[i];
+        if (item.field_category && VALID_FIELD_CATEGORIES.includes(item.field_category)) {
+          await supabase.schema("ingestion").from("parsed_programs")
+            .update({ field_category: item.field_category })
+            .eq("id", target.id);
+          fixed++;
+          console.log(`[fix-gpt] "${target.program_name}" → "${item.field_category}"`);
+        }
+      }
+    } catch (err) {
+      console.error(`[fix-gpt] GPT field category fallback failed:`, err.message);
+    }
+  }
+
   return fixed;
 }
 
