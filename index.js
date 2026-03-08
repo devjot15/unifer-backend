@@ -2833,6 +2833,30 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
     return lower.split(" ")[0];
   }
 
+  async function safeSelect(page, selector, value) {
+    try {
+      await page.select(selector, value);
+      return;
+    } catch (e) {
+      const result = await page.evaluate((sel, val) => {
+        const idMatch = sel.match(/^#(.+)$/);
+        let el = null;
+        if (idMatch) el = document.getElementById(idMatch[1]);
+        if (!el) { try { el = document.querySelector(sel); } catch(e2) {} }
+        if (!el) {
+          const nameMatch = sel.match(/\[name="(.+)"\]/);
+          if (nameMatch) el = document.querySelector(`select[name="${nameMatch[1]}"]`);
+        }
+        if (!el) return false;
+        el.value = val;
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+      }, selector, value);
+      if (!result) throw new Error(`safeSelect: could not find element for selector: ${selector}`);
+    }
+  }
+
   async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) {
     const { data: uni } = await supabase.schema("core").from("universities").select("name, terms_per_year").eq("id", universityId).single();
     const universityName = uni?.name || universityId;
@@ -2907,7 +2931,12 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
             .filter(o => o.value && o.value.trim() !== "")
             .map(o => ({ value: o.value, text: o.textContent.trim() }));
 
-          return { id: sel.id || "", name: sel.name || "", index: i, label, selector: sel.id ? `#${sel.id}` : (sel.name ? `[name="${sel.name}"]` : `select:nth-of-type(${i+1})`), options };
+          const rawId = sel.id || "";
+          const rawName = sel.name || "";
+          const safeId = rawId.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
+          const safeName = rawName.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
+          const selector = rawId ? `#${safeId}` : rawName ? `select[name="${safeName}"]` : `select:nth-of-type(${i+1})`;
+          return { id: rawId, name: rawName, index: i, label, selector, options };
         });
       });
 
@@ -2939,7 +2968,12 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
                 const options = Array.from(sel.options)
                   .filter(o => o.value && o.value.trim() !== "")
                   .map(o => ({ value: o.value, text: o.textContent.trim() }));
-                return { id: sel.id || "", name: sel.name || "", index: i, label, selector: sel.id ? `#${sel.id}` : (sel.name ? `[name="${sel.name}"]` : `select:nth-of-type(${i+1})`), options };
+                const rawId = sel.id || "";
+                const rawName = sel.name || "";
+                const safeId = rawId.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
+                const safeName = rawName.replace(/([\$\[\]\(\)\{\}\^\*\+\?\|\\\.#])/g, "\\$1");
+                const selector = rawId ? `#${safeId}` : rawName ? `select[name="${safeName}"]` : `select:nth-of-type(${i+1})`;
+                return { id: rawId, name: rawName, index: i, label, selector, options };
               });
             });
             if (frameSelects.length > 0) {
@@ -2998,26 +3032,37 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
 
     if (roles.student_type_selector && roles.student_type_international_value) {
       try {
-        await page.select(roles.student_type_selector, roles.student_type_international_value);
+        await safeSelect(page, roles.student_type_selector, roles.student_type_international_value);
         await new Promise(r => setTimeout(r, 500));
         console.log(`[fees5] Set student type to international`);
       } catch (e) { console.warn(`[fees5] Could not set student type:`, e.message); }
     }
 
     if (roles.academic_year_selector && roles.academic_year_latest_value) {
-      try { await page.select(roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+      try { await safeSelect(page, roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
     }
 
     if (roles.billing_selector && roles.billing_fulltime_value) {
-      try { await page.select(roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+      try { await safeSelect(page, roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
     }
 
     let facultyOptions = [];
     if (roles.faculty_selector) {
       try {
-        facultyOptions = await page.$$eval(`${roles.faculty_selector} option`, opts =>
-          opts.filter(o => o.value && o.value.trim() !== "").map(o => ({ value: o.value, text: o.textContent.trim() }))
-        );
+        facultyOptions = await page.evaluate((selector) => {
+          const idMatch = selector.match(/^#(.+)$/);
+          let el = null;
+          if (idMatch) el = document.getElementById(idMatch[1]);
+          if (!el) { try { el = document.querySelector(selector); } catch(e) {} }
+          if (!el) {
+            const nameMatch = selector.match(/\[name="(.+)"\]/);
+            if (nameMatch) el = document.querySelector(`select[name="${nameMatch[1]}"]`);
+          }
+          if (!el) return [];
+          return Array.from(el.options)
+            .filter(o => o.value && o.value.trim() !== "")
+            .map(o => ({ value: o.value, text: o.textContent.trim() }));
+        }, roles.faculty_selector);
         console.log(`[fees5] ${facultyOptions.length} faculty options found`);
       } catch (e) { console.warn(`[fees5] Could not read faculty options:`, e.message); }
     }
@@ -3042,29 +3087,40 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
           await new Promise(r => setTimeout(r, 1500));
 
           if (roles.student_type_selector && roles.student_type_international_value) {
-            try { await page.select(roles.student_type_selector, roles.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+            try { await safeSelect(page, roles.student_type_selector, roles.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
           }
 
           if (roles.academic_year_selector && roles.academic_year_latest_value) {
-            try { await page.select(roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+            try { await safeSelect(page, roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
           }
 
-          await page.select(roles.level_selector, levelValue);
+          await safeSelect(page, roles.level_selector, levelValue);
           await new Promise(r => setTimeout(r, 800));
 
           let disciplineOptions = [];
           if (roles.faculty_selector && faculty.value) {
             try {
-              await page.select(roles.faculty_selector, faculty.value);
+              await safeSelect(page, roles.faculty_selector, faculty.value);
               await new Promise(r => setTimeout(r, 800));
             } catch (e) { console.warn(`[fees5] Could not set faculty ${faculty.text}:`, e.message); }
           }
 
           if (roles.discipline_selector) {
             try {
-              disciplineOptions = await page.$$eval(`${roles.discipline_selector} option`, opts =>
-                opts.filter(o => o.value && o.value.trim() !== "").map(o => ({ value: o.value, text: o.textContent.trim() }))
-              );
+              disciplineOptions = await page.evaluate((selector) => {
+                const idMatch = selector.match(/^#(.+)$/);
+                let el = null;
+                if (idMatch) el = document.getElementById(idMatch[1]);
+                if (!el) { try { el = document.querySelector(selector); } catch(e) {} }
+                if (!el) {
+                  const nameMatch = selector.match(/\[name="(.+)"\]/);
+                  if (nameMatch) el = document.querySelector(`select[name="${nameMatch[1]}"]`);
+                }
+                if (!el) return [];
+                return Array.from(el.options)
+                  .filter(o => o.value && o.value.trim() !== "")
+                  .map(o => ({ value: o.value, text: o.textContent.trim() }));
+              }, roles.discipline_selector);
             } catch (e) {}
           }
 
@@ -3073,11 +3129,11 @@ async function identifyDropdownRoles(selectsInfo, universityName) {
           for (const discipline of disciplineOptions) {
             try {
               if (roles.discipline_selector && discipline.value) {
-                try { await page.select(roles.discipline_selector, discipline.value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+                try { await safeSelect(page, roles.discipline_selector, discipline.value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
               }
 
               if (roles.billing_selector && roles.billing_fulltime_value) {
-                try { await page.select(roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 300)); } catch (e) {}
+                try { await safeSelect(page, roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 300)); } catch (e) {}
               }
 
               if (submitSelector) {
