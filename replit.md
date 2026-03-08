@@ -94,11 +94,14 @@ Preferred communication style: Simple, everyday language.
   - GPT fallback for unresolved `field_category` nulls — after keyword matching, remaining nulls sent to GPT for classification (index-based matching)
   - Fee scraping failure alerting — sets `error_message` on job when fee scraping fails
   - UG mis-classification guard — GPT prompt explicitly warns graduate school pages → PG only
-  - **Intelligent fee scraper** (`scrapeFeeStructureIntelligent`): cascade-aware, DOM-first approach:
-    - Cascade order: Year → Level → Faculty → Discipline → Submit (fresh page load per level for clean state)
-    - Dropdown classification via pure keyword matching (`classifyDropdownRole`) — no GPT Vision, no screenshots for classification
-    - Fee reading: `readFeeFromDOM` reads dollar amounts from DOM tables first; GPT-4o-mini text fallback only if DOM finds nothing
-    - Helpers: `safeSelect` (.NET WebForms compatible), `readOptions` (live DOM option reader), `submitAndWait`, `readFeeFromDOM`, `classifyDropdownRole`, `levelMeaning`, `toPatternKeyword`
+  - **Intelligent fee scraper** (`scrapeFeeStructureIntelligent`): fully cascade-aware, DOM-first approach:
+    - Cascade order: Year → Level → Faculty → Discipline → Course Load → fee auto-appears (DNN UpdatePanel)
+    - Key primitive: `waitForOptions(page, id, min)` — polls until dropdown has >= min real options (no fixed timeouts)
+    - Key primitive: `waitForFee(page)` — polls until a $X amount appears on the page
+    - Dropdown classification via pure keyword matching (`classifyRole`) — no GPT Vision, no screenshots
+    - Fee reading: `readFeeFromDOM` reads dollar amounts from DOM table cells first, then result containers, then full body
+    - Course load read LIVE after discipline selected (cascading)
+    - Helpers: `safeSelect`, `readOptions`, `waitForOptions`, `waitForFee`, `readFeeFromDOM`, `classifyRole`, `pgLevel`, `toPatternKeyword`
     - Falls back to `extractFeesFromStaticPage` if no dropdowns found, no level dropdown, or no fees extracted
   - New endpoint: `POST /worker/scrape-fees-intelligent/:university_id` (optional body: `{ fee_url: "..." }`)
   - Worker step 4 uses `scrapeFeeStructureIntelligent` instead of `scrapeFeeStructure`
