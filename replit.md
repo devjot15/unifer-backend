@@ -94,8 +94,9 @@ Preferred communication style: Simple, everyday language.
   - GPT fallback for unresolved `field_category` nulls — after keyword matching, remaining nulls sent to GPT for classification (index-based matching)
   - Fee scraping failure alerting — sets `error_message` on job when fee scraping fails
   - UG mis-classification guard — GPT prompt explicitly warns graduate school pages → PG only
-  - **Intelligent fee scraper** (`scrapeFeeStructureIntelligent`): analyses fee pages for form-based calculators, uses GPT to build form-filling plans, Puppeteer executes combinations, falls back to static text extraction
-  - New helpers: `analyseFeePage`, `buildFormFillingPlan`, `executeFormPlan`, `parseFormResults`, `extractFeesFromText`, `findFeePageUrl`, `getBaseUrlsForUniversity`
+  - **Intelligent fee scraper** (`scrapeFeeStructureIntelligent`): fully Puppeteer-driven — fetches fee page with Puppeteer (JS renders fully), GPT identifies dropdown roles (level, faculty, discipline, student type, billing, academic year), Puppeteer enumerates ALL options live and cycles every level × faculty × discipline combination, reads first data row only (Year 1 fee), stores faculty_name/discipline_name/fee_per_instalment/academic_year/level_of_study per row
+  - New helpers: `identifyDropdownRoles`, `toPatternKeyword`, `extractFeesFromStaticPage`, `extractFeesFromText`, `findFeePageUrl`, `getBaseUrlsForUniversity`
+  - Falls back to `extractFeesFromStaticPage` if no dropdowns found or form enumeration yields nothing
   - Refactored `scrapeFeeStructure` to use shared `extractFeesFromText` helper
   - New endpoint: `POST /worker/scrape-fees-intelligent/:university_id` (optional body: `{ fee_url: "..." }`)
   - Worker step 4 now uses `scrapeFeeStructureIntelligent` instead of `scrapeFeeStructure`

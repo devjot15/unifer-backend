@@ -2768,197 +2768,221 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
   return null;
 }
 
-async function analyseFeePage(html, url) {
-  const $ = cheerio.load(html);
-  const hasForms = $("form, select, input[type='radio'], input[type='submit']").length > 0;
-  const hasTable = $("table").length > 0;
-  const hasDropdowns = $("select").length > 0;
+async function identifyDropdownRoles(selectsInfo, universityName) {
+    const prompt = `
+  University: ${universityName}
+  The following select dropdowns were found on a university fee calculator page.
+  Each has an id/name, a label, and its available options.
 
-  const formElements = [];
-  $("select").each(function () {
-    const id = $(this).attr("id") || $(this).attr("name") || "";
-    const label = $(`label[for='${id}']`).text().trim() || id;
-    const options = [];
-    $(this).find("option").each(function () {
-      const val = $(this).attr("value") || "";
-      const text = $(this).text().trim();
-      if (val && text) options.push({ value: val, text });
-    });
-    if (options.length > 0) formElements.push({ type: "select", id, label, options });
-  });
+  ${JSON.stringify(selectsInfo, null, 2)}
 
-  $("input[type='radio']").each(function () {
-    const name = $(this).attr("name") || "";
-    const val = $(this).attr("value") || "";
-    const label = $(`label[for='${$(this).attr("id")}']`).text().trim() || val;
-    formElements.push({ type: "radio", name, value: val, label });
-  });
+  Return STRICT JSON only (no markdown):
+  {
+    "level_selector": "exact id or name of the level of study dropdown",
+    "level_masters_values": ["exact option values that mean masters or graduate diploma"],
+    "level_doctoral_values": ["exact option values that mean PhD or doctoral"],
+    "faculty_selector": "exact id or name of faculty/school dropdown, or null",
+    "discipline_selector": "exact id or name of discipline/program dropdown, or null",
+    "student_type_selector": "exact id or name of domestic/international dropdown, or null",
+    "student_type_international_value": "exact option value for international students, or null",
+    "billing_selector": "exact id or name of course load/billing method dropdown, or null",
+    "billing_fulltime_value": "exact option value for full time flat rate, or null",
+    "academic_year_selector": "exact id or name of academic year dropdown, or null",
+    "academic_year_latest_value": "exact option value for the most recent year, or null",
+    "cascading_faculty_discipline": true or false
+  }
 
-  return { hasForms, hasTable, hasDropdowns, formElements, isFormBased: formElements.length > 0 };
-}
+  RULES:
+  - Use the EXACT id/name values from the JSON above
+  - If a dropdown doesn't exist, use null
+  - Only include option values that clearly match the description — skip blank/placeholder options
+  - level_masters_values and level_doctoral_values should each have 1-3 values max
+  `;
 
-async function buildFormFillingPlan(html, url, universityName) {
-  const $ = cheerio.load(html);
-  $("script, style, nav, footer, header, aside").remove();
-
-  let formHtml = "";
-  $("form, select, input, label, button[type='submit'], input[type='submit']").each(function () {
-    formHtml += $.html(this) + "\n";
-  });
-  $("table").each(function () {
-    formHtml += $.html(this).substring(0, 2000) + "\n";
-  });
-  formHtml = formHtml.substring(0, 6000);
-
-  const prompt = `
-You are helping scrape international graduate tuition fees from a university fee calculator page.
-University: ${universityName}
-URL: ${url}
-
-Here is the relevant HTML from the fee page (forms, selects, inputs, tables):
-${formHtml}
-
-Your task: Return a JSON plan describing exactly how to use this form to extract international graduate fees.
-
-Return STRICT JSON only (no markdown, no explanation) with this structure:
-{
-  "page_type": "form_calculator" | "static_table" | "mixed",
-  "submit_selector": "CSS selector for the submit button or null if auto-submits",
-  "result_selector": "CSS selector where the fee result appears after submission",
-  "combinations": [
-    {
-      "label": "International Masters Research",
-      "fields": [
-        { "selector": "CSS selector", "type": "select|radio|checkbox", "value": "exact option value to select" }
-      ]
+    try {
+      const completion = await Promise.race([
+        openai.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0 }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
+      ]);
+      return JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
+    } catch (err) {
+      console.error("[fees5] GPT dropdown identification failed:", err.message);
+      return null;
     }
-  ]
-}
-
-RULES:
-- Include combinations for: international + masters (research), international + masters (professional), international + doctoral
-- If the form has a "faculty" or "program" field, include the most common/default option (e.g. "Arts" or "General")
-- If the page is a static table (no form), set page_type to "static_table" and combinations to []
-- If you cannot determine the form structure, return { "page_type": "unknown", "combinations": [] }
-- selector values must be valid CSS selectors (use #id, [name='x'], or select:nth-of-type(n))
-`;
-
-  try {
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0,
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 45000)),
-    ]);
-    const content = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
-    return JSON.parse(content);
-  } catch (err) {
-    console.error("[fees-intelligent] GPT form plan failed:", err.message);
-    return { page_type: "unknown", combinations: [] };
   }
-}
 
-async function identifyFormSelectors(html, universityName) {
-  const $ = cheerio.load(html);
-  const selects = [];
-  $("select").each(function(i) {
-    const id = $(this).attr("id") || $(this).attr("name") || `select_${i}`;
-    const labelEl = $(`label[for='${$(this).attr("id") || ""}']`).text().trim()
-      || $(this).closest("div, p, tr").find("label, th, td").first().text().trim()
-      || id;
-    const options = [];
-    $(this).find("option").each(function() {
-      const val = $(this).attr("value");
-      const text = $(this).text().trim();
-      if (val !== undefined && val !== "" && text) options.push({ value: val, text });
+  function toPatternKeyword(label) {
+    if (!label) return null;
+    const lower = label.toLowerCase()
+      .replace(/faculty of |school of |telfer |department of |faculty |college of /gi, "")
+      .replace(/[^a-z0-9 ]/g, "")
+      .trim();
+    const mappings = {
+      "arts": "arts", "science": "science", "engineering": "engineering",
+      "management": "management", "law": "law", "medicine": "medicine",
+      "health": "health", "education": "education", "social sciences": "social",
+      "social science": "social", "computer science": "computer science",
+      "information": "information", "environment": "environment",
+      "architecture": "architecture", "pharmacy": "pharmacy",
+      "nursing": "nursing", "business": "business", "economics": "economics",
+      "psychology": "psychology",
+    };
+    for (const [key, val] of Object.entries(mappings)) {
+      if (lower.includes(key)) return val;
+    }
+    return lower.split(" ")[0];
+  }
+
+  async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) {
+    const { data: uni } = await supabase.schema("core").from("universities").select("name, terms_per_year").eq("id", universityId).single();
+    const universityName = uni?.name || universityId;
+    const instalmentsPerYear = uni?.terms_per_year || 3;
+
+    let feeUrl = manualFeeUrl;
+    if (!feeUrl) {
+      const { data: sampleUrl } = await supabase.schema("ingestion").from("scrape_queue").select("program_url").eq("university_id", universityId).limit(1).single();
+      if (!sampleUrl) { console.log(`[fees5] No URLs found for ${universityName}`); return false; }
+      const parsedUrl = new URL(sampleUrl.program_url);
+      const baseUrl = parsedUrl.origin;
+      const hostParts = parsedUrl.hostname.split(".");
+      const rootDomain = hostParts.length > 2 ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}` : baseUrl;
+      for (const base of [...new Set([baseUrl, rootDomain])]) {
+        for (const pattern of FEE_PAGE_PATTERNS) {
+          const testUrl = base + pattern;
+          try {
+            const res = await axios.get(testUrl, { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 15000, validateStatus: (s) => s < 404 });
+            if (res.status === 200 && res.data.length > 3000 && ["tuition","fee","international"].some(k => res.data.toLowerCase().includes(k))) {
+              feeUrl = testUrl; break;
+            }
+          } catch (e) { continue; }
+        }
+        if (feeUrl) break;
+      }
+    }
+
+    if (!feeUrl) { console.log(`[fees5] Could not find fee page for ${universityName}`); return false; }
+    console.log(`[fees5] Fee URL: ${feeUrl}`);
+
+    console.log(`[fees5] Fetching fee page with Puppeteer for ${universityName}...`);
+    const browser = await puppeteer.connect({ browserWSEndpoint });
+    const page = await browser.newPage();
+    let renderedHtml = null;
+    let selectsInfo = [];
+
+    try {
+      await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 45000 });
+      await new Promise(r => setTimeout(r, 2000));
+
+      selectsInfo = await page.evaluate(() => {
+        const selects = document.querySelectorAll("select");
+        return Array.from(selects).map((sel, i) => {
+          const id = sel.id || sel.name || `select_${i}`;
+          let label = "";
+          if (sel.id) {
+            const labelEl = document.querySelector(`label[for="${sel.id}"]`);
+            if (labelEl) label = labelEl.textContent.trim();
+          }
+          if (!label) {
+            const parent = sel.closest("div, p, td, li, fieldset");
+            if (parent) {
+              const labelEl = parent.querySelector("label, th, legend");
+              if (labelEl) label = labelEl.textContent.trim();
+            }
+          }
+          if (!label) label = id;
+
+          const options = Array.from(sel.options)
+            .filter(o => o.value && o.value.trim() !== "")
+            .map(o => ({ value: o.value, text: o.textContent.trim() }));
+
+          return { id: sel.id || "", name: sel.name || "", index: i, label, selector: sel.id ? `#${sel.id}` : (sel.name ? `[name="${sel.name}"]` : `select:nth-of-type(${i+1})`), options };
+        });
+      });
+
+      renderedHtml = await page.content();
+      console.log(`[fees5] Found ${selectsInfo.length} dropdowns for ${universityName}`);
+
+    } catch (err) {
+      console.error(`[fees5] Puppeteer fetch failed for ${universityName}:`, err.message);
+      await page.close();
+      await browser.disconnect();
+      const staticHtml = await fetchWithPuppeteer(feeUrl).catch(() => null);
+      if (!staticHtml) { console.log(`[fees5] No HTML for ${universityName}`); return false; }
+      return await extractFeesFromStaticPage(staticHtml, universityName, universityId, feeUrl);
+    }
+
+    if (selectsInfo.length === 0) {
+      console.log(`[fees5] No dropdowns found — using static extraction for ${universityName}`);
+      await page.close();
+      await browser.disconnect();
+      return await extractFeesFromStaticPage(renderedHtml, universityName, universityId, feeUrl);
+    }
+
+    console.log(`[fees5] Identifying dropdown roles for ${universityName}...`);
+    const roles = await identifyDropdownRoles(selectsInfo, universityName);
+
+    if (!roles || !roles.level_selector) {
+      console.log(`[fees5] Could not identify level dropdown for ${universityName} — falling back to static`);
+      await page.close();
+      await browser.disconnect();
+      return await extractFeesFromStaticPage(renderedHtml, universityName, universityId, feeUrl);
+    }
+
+    console.log(`[fees5] Roles identified: level=${roles.level_selector}, faculty=${roles.faculty_selector}, discipline=${roles.discipline_selector}`);
+
+    const resultSelector = await page.evaluate(() => {
+      if (document.querySelector(".views-table")) return ".views-table";
+      if (document.querySelector(".fee-results")) return ".fee-results";
+      if (document.querySelector("#fee-result")) return "#fee-result";
+      if (document.querySelector("table")) return "table";
+      return "table";
     });
-    selects.push({ selector: id.startsWith("select_") ? `select:nth-of-type(${i+1})` : `#${id}`, label: labelEl, options });
-  });
 
-  let submitSelector = null;
-  const submitCandidates = ["input[type='submit']", "button[type='submit']", "button.btn-primary"];
-  for (const s of submitCandidates) {
-    if ($(s).length) { submitSelector = s; break; }
-  }
+    const submitSelector = await page.evaluate(() => {
+      const candidates = ["input[type='submit']", "button[type='submit']", ".form-submit", "button.btn", "input.btn"];
+      for (const s of candidates) {
+        if (document.querySelector(s)) return s;
+      }
+      return null;
+    });
 
-  let resultSelector = "table";
-  if ($(".views-table").length) resultSelector = ".views-table";
-  else if ($("#fee-results").length) resultSelector = "#fee-results";
-
-  const prompt = `
-University: ${universityName}
-You are identifying form fields on a university tuition fee calculator page.
-
-Here are the select dropdowns found on the page:
-${JSON.stringify(selects, null, 2)}
-
-Return STRICT JSON only:
-{
-  "level_selector": "CSS selector for the 'level of study' dropdown",
-  "level_masters_values": ["array of option values that mean masters/graduate diploma"],
-  "level_doctoral_values": ["array of option values that mean PhD/doctoral"],
-  "faculty_selector": "CSS selector for faculty/school dropdown, or null if not present",
-  "discipline_selector": "CSS selector for discipline/program dropdown, or null",
-  "student_type_selector": "CSS selector for domestic/international selector, or null",
-  "student_type_international_value": "option value for international students, or null",
-  "submit_selector": "${submitSelector || "input[type='submit']"}",
-  "result_selector": "${resultSelector}",
-  "cascading": true or false (true if changing faculty updates discipline options)
-}
-
-RULES:
-- Use the exact CSS selectors from the selects array above
-- If no faculty dropdown exists, set faculty_selector to null
-- Only include values that clearly mean masters/doctoral — skip blank/placeholder options
-`;
-
-  try {
-    const completion = await Promise.race([
-      openai.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: prompt }], temperature: 0 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
-    ]);
-    return JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
-  } catch (err) {
-    console.error("[fees-enum] GPT selector identification failed:", err.message);
-    return null;
-  }
-}
-
-async function executeFullEnumeration(feeUrl, selectors, universityName) {
-  const browser = await puppeteer.connect({ browserWSEndpoint });
-  const page = await browser.newPage();
-  const results = [];
-
-  try {
-    await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
-    await new Promise(r => setTimeout(r, 2000));
-
-    if (selectors.student_type_selector && selectors.student_type_international_value) {
+    if (roles.student_type_selector && roles.student_type_international_value) {
       try {
-        await page.select(selectors.student_type_selector, selectors.student_type_international_value);
+        await page.select(roles.student_type_selector, roles.student_type_international_value);
         await new Promise(r => setTimeout(r, 500));
-      } catch (e) { console.warn("[fees-enum] Could not set student type:", e.message); }
+        console.log(`[fees5] Set student type to international`);
+      } catch (e) { console.warn(`[fees5] Could not set student type:`, e.message); }
     }
 
-    let facultyOptions = [{ value: null, text: "default" }];
-    if (selectors.faculty_selector) {
-      try {
-        facultyOptions = await page.$$eval(`${selectors.faculty_selector} option`, opts =>
-          opts.filter(o => o.value && o.value !== "").map(o => ({ value: o.value, text: o.textContent.trim() }))
-        );
-        console.log(`[fees-enum] Found ${facultyOptions.length} faculties for ${universityName}`);
-      } catch (e) { console.warn("[fees-enum] Could not read faculty options:", e.message); }
+    if (roles.academic_year_selector && roles.academic_year_latest_value) {
+      try { await page.select(roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
     }
+
+    if (roles.billing_selector && roles.billing_fulltime_value) {
+      try { await page.select(roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+    }
+
+    let facultyOptions = [];
+    if (roles.faculty_selector) {
+      try {
+        facultyOptions = await page.$$eval(`${roles.faculty_selector} option`, opts =>
+          opts.filter(o => o.value && o.value.trim() !== "").map(o => ({ value: o.value, text: o.textContent.trim() }))
+        );
+        console.log(`[fees5] ${facultyOptions.length} faculty options found`);
+      } catch (e) { console.warn(`[fees5] Could not read faculty options:`, e.message); }
+    }
+
+    if (facultyOptions.length === 0) facultyOptions = [{ value: null, text: "default" }];
 
     const levelCombos = [
-      { values: selectors.level_masters_values || [], label: "masters" },
-      { values: selectors.level_doctoral_values || [], label: "doctoral" },
-    ];
+      { values: roles.level_masters_values || [], label: "masters", dbLevel: "masters" },
+      { values: roles.level_doctoral_values || [], label: "doctoral", dbLevel: "doctoral" },
+    ].filter(l => l.values.length > 0);
+
+    const feeRows = [];
+    const seen = new Set();
 
     for (const levelCombo of levelCombos) {
-      if (!levelCombo.values.length) continue;
       const levelValue = levelCombo.values[0];
 
       for (const faculty of facultyOptions) {
@@ -2966,329 +2990,145 @@ async function executeFullEnumeration(feeUrl, selectors, universityName) {
           await page.goto(feeUrl, { waitUntil: "networkidle2", timeout: 30000 });
           await new Promise(r => setTimeout(r, 1000));
 
-          if (selectors.student_type_selector && selectors.student_type_international_value) {
-            try { await page.select(selectors.student_type_selector, selectors.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+          if (roles.student_type_selector && roles.student_type_international_value) {
+            try { await page.select(roles.student_type_selector, roles.student_type_international_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
           }
 
-          await page.select(selectors.level_selector, levelValue);
+          if (roles.academic_year_selector && roles.academic_year_latest_value) {
+            try { await page.select(roles.academic_year_selector, roles.academic_year_latest_value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
+          }
+
+          await page.select(roles.level_selector, levelValue);
           await new Promise(r => setTimeout(r, 800));
 
-          if (selectors.faculty_selector && faculty.value) {
+          let disciplineOptions = [];
+          if (roles.faculty_selector && faculty.value) {
             try {
-              await page.select(selectors.faculty_selector, faculty.value);
+              await page.select(roles.faculty_selector, faculty.value);
               await new Promise(r => setTimeout(r, 800));
-            } catch (e) { continue; }
+            } catch (e) { console.warn(`[fees5] Could not set faculty ${faculty.text}:`, e.message); }
           }
 
-          const billingSelectors = ["select[name*='billing']", "select[name*='load']", "select[name*='status']"];
-          for (const bs of billingSelectors) {
+          if (roles.discipline_selector) {
             try {
-              const opts = await page.$$eval(`${bs} option`, o => o.map(x => x.value));
-              const ftOpt = opts.find(v => v && (v.includes("full") || v.includes("flat") || v.includes("FT")));
-              if (ftOpt) { await page.select(bs, ftOpt); await new Promise(r => setTimeout(r, 300)); break; }
+              disciplineOptions = await page.$$eval(`${roles.discipline_selector} option`, opts =>
+                opts.filter(o => o.value && o.value.trim() !== "").map(o => ({ value: o.value, text: o.textContent.trim() }))
+              );
             } catch (e) {}
           }
 
-          try {
-            await page.click(selectors.submit_selector);
-            await new Promise(r => setTimeout(r, 2000));
-          } catch (e) {
-            try { await page.keyboard.press("Enter"); await new Promise(r => setTimeout(r, 2000)); } catch (e2) {}
-          }
+          if (disciplineOptions.length === 0) disciplineOptions = [{ value: null, text: null }];
 
-          let feeAmount = null;
-          let feeText = "";
-          try {
-            await page.waitForSelector(selectors.result_selector, { timeout: 5000 });
-            feeText = await page.$eval(selectors.result_selector, el => {
-              const rows = el.querySelectorAll("tr");
-              for (const row of rows) {
-                const cells = row.querySelectorAll("td");
-                if (cells.length >= 2) {
-                  return Array.from(cells).map(c => c.textContent.trim()).join(" | ");
-                }
+          for (const discipline of disciplineOptions) {
+            try {
+              if (roles.discipline_selector && discipline.value) {
+                try { await page.select(roles.discipline_selector, discipline.value); await new Promise(r => setTimeout(r, 500)); } catch (e) {}
               }
-              return el.textContent.replace(/\s+/g, " ").trim().substring(0, 200);
-            });
 
-            const feeMatch = feeText.match(/[\$£€]?([\d,]+\.?\d*)/);
-            if (feeMatch) feeAmount = parseFloat(feeMatch[1].replace(/,/g, ""));
-          } catch (e) {
-            console.warn(`[fees-enum] Could not extract result for ${levelCombo.label} / ${faculty.text}`);
-            continue;
+              if (roles.billing_selector && roles.billing_fulltime_value) {
+                try { await page.select(roles.billing_selector, roles.billing_fulltime_value); await new Promise(r => setTimeout(r, 300)); } catch (e) {}
+              }
+
+              if (submitSelector) {
+                try { await page.click(submitSelector); await new Promise(r => setTimeout(r, 2000)); } catch (e) {
+                  try { await page.keyboard.press("Enter"); await new Promise(r => setTimeout(r, 2000)); } catch (e2) {}
+                }
+              } else {
+                await new Promise(r => setTimeout(r, 1000));
+              }
+
+              let feePerTerm = null;
+              let rawFeeText = "";
+              let academicYear = roles.academic_year_latest_value || "2025-2026";
+
+              try {
+                await page.waitForSelector(resultSelector, { timeout: 5000 });
+                const result = await page.evaluate((sel) => {
+                  const table = document.querySelector(sel);
+                  if (!table) return null;
+                  const rows = table.querySelectorAll("tr");
+                  for (const row of rows) {
+                    const cells = row.querySelectorAll("td");
+                    if (cells.length >= 2) {
+                      return {
+                        rowText: Array.from(cells).map(c => c.textContent.trim()).join(" | "),
+                        allText: table.innerText.replace(/\s+/g, " ").trim().substring(0, 500),
+                      };
+                    }
+                  }
+                  return { rowText: "", allText: table.innerText.replace(/\s+/g, " ").trim().substring(0, 500) };
+                }, resultSelector);
+
+                if (result) {
+                  rawFeeText = result.rowText || result.allText;
+                  const feeMatch = rawFeeText.match(/(?:CA\$|C\$|\$|£|€|AUD\s*)?([\d,]+\.?\d*)/);
+                  if (feeMatch) feePerTerm = parseFloat(feeMatch[1].replace(/,/g, ""));
+                }
+              } catch (e) {
+                console.warn(`[fees5] Result read failed (${levelCombo.label}/${faculty.text}/${discipline.text})`);
+                continue;
+              }
+
+              if (!feePerTerm || feePerTerm < 100) continue;
+
+              const annualFee = Math.round(feePerTerm * instalmentsPerYear * 100) / 100;
+              const pattern = faculty.text === "default" ? `default_${levelCombo.dbLevel}` : toPatternKeyword(faculty.text);
+
+              const dedupKey = `${levelCombo.dbLevel}|${faculty.text}|${discipline.text}`;
+              if (seen.has(dedupKey)) continue;
+              seen.add(dedupKey);
+
+              feeRows.push({
+                university_id: universityId,
+                program_level: levelCombo.dbLevel,
+                program_type: null,
+                fee_type: "flat_annual",
+                international_fee: annualFee,
+                fee_per_instalment: feePerTerm,
+                instalments_per_year: instalmentsPerYear,
+                currency: "CAD",
+                program_name_pattern: pattern,
+                faculty_name: faculty.text === "default" ? null : faculty.text,
+                discipline_name: discipline.text || null,
+                level_of_study: levelCombo.label,
+                academic_year: academicYear,
+                notes: `Per term: ${feePerTerm} | Raw: ${rawFeeText.substring(0, 100)}`,
+                fee_page_url: feeUrl,
+              });
+
+              console.log(`[fees5] ${levelCombo.label} | ${faculty.text} | ${discipline.text || "—"}: $${feePerTerm}/term → $${annualFee}/yr`);
+
+            } catch (discErr) {
+              console.warn(`[fees5] Discipline combo error:`, discErr.message);
+            }
           }
 
-          if (feeAmount && feeAmount > 100) {
-            const label = `${levelCombo.label} | ${faculty.text}`;
-            results.push({ label, level: levelCombo.label, faculty: faculty.text, feePerTerm: feeAmount });
-            console.log(`[fees-enum] ${label}: ${feeAmount}/term`);
-          }
-
-        } catch (comboErr) {
-          console.warn(`[fees-enum] Combo failed (${levelCombo.label}/${faculty.text}):`, comboErr.message);
+        } catch (facErr) {
+          console.warn(`[fees5] Faculty combo error (${faculty.text}):`, facErr.message);
         }
       }
     }
 
-  } finally {
-    try { await page.close(); } catch (e) {}
-    try { await browser.disconnect(); } catch (e) {}
-  }
+    await page.close();
+    await browser.disconnect();
 
-  return results;
-}
-
-function buildFeeRowsFromEnumeration(results, universityId, feeUrl, instalmentsPerYear = 3) {
-  const feeRows = [];
-  const seen = new Set();
-
-  for (const r of results) {
-    const annualFee = Math.round(r.feePerTerm * instalmentsPerYear * 100) / 100;
-
-    const facultyLower = r.faculty.toLowerCase();
-    let pattern = null;
-    if (facultyLower === "default") {
-      pattern = `default_${r.level === "masters" ? "masters" : "doctoral"}`;
-    } else {
-      pattern = facultyLower
-        .replace(/faculty of |school of |telfer |department of /gi, "")
-        .replace(/[^a-z0-9 ]/g, "")
-        .trim()
-        .split(" ")[0];
+    if (feeRows.length === 0) {
+      console.log(`[fees5] No fees found via form enumeration for ${universityName} — trying static`);
+      return await extractFeesFromStaticPage(renderedHtml, universityName, universityId, feeUrl);
     }
 
-    const key = `${r.level}|${pattern}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    await supabase.schema("ingestion").from("university_fee_structure").delete().eq("university_id", universityId);
 
-    feeRows.push({
-      university_id: universityId,
-      program_level: r.level === "masters" ? "masters" : "doctoral",
-      program_type: null,
-      fee_type: "flat_annual",
-      international_fee: annualFee,
-      instalments_per_year: instalmentsPerYear,
-      currency: "CAD",
-      program_name_pattern: pattern,
-      notes: `Per term: ${r.feePerTerm} CAD × ${instalmentsPerYear} terms`,
-      fee_page_url: feeUrl,
-    });
+    const { error } = await supabase.schema("ingestion").from("university_fee_structure")
+      .insert(feeRows);
+
+    if (error) { console.error(`[fees5] Insert error for ${universityName}:`, error.message); return false; }
+    console.log(`[fees5] Inserted ${feeRows.length} fee rows for ${universityName}`);
+    return true;
   }
 
-  return feeRows;
-}
-
-async function parseFormResults(results, universityName) {
-  if (results.length === 0) return [];
-
-  const resultText = results.map(r => {
-    const $ = cheerio.load(r.html);
-    $("script, style").remove();
-    return `=== ${r.label} ===\n${$("body").text().replace(/\s+/g, " ").trim().substring(0, 1500)}`;
-  }).join("\n\n");
-
-  const prompt = `
-You are extracting international graduate tuition fees from university fee calculator results.
-University: ${universityName}
-
-Results from the fee calculator for different combinations:
-${resultText}
-
-Return STRICT JSON array only. Each entry is one fee row:
-[
-  {
-    "program_level": "masters" | "doctoral",
-    "program_type": "research" | "professional" | null,
-    "fee_type": "flat_annual" | "per_instalment",
-    "international_fee": numeric_amount,
-    "instalments_per_year": 1 | 2 | 3,
-    "currency": "CAD" | "GBP" | "EUR" | "AUD" | "USD",
-    "program_name_pattern": null or specific keyword,
-    "notes": "optional notes"
-  }
-]
-
-RULES:
-- international_fee should be the ANNUAL total for a FIRST YEAR student (use the first/lowest progression level only)
-- If the table shows multiple progression levels (term 1, term 2, A1, A2, B1 etc.), use ONLY the first level
-- Multiply per-term fee by instalments_per_year to get annual total
-- If you see "per term" fees, set fee_type to "per_instalment" and set instalments_per_year accordingly
-- Graduate year = 3 terms for Canadian universities, 2 for UK/Australian
-- program_name_pattern = null for default fees, or lowercase keyword for program-specific (e.g. "mba", "engineering")
-- Deduplicate: if masters research and professional have same fee, create one entry with program_type = null
-- Return [] if no clear fee amounts found
-`;
-
-  try {
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0,
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 45000)),
-    ]);
-    const content = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
-    return JSON.parse(content);
-  } catch (err) {
-    console.error("[fees-intelligent] GPT result parsing failed:", err.message);
-    return [];
-  }
-}
-
-async function extractFeesFromText(feeText, universityName) {
-  const feePrompt = `
-You are extracting university fee structures from a tuition page.
-Return STRICT JSON array only. No markdown, no explanation.
-University: ${universityName}
-
-Extract ALL distinct fee entries for INTERNATIONAL students.
-
-FIELDS:
-- program_level: "masters" or "doctoral"
-- program_type: "research", "professional", or null
-- fee_type: "flat_annual" or "per_instalment"
-- international_fee: numeric annual fee for a FIRST YEAR student (use the first/lowest progression level only)
-- If the table shows multiple progression levels (term 1, term 2, A1, A2, B1 etc.), use ONLY the first level
-- Multiply per-term fee by instalments_per_year to get annual total
-- instalments_per_year: 1 | 2 | 3
-- currency: "CAD", "USD", "GBP", "EUR", "AUD"
-- program_name_pattern: null for defaults, or lowercase keyword for specific programs
-- notes: any relevant notes
-
-RULES:
-- Only international student fees
-- Graduate year = 3 terms for Canadian, 2 for UK/Australian
-- program_name_pattern = "default_masters" or "default_doctoral" for general fees
-- Return [] if no clear fee structure found
-
-Content:
-${feeText}
-`;
-  try {
-    const completion = await Promise.race([
-      openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: feePrompt }], temperature: 0 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 60000)),
-    ]);
-    const content = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
-    return JSON.parse(content);
-  } catch (err) {
-    console.error("[fees] GPT extraction failed:", err.message);
-    return [];
-  }
-}
-
-function findFeePageUrl(baseUrls) {
-  return new Promise(async (resolve) => {
-    for (const base of baseUrls) {
-      for (const pattern of FEE_PAGE_PATTERNS) {
-        const testUrl = base + pattern;
-        try {
-          const res = await axios.get(testUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-            timeout: 15000,
-            validateStatus: (s) => s < 404,
-          });
-          if (res.status === 200 && res.data.length > 3000) {
-            const hasFee = ["tuition", "fee", "international"].some(k => res.data.toLowerCase().includes(k));
-            if (hasFee) return resolve(testUrl);
-          }
-        } catch (e) { continue; }
-      }
-    }
-    resolve(null);
-  });
-}
-
-async function getBaseUrlsForUniversity(universityId) {
-  const { data: sampleUrl } = await supabase
-    .schema("ingestion")
-    .from("scrape_queue")
-    .select("program_url")
-    .eq("university_id", universityId)
-    .limit(1)
-    .single();
-  if (!sampleUrl) return null;
-  const parsedUrl = new URL(sampleUrl.program_url);
-  const baseUrl = parsedUrl.origin;
-  const hostParts = parsedUrl.hostname.split(".");
-  const rootDomain = hostParts.length > 2
-    ? `${parsedUrl.protocol}//${hostParts.slice(-2).join(".")}`
-    : baseUrl;
-  return [...new Set([baseUrl, rootDomain])];
-}
-
-async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) {
-  const { data: uni } = await supabase.schema("core").from("universities").select("name").eq("id", universityId).single();
-  const universityName = uni?.name || universityId;
-
-  let feeUrl = manualFeeUrl;
-  if (!feeUrl) {
-    const baseUrls = await getBaseUrlsForUniversity(universityId);
-    if (!baseUrls) {
-      console.log(`[fees-intelligent] No URLs found for ${universityName}`);
-      return false;
-    }
-    feeUrl = await findFeePageUrl(baseUrls);
-  }
-
-  if (!feeUrl) {
-    console.log(`[fees-intelligent] Could not find fee page for ${universityName}`);
-    return false;
-  }
-  console.log(`[fees-intelligent] Using fee URL: ${feeUrl}`);
-
-  let html = null;
-  try {
-    const res = await axios.get(feeUrl, { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 15000 });
-    if (res.status === 200 && res.data.length > 1000) html = res.data;
-  } catch (e) {}
-
-  if (!html) {
-    html = await Promise.race([
-      fetchWithPuppeteer(feeUrl),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
-    ]).catch(() => null);
-  }
-
-  if (!html) {
-    console.log(`[fees-intelligent] Could not fetch fee page for ${universityName}`);
-    return false;
-  }
-
-  const analysis = await analyseFeePage(html, feeUrl);
-  console.log(`[fees-intelligent] Page type for ${universityName}: ${analysis.isFormBased ? "form-based" : "static"}, forms=${analysis.hasForms}, tables=${analysis.hasTable}`);
-
-  let fees = [];
-
-  if (analysis.isFormBased) {
-    console.log(`[fees-intelligent] Identifying form selectors for ${universityName}...`);
-    const selectors = await identifyFormSelectors(html, universityName);
-
-    if (selectors && selectors.level_selector) {
-      console.log(`[fees-intelligent] Starting full enumeration for ${universityName}...`);
-      const enumResults = await executeFullEnumeration(feeUrl, selectors, universityName);
-      console.log(`[fees-intelligent] Enumeration complete: ${enumResults.length} combinations extracted`);
-      if (enumResults.length > 0) {
-        const instalmentsPerYear = 3;
-        const feeRows = buildFeeRowsFromEnumeration(enumResults, universityId, feeUrl, instalmentsPerYear);
-
-        if (feeRows.length > 0) {
-          const { error } = await supabase.schema("ingestion").from("university_fee_structure")
-            .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern,program_type" });
-          if (error) { console.error(`[fees-intelligent] Insert error:`, error.message); }
-          else {
-            console.log(`[fees-intelligent] Inserted ${feeRows.length} fee rows from form enumeration`);
-            return true;
-          }
-        }
-      }
-    }
-
-    console.log(`[fees-intelligent] Form approach yielded nothing, falling back to static extraction`);
-  }
-
-  if (fees.length === 0) {
+  async function extractFeesFromStaticPage(html, universityName, universityId, feeUrl) {
+    if (!html) return false;
     const $ = cheerio.load(html);
     $("script, style, nav, footer, header, aside, .menu, .sidebar").remove();
     let feeText = "";
@@ -3304,38 +3144,26 @@ async function scrapeFeeStructureIntelligent(universityId, manualFeeUrl = null) 
     });
     const nonTableText = targetEl.clone().find("table").remove().end().text().replace(/\s+/g, " ").trim();
     feeText = (feeText + "\n" + nonTableText).substring(0, 8000);
-
-    fees = await extractFeesFromText(feeText, universityName);
+    const fees = await extractFeesFromText(feeText, universityName);
+    if (!fees || fees.length === 0) { console.log(`[fees5] Static extraction found nothing for ${universityName}`); return false; }
+    const feeRows = fees.map(f => ({
+      university_id: universityId,
+      program_level: f.program_level,
+      program_type: f.program_type || null,
+      fee_type: f.fee_type || "flat_annual",
+      international_fee: f.international_fee,
+      instalments_per_year: f.instalments_per_year || 1,
+      currency: f.currency || "CAD",
+      program_name_pattern: f.program_name_pattern || `default_${f.program_level}`,
+      notes: f.notes || null,
+      fee_page_url: feeUrl,
+    }));
+    const { error } = await supabase.schema("ingestion").from("university_fee_structure")
+      .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern,program_type" });
+    if (error) { console.error(`[fees5] Static insert error:`, error.message); return false; }
+    console.log(`[fees5] Static extraction: ${feeRows.length} fee rows for ${universityName}`);
+    return true;
   }
-
-  if (!fees || fees.length === 0) {
-    console.log(`[fees-intelligent] No fees extracted for ${universityName}`);
-    return false;
-  }
-
-  const feeRows = fees.map(f => ({
-    university_id: universityId,
-    program_level: f.program_level,
-    program_type: f.program_type || null,
-    fee_type: f.fee_type || "flat_annual",
-    international_fee: f.international_fee,
-    instalments_per_year: f.instalments_per_year || 1,
-    currency: f.currency || "CAD",
-    program_name_pattern: f.program_name_pattern || `default_${f.program_level}`,
-    notes: f.notes || null,
-    fee_page_url: feeUrl,
-  }));
-
-  const { error } = await supabase.schema("ingestion").from("university_fee_structure")
-    .upsert(feeRows, { onConflict: "university_id,program_level,program_name_pattern,program_type" });
-
-  if (error) {
-    console.error(`[fees-intelligent] Insert error for ${universityName}:`, error.message);
-    return false;
-  }
-  console.log(`[fees-intelligent] Extracted ${feeRows.length} fee entries for ${universityName}`);
-  return true;
-}
 
 async function scrapeFeeStructure(universityId) {
   const { data: existing } = await supabase
