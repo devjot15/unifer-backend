@@ -767,7 +767,7 @@ function isListingPage(html, sourceUrl) {
       return false; // definitely a detail page
     }
 
-    if (programLinkCount >= 8) {
+    if (programLinkCount >= 8 && wordCount < 2000) {
       console.log(`[parse] Detected listing page (programLinks: ${programLinkCount}, words: ${wordCount}): ${sourceUrl}`);
       return true;
     }
@@ -2490,6 +2490,16 @@ async function scrapeQueueForUniversity(universityId) {
             .eq("id", item.id);
           if (markErr) {
             console.error(`[scrape] Could not mark item processing: ${item.program_url}`);
+            return;
+          }
+
+          // Skip PDF URLs — binary content can't be stored as raw_html
+          if (item.program_url.toLowerCase().endsWith(".pdf")) {
+            await supabase
+              .schema("ingestion")
+              .from("scrape_queue")
+              .update({ status: "failed", error_message: "Skipped: PDF URL not supported" })
+              .eq("id", item.id);
             return;
           }
 
