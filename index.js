@@ -4075,7 +4075,7 @@ setInterval(async () => {
     const { error: resetErr } = await supabase
       .schema("ingestion")
       .from("university_jobs")
-      .update({ status: "queued", error_message: "Reset after 2h timeout", updated_at: new Date().toISOString() })
+      .update({ status: "queued", error_message: "Reset after 2h timeout" })
       .in("status", ["crawling", "scraping", "parsing", "fixing", "fee_scraping"])
       .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
 
