@@ -3313,23 +3313,28 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
               let result = await readFeeFromDOM(page);
 
               if (!result) {
-                const pageText = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').substring(0, 3000));
                 try {
+                  const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 70, fullPage: false });
+                  const b64 = screenshotBuf.toString('base64');
+                  console.log('[fees] DOM read failed — trying vision fallback');
                   const completion = await Promise.race([
                     openai.chat.completions.create({
-                      model: 'gpt-4o-mini',
-                      messages: [{ role: 'user', content:
-                        'University: ' + uniName + '\nLevel: ' + level.dbLevel + ', Faculty: ' + (faculty.label || 'default') + '\n' +
-                        'Extract the international student fee per term from this text.\n' +
-                        'Return STRICT JSON only: { "fee_per_term": 9720.89, "raw_text": "..." }\n' +
-                        'Return { "fee_per_term": null } if not found.\n\n' + pageText
-                      }],
-                      temperature: 0, max_tokens: 100,
+                      model: 'gpt-4o',
+                      messages: [{ role: 'user', content: [
+                        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
+                        { type: 'text', text:
+                          'University: ' + uniName + '\nLevel: ' + level.dbLevel + ', Faculty: ' + (faculty.label || 'default') + '\n' +
+                          'Extract the international student fee per term shown on screen.\n' +
+                          'Return STRICT JSON only: { "fee_per_term": 9720.89, "raw_text": "..." }\n' +
+                          'Return { "fee_per_term": null } if not visible.'
+                        },
+                      ]}],
+                      temperature: 0, max_tokens: 150,
                     }),
-                    new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 20000)),
+                    new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 30000)),
                   ]);
                   result = JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, '').trim());
-                } catch(e) { console.error('[fees] GPT fallback failed:', e.message); }
+                } catch(e) { console.error('[fees] Vision fallback failed:', e.message); }
               }
 
               if (!result?.fee_per_term) {
