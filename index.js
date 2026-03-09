@@ -1268,7 +1268,7 @@ app.post("/crawl-university", async (req, res) => {
 
 app.post("/process-queue", async (req, res) => {
   try {
-    const limit = req.body.limit || 10;
+    const limit = req.body.limit || 500;
     const university_id = req.body.university_id;
 
     let query = supabase
@@ -1384,6 +1384,22 @@ app.post("/process-queue", async (req, res) => {
           .update({ status: "failed", error_message: err.message })
           .eq("id", item.id);
         results.failed++;
+      }
+    }
+
+    if (university_id && results.success > 0) {
+      console.log(`[queue] Parsing ${results.success} newly scraped pages...`);
+      try {
+        const parsed = await parsePagesForUniversity(university_id);
+        results.parsed = parsed;
+        console.log(`[queue] Parsed ${parsed} programs`);
+
+        const fixed = await autoFixFieldCategories(university_id);
+        results.fixed = fixed;
+        console.log(`[queue] Fixed ${fixed} field categories`);
+      } catch (parseErr) {
+        console.error('[queue] Parse step failed:', parseErr.message);
+        results.parse_error = parseErr.message;
       }
     }
 
@@ -3645,6 +3661,69 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
       skipped,
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/worker/reprocess/:university_id", async (req, res) => {
+  const { university_id } = req.params;
+
+  try {
+    const { data: uni } = await supabase.schema('core').from('universities')
+      .select('name').eq('id', university_id).single();
+    if (!uni) return res.status(404).json({ error: 'University not found' });
+
+    console.log(`[reprocess] Starting full reprocess for ${uni.name}`);
+
+    const summary = { university: uni.name };
+
+    const { count: resetCount } = await supabase.schema('ingestion').from('scrape_queue')
+      .update({ status: 'pending', error_message: null })
+      .eq('university_id', university_id)
+      .in('status', ['scraped', 'failed'])
+      .select('*', { count: 'exact', head: true });
+    summary.queue_reset = resetCount || 0;
+    console.log(`[reprocess] Reset ${summary.queue_reset} scrape_queue items to pending`);
+
+    await supabase.schema('ingestion').from('raw_program_pages')
+      .update({ parse_status: 'pending' })
+      .eq('university_id', university_id)
+      .in('parse_status', ['failed', 'processing']);
+
+    const scraped = await scrapeQueueForUniversity(university_id);
+    summary.scraped = scraped;
+    console.log(`[reprocess] Scraped ${scraped} pages`);
+
+    const parsed = await parsePagesForUniversity(university_id);
+    summary.parsed = parsed;
+    console.log(`[reprocess] Parsed ${parsed} pages`);
+
+    const fixed = await autoFixFieldCategories(university_id);
+    summary.fixed = fixed;
+    console.log(`[reprocess] Fixed ${fixed} field categories`);
+
+    const { count: ready } = await supabase.schema('ingestion').from('parsed_programs')
+      .select('*', { count: 'exact', head: true })
+      .eq('university_id', university_id)
+      .eq('validation_status', 'pending');
+
+    const { count: nullFields } = await supabase.schema('ingestion').from('parsed_programs')
+      .select('*', { count: 'exact', head: true })
+      .eq('university_id', university_id)
+      .eq('validation_status', 'pending')
+      .is('field_category', null);
+
+    summary.programs_ready = ready || 0;
+    summary.null_field_category = nullFields || 0;
+    summary.message = nullFields > 0
+      ? `${nullFields} programs still have null field_category — inspect before migrating`
+      : 'Ready to migrate';
+
+    console.log(`[reprocess] Done — ${ready} programs ready, ${nullFields} null field_category`);
+    res.json(summary);
+
+  } catch (err) {
+    console.error('[reprocess] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

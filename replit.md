@@ -105,3 +105,7 @@ Preferred communication style: Simple, everyday language.
     - Falls back to `extractFeesFromStaticPage` if no dropdowns found, no level dropdown, or no fees extracted
   - New endpoint: `POST /worker/scrape-fees-intelligent/:university_id` (optional body: `{ fee_url: "..." }`)
   - Worker step 4 uses `scrapeFeeStructureIntelligent` instead of `scrapeFeeStructure`
+- **2026-03-09:**
+  - `/process-queue` default limit raised from 10 to 500
+  - `/process-queue` now auto-parses and auto-fixes field categories after scraping (when `university_id` is provided)
+  - New endpoint: `POST /worker/reprocess/:university_id` — full pipeline reprocess (reset queue → scrape → parse → fix fields → report readiness)
