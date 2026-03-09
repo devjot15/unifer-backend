@@ -820,7 +820,20 @@ async function parseProgramPage(pageId, { prefetchedFeeStructures = null, prefet
           if (full.includes("#") || seen.has(full)) return;
           try { if (new URL(full).hostname !== baseHostname) return; } catch { return; }
           if (full.toLowerCase().endsWith(".pdf")) return;
-          if (!isProgramUrl(full)) return;
+          // Stricter filter for listing-page seeds: must look like a graduate program page
+          const seedPath = full.toLowerCase();
+          const hasGradSignal = [
+            "graduate", "grad", "/programs", "masters", "doctoral", "phd", "mba", "msc", "meng", "llm",
+          ].some((s) => seedPath.includes(s));
+          const isJunkPath = [
+            "people/faculty", "undergrad", "undergraduate", "current-students",
+            "writing-mentor", "meet-the-team", "faculty-members", "faculty-staff",
+            "presentations", "high-school", "news", "event", "blog", "contact",
+            "about", "login", "apply", "alumni", "giving", "donate", "campus",
+            "map", "directory", "privacy", "accessibility", "copyright",
+            "sitemap", "search", "career", "/job", "/staff",
+          ].some((s) => seedPath.includes(s));
+          if (!hasGradSignal || isJunkPath) return;
           seen.add(full);
           toSeed.push({ university_id: raw.university_id, program_url: full, status: "pending" });
         });
