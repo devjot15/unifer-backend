@@ -812,36 +812,69 @@ async function parseProgramPage(pageId, { prefetchedFeeStructures = null, prefet
         const baseHostname = new URL(raw.source_url).hostname;
         const toSeed = [];
         const seen = new Set();
-        // Degree keywords that appear in real program names
+        // Signal 1 (anchor text): link text must name a specific degree type.
+        // "graduate" alone is intentionally excluded — it appears in news headlines,
+        // admissions copy, award names, etc. Only explicit degree abbreviations and
+        // words that cannot appear outside a program name are allowed.
         const DEGREE_KEYWORDS = [
           "master", "msc", "m.sc", "mba", "m.b.a", "mfa", "meng", "m.eng",
-          "med", "m.ed", "mpa", "llm", "l.l.m", "mph", "phd", "ph.d",
-          "doctor", "doctoral", "graduate certificate", "graduate diploma",
+          "med ", "m.ed", "mpa", "llm", "l.l.m", "mph", "phd", "ph.d",
+          "doctor of ", "doctoral", "graduate certificate", "graduate diploma",
           "postgraduate", "post-graduate",
         ];
-        // Signals that the link text is a person name, nav item, or non-program content
-        const NON_PROGRAM_TEXT = [
-          "meet ", "our ", "profile", "spotlight", "ambassador", "mentor",
-          "contact", "apply now", "learn more", "read more", "click here",
-          "home", "about", "login", "sign in", "view all", "see all",
-          "news", "event", "blog", "alumni", "giving", "donate",
+
+        // Signal 2 (URL path): reject URLs whose path contains any of these segments.
+        // These are section-level paths that will never be an individual program page,
+        // regardless of what the anchor text says.
+        const JUNK_PATH_SEGMENTS = [
+          "/news/", "/events/", "/event/", "/admissions/", "/admission/",
+          "/student-experience/", "/student-life/", "/student-services/",
+          "/about/", "/people/", "/faculty/", "/staff/", "/alumni/",
+          "/awards/", "/scholarships/", "/funding/", "/giving/",
+          "/apply/", "/contact/", "/faq/", "/resources/", "/handbook/",
+          "/current-students/", "/prospective-students/",
         ];
+
+        // Signal 2 (URL terminal slug): the last path segment must not be a generic
+        // section name. Program slugs are specific (msc-finance, ma-communication);
+        // section slugs are generic and finite (overview, admissions, requirements).
+        const GENERIC_TERMINAL_SLUGS = new Set([
+          "overview", "admissions", "admission", "apply", "application",
+          "news", "events", "event", "about", "contact", "index",
+          "funding", "requirements", "deadlines", "deadline", "faq",
+          "resources", "resource", "faculty", "people", "staff", "team",
+          "student-experience", "experience", "life", "community", "support",
+          "handbook", "forms", "awards", "award", "medals", "medal",
+          "scholarships", "scholarship", "bursaries", "bursary",
+          "ambassadors", "ambassador", "current-students", "prospective-students",
+          "why-sfu", "visit", "programs", "graduate", "grad", "home",
+        ]);
+
         $listing("a[href]").each(function () {
           const href = $listing(this).attr("href");
           if (!href || href.startsWith("mailto:") || href.startsWith("tel:")) return;
           let full;
           try { full = new URL(href, raw.source_url).toString(); } catch { return; }
           if (full.includes("#") || seen.has(full)) return;
-          try { if (new URL(full).hostname !== baseHostname) return; } catch { return; }
-          if (full.toLowerCase().endsWith(".pdf")) return;
 
-          // Primary signal: anchor text must read like a graduate program name
+          let parsedUrl;
+          try { parsedUrl = new URL(full); } catch { return; }
+          if (parsedUrl.hostname !== baseHostname) return;
+
+          const lowerPath = parsedUrl.pathname.toLowerCase();
+          if (lowerPath.endsWith(".pdf")) return;
+
+          // Signal 1: anchor text must name a specific degree type
           const linkText = $listing(this).text().replace(/\s+/g, " ").trim().toLowerCase();
           if (linkText.length < 6) return;
-          const looksLikeProgram = DEGREE_KEYWORDS.some((k) => linkText.includes(k));
-          if (!looksLikeProgram) return;
-          const looksLikeJunk = NON_PROGRAM_TEXT.some((t) => linkText.includes(t));
-          if (looksLikeJunk) return;
+          if (!DEGREE_KEYWORDS.some((k) => linkText.includes(k))) return;
+
+          // Signal 2a: URL path must not pass through a known section directory
+          if (JUNK_PATH_SEGMENTS.some((s) => lowerPath.includes(s))) return;
+
+          // Signal 2b: terminal path slug must not be a generic section name
+          const terminalSlug = lowerPath.replace(/\.html?$/, "").split("/").filter(Boolean).pop() ?? "";
+          if (GENERIC_TERMINAL_SLUGS.has(terminalSlug)) return;
 
           seen.add(full);
           toSeed.push({ university_id: raw.university_id, program_url: full, status: "pending" });
