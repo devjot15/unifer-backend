@@ -5,7 +5,7 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
 
-const browserWSEndpoint = `wss://chrome.browserless.io?token=2U5UENwcHnFsfxg065dfe159c7865e9aaf2ae16ccd0f026e2`;
+const browserWSEndpoint = `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_TOKEN || "2U5UENwcHnFsfxg065dfe159c7865e9aaf2ae16ccd0f026e2"}`;
 
 async function fetchWithPuppeteer(url) {
   const browser = await puppeteer.connect({ browserWSEndpoint });
@@ -15,8 +15,8 @@ async function fetchWithPuppeteer(url) {
 
     // Accept cookies if present
     try {
-      await page.waitForTimeout(2000);
-      const cookieSelectors = [
+      await new Promise((r) => setTimeout(r, 2000));
+      const attrSelectors = [
         'button[id*="accept"]',
         'button[class*="accept"]',
         'button[id*="cookie"]',
@@ -25,27 +25,43 @@ async function fetchWithPuppeteer(url) {
         "#onetrust-accept-btn-handler",
         ".cookie-accept",
         '[aria-label*="accept"]',
-        'button:contains("Accept")',
-        'button:contains("Accept All")',
-        'button:contains("I agree")',
-        'button:contains("Allow")',
       ];
-
-      for (const selector of cookieSelectors) {
+      let clicked = false;
+      for (const selector of attrSelectors) {
         try {
           const btn = await page.$(selector);
           if (btn) {
             await btn.click();
-            await page.waitForTimeout(1000);
+            await new Promise((r) => setTimeout(r, 800));
             console.log(`[puppeteer] Accepted cookies with: ${selector}`);
+            clicked = true;
             break;
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn(`[puppeteer] Cookie selector failed (${selector}): ${e.message}`);
+        }
       }
-    } catch (e) {}
+      if (!clicked) {
+        // Fallback: find buttons by text content
+        try {
+          await page.evaluate(() => {
+            const texts = ["Accept All", "Accept Cookies", "Accept", "I agree", "Allow all", "Allow"];
+            const buttons = Array.from(document.querySelectorAll("button, a"));
+            for (const text of texts) {
+              const btn = buttons.find((b) => b.textContent.trim().startsWith(text));
+              if (btn) { btn.click(); break; }
+            }
+          });
+        } catch (e) {
+          // not critical
+        }
+      }
+    } catch (e) {
+      console.warn(`[puppeteer] Cookie acceptance error: ${e.message}`);
+    }
 
     // Wait for content to load after cookie acceptance
-    await page.waitForTimeout(3000);
+    await new Promise((r) => setTimeout(r, 3000));
     const html = await page.content();
     return html;
   } finally {
@@ -712,7 +728,7 @@ function isListingPage(html, sourceUrl) {
     let mainText = "";
     for (const sel of mainSelectors) {
       const el = $(sel);
-      if (el.length && el.text().trim().length > 200) {
+      if (el.length && el.text().trim().length > 100) {
         mainText = el.text().replace(/\s+/g, " ").trim();
         break;
       }
@@ -721,20 +737,47 @@ function isListingPage(html, sourceUrl) {
 
     const wordCount = mainText.split(/\s+/).length;
 
-    const programHeadings = [
-      "admission", "requirement", "curriculum", "degree requirement",
-      "program structure", "course requirement", "application",
-      "tuition", "duration", "thesis", "dissertation", "supervisor"
+    // Detail-page headings — if present, this is almost certainly a program detail page
+    const detailHeadings = [
+      "admission requirement", "requirements", "curriculum", "degree requirement",
+      "program structure", "course requirement", "application process",
+      "tuition", "duration", "thesis", "dissertation", "supervisor",
+      "learning outcomes", "course outline", "program overview",
     ];
     const headingText = $("h1, h2, h3").text().toLowerCase();
-    const hasProgamHeadings = programHeadings.some(h => headingText.includes(h));
+    const hasDetailHeadings = detailHeadings.some((h) => headingText.includes(h));
 
-    if (wordCount > 300 || hasProgamHeadings) {
-      return false;
+    // Count links that look like program pages
+    let programLinkCount = 0;
+    $("a[href]").each(function () {
+      const href = ($(this).attr("href") || "").toLowerCase();
+      const text = $(this).text().trim();
+      if (
+        text.length > 5 &&
+        PROGRAM_URL_SIGNALS_GLOBAL.some((s) => href.includes(s))
+      ) {
+        programLinkCount++;
+      }
+    });
+
+    // A page is a listing page if:
+    // - Has many outbound program links AND lacks program-detail headings
+    // - OR is very short (< 200 words) with no detail headings
+    if (hasDetailHeadings) {
+      return false; // definitely a detail page
     }
 
-    console.log(`[parse] Detected listing page (words: ${wordCount}, no program headings): ${sourceUrl}`);
-    return true;
+    if (programLinkCount >= 8) {
+      console.log(`[parse] Detected listing page (programLinks: ${programLinkCount}, words: ${wordCount}): ${sourceUrl}`);
+      return true;
+    }
+
+    if (wordCount < 200 && programLinkCount >= 3) {
+      console.log(`[parse] Detected listing page (short+links — words: ${wordCount}, programLinks: ${programLinkCount}): ${sourceUrl}`);
+      return true;
+    }
+
+    return false;
   } catch (e) {
     return false;
   }
@@ -744,7 +787,7 @@ function isListingPage(html, sourceUrl) {
 // PARSE SINGLE PROGRAM
 // ----------------------
 
-async function parseProgramPage(pageId) {
+async function parseProgramPage(pageId, { prefetchedFeeStructures = null, prefetchedUni = null } = {}) {
   const { data: raw, error: fetchError } = await supabase
     .schema("ingestion")
     .from("raw_program_pages")
@@ -993,17 +1036,47 @@ ${trimmedText}
       ),
     ]);
 
-    const content = completion.choices[0].message.content;
-    const parsed = JSON.parse(content.replace(/```json|```/g, "").trim());
+    const rawContent = completion.choices[0].message.content;
+    let parsed;
+    try {
+      parsed = JSON.parse(rawContent.replace(/```json|```/g, "").trim());
+    } catch (jsonErr) {
+      // Try to salvage a JSON array or object from the response
+      const match = rawContent.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch (e2) {
+          throw new Error(`GPT returned unparseable JSON: ${rawContent.substring(0, 300)}`);
+        }
+      } else {
+        throw new Error(`GPT returned unparseable JSON: ${rawContent.substring(0, 300)}`);
+      }
+    }
 
     // Handle both single object (legacy) and array (multi-degree pages)
     const programList = Array.isArray(parsed) ? parsed : [parsed];
 
-    const { data: feeStructures } = await supabase
-      .schema("ingestion")
-      .from("university_fee_structure")
-      .select("*")
-      .eq("university_id", raw.university_id);
+    // Use pre-fetched fee structures if provided (avoids N+1 when called in batch)
+    const feeStructures = prefetchedFeeStructures !== null
+      ? prefetchedFeeStructures
+      : (await supabase
+          .schema("ingestion")
+          .from("university_fee_structure")
+          .select("*")
+          .eq("university_id", raw.university_id)
+        ).data;
+
+    // Use pre-fetched university info if provided
+    const uniInfo = prefetchedUni !== null
+      ? prefetchedUni
+      : (await supabase
+          .schema("core")
+          .from("universities")
+          .select("credits_per_year")
+          .eq("id", raw.university_id)
+          .single()
+        ).data;
 
     for (const program of programList) {
       if (!program.program_name) continue;
@@ -1016,18 +1089,10 @@ ${trimmedText}
       }
 
       // Fallback: calculate from credits using university's credits_per_year
-      if (!duration_years && program.total_credits_required) {
-        const { data: uni } = await supabase
-          .schema("core")
-          .from("universities")
-          .select("credits_per_year")
-          .eq("id", raw.university_id)
-          .single();
-        if (uni?.credits_per_year) {
-          duration_years = Math.ceil(
-            program.total_credits_required / uni.credits_per_year,
-          );
-        }
+      if (!duration_years && program.total_credits_required && uniInfo?.credits_per_year) {
+        duration_years = Math.ceil(
+          program.total_credits_required / uniInfo.credits_per_year,
+        );
       }
 
       const CAD_TO_USD = 0.74;
@@ -2140,11 +2205,18 @@ async function runWorker() {
 
     // ---- STEP 4: SCRAPE FEE STRUCTURE (intelligent — tries form-based then static) ----
     await updateJobStatus(job.id, "fee_scraping");
-    const feeResult = await scrapeFeeStructureIntelligent(job.university_id);
+    let feeResult = false;
+    try {
+      feeResult = await scrapeFeeStructureIntelligent(job.university_id);
+    } catch (feeErr) {
+      console.error(`[worker] Fee scraping threw an error for ${job.university_id}: ${feeErr.message}`);
+    }
     if (!feeResult) {
-      console.warn(`[worker] Fee scraping FAILED for ${job.university_id} — manual fee insertion needed`);
-      await supabase.schema("ingestion").from("university_jobs")
-        .update({ error_message: "Fee scraping failed — insert fees manually into university_fee_structure" })
+      console.warn(`[worker] ⚠ Fee scraping FAILED for university ${job.university_id} — programs will have NULL tuition unless fees are added manually to university_fee_structure`);
+      await supabase
+        .schema("ingestion")
+        .from("university_jobs")
+        .update({ error_message: "Fee scraping failed — add fees manually to university_fee_structure before migrating" })
         .eq("id", job.id);
     }
 
@@ -2180,14 +2252,17 @@ async function runWorker() {
 }
 
 async function updateJobStatus(jobId, status, errorMessage = null) {
-  const update = { status };
+  const update = { status, updated_at: new Date().toISOString() };
   if (status === "crawling") update.started_at = new Date().toISOString();
   if (errorMessage) update.error_message = errorMessage;
-  await supabase
+  const { error } = await supabase
     .schema("ingestion")
     .from("university_jobs")
     .update(update)
     .eq("id", jobId);
+  if (error) {
+    console.error(`[worker] Failed to update job ${jobId} → ${status}: ${error.message}`);
+  }
 }
 
 async function crawlDirectory(universityId, dirUrl, depth = 1) {
@@ -2355,21 +2430,38 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
 
   if (discovered.length === 0) return 0;
 
-  const { data } = await supabase
+  const { error: upsertErr } = await supabase
     .schema("ingestion")
     .from("scrape_queue")
-    .upsert(discovered, { onConflict: "program_url" })
-    .select();
+    .upsert(discovered, { onConflict: "program_url" });
 
-  return data ? data.length : 0;
+  if (upsertErr) {
+    console.error(`[crawl] Failed to upsert discovered URLs:`, upsertErr.message);
+  }
+
+  // Return discovered count regardless — upsert may 0 when all rows already existed
+  return discovered.length;
 }
 
 async function scrapeQueueForUniversity(universityId) {
   const CONCURRENCY = 5;
+  const MAX_BATCHES = 40; // safety cap — prevents infinite loop if status updates fail
   let totalScraped = 0;
+  let batchCount = 0;
 
-  while (true) {
-    const { data: items } = await supabase
+  // Reset any items stuck in "processing" from a previous crashed run
+  const { error: resetErr } = await supabase
+    .schema("ingestion")
+    .from("scrape_queue")
+    .update({ status: "pending", error_message: null })
+    .eq("university_id", universityId)
+    .eq("status", "processing");
+  if (resetErr) console.warn(`[scrape] Could not reset stuck items: ${resetErr.message}`);
+
+  while (batchCount < MAX_BATCHES) {
+    batchCount++;
+
+    const { data: items, error: fetchErr } = await supabase
       .schema("ingestion")
       .from("scrape_queue")
       .select("*")
@@ -2377,54 +2469,79 @@ async function scrapeQueueForUniversity(universityId) {
       .eq("status", "pending")
       .limit(50);
 
+    if (fetchErr) {
+      console.error(`[scrape] Failed to fetch queue batch: ${fetchErr.message}`);
+      break;
+    }
+
     if (!items || items.length === 0) break;
+
+    console.log(`[scrape] Batch ${batchCount}: processing ${items.length} URLs`);
 
     for (let i = 0; i < items.length; i += CONCURRENCY) {
       const chunk = items.slice(i, i + CONCURRENCY);
       await Promise.all(
         chunk.map(async (item) => {
+          // Mark as processing first so we don't pick it up again in the same run
+          const { error: markErr } = await supabase
+            .schema("ingestion")
+            .from("scrape_queue")
+            .update({ status: "processing" })
+            .eq("id", item.id);
+          if (markErr) {
+            console.error(`[scrape] Could not mark item processing: ${item.program_url}`);
+            return;
+          }
+
+          let html = null;
+
+          // Attempt 1: fast axios fetch
           try {
-            await supabase
-              .schema("ingestion")
-              .from("scrape_queue")
-              .update({ status: "processing" })
-              .eq("id", item.id);
+            const res = await axios.get(item.program_url, {
+              headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+              timeout: 30000,
+            });
+            html = res.data;
+          } catch (e) {
+            console.warn(`[scrape] Axios failed for ${item.program_url}: ${e.message}`);
+            html = null;
+          }
 
-            let html;
+          // Attempt 2: Puppeteer fallback if page too small or empty
+          if (!html || html.length < 500) {
+            console.log(`[scrape] Falling back to Puppeteer for: ${item.program_url}`);
             try {
-              const res = await axios.get(item.program_url, {
-                headers: {
-                  "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)",
-                },
-                timeout: 30000,
-              });
-              html = res.data;
-            } catch (e) {
-              html = null;
-            }
-
-            if (!html || html.length < 500) {
               html = await Promise.race([
                 fetchWithPuppeteer(item.program_url),
                 new Promise((_, reject) =>
-                  setTimeout(
-                    () => reject(new Error("Puppeteer timeout after 45s")),
-                    45000,
-                  ),
+                  setTimeout(() => reject(new Error("Puppeteer timeout after 45s")), 45000),
                 ),
               ]);
-            }
-
-            if (!html || html.length < 500) {
+            } catch (puppeteerErr) {
+              console.error(`[scrape] Puppeteer failed for ${item.program_url}: ${puppeteerErr.message}`);
               await supabase
                 .schema("ingestion")
                 .from("scrape_queue")
-                .update({ status: "failed", error_message: "Page too small" })
+                .update({ status: "failed", error_message: `Puppeteer: ${puppeteerErr.message}` })
                 .eq("id", item.id);
               return;
             }
+          }
 
-            await supabase.schema("ingestion").from("raw_program_pages").upsert(
+          if (!html || html.length < 500) {
+            await supabase
+              .schema("ingestion")
+              .from("scrape_queue")
+              .update({ status: "failed", error_message: "Page too small after both attempts" })
+              .eq("id", item.id);
+            return;
+          }
+
+          // Save raw HTML
+          const { error: upsertErr } = await supabase
+            .schema("ingestion")
+            .from("raw_program_pages")
+            .upsert(
               {
                 university_id: item.university_id,
                 source_url: item.program_url,
@@ -2434,21 +2551,25 @@ async function scrapeQueueForUniversity(universityId) {
               { onConflict: "source_url" },
             );
 
+          if (upsertErr) {
+            console.error(`[scrape] Failed to save HTML for ${item.program_url}: ${upsertErr.message}`);
             await supabase
               .schema("ingestion")
               .from("scrape_queue")
-              .update({
-                status: "scraped",
-                scraped_at: new Date().toISOString(),
-              })
+              .update({ status: "failed", error_message: `DB save failed: ${upsertErr.message}` })
               .eq("id", item.id);
+            return;
+          }
+
+          const { error: doneErr } = await supabase
+            .schema("ingestion")
+            .from("scrape_queue")
+            .update({ status: "scraped", scraped_at: new Date().toISOString() })
+            .eq("id", item.id);
+          if (doneErr) {
+            console.error(`[scrape] Failed to mark scraped: ${item.program_url}: ${doneErr.message}`);
+          } else {
             totalScraped++;
-          } catch (e) {
-            await supabase
-              .schema("ingestion")
-              .from("scrape_queue")
-              .update({ status: "failed", error_message: e.message })
-              .eq("id", item.id);
           }
         }),
       );
@@ -2456,15 +2577,45 @@ async function scrapeQueueForUniversity(universityId) {
     }
   }
 
+  if (batchCount >= MAX_BATCHES) {
+    console.warn(`[scrape] Reached max batch limit (${MAX_BATCHES}) for university ${universityId} — stopping`);
+  }
+
   return totalScraped;
 }
 
 async function parsePagesForUniversity(universityId) {
   const CONCURRENCY = 5;
+  const MAX_BATCHES = 40; // safety cap
   let totalParsed = 0;
+  let batchCount = 0;
 
-  while (true) {
-    const { data: pages } = await supabase
+  // Pre-fetch shared data once — avoids N+1 queries per page
+  const { data: prefetchedFeeStructures } = await supabase
+    .schema("ingestion")
+    .from("university_fee_structure")
+    .select("*")
+    .eq("university_id", universityId);
+
+  const { data: prefetchedUni } = await supabase
+    .schema("core")
+    .from("universities")
+    .select("credits_per_year")
+    .eq("id", universityId)
+    .single();
+
+  // Reset any pages stuck in "processing" from a previous crashed run
+  await supabase
+    .schema("ingestion")
+    .from("raw_program_pages")
+    .update({ parse_status: "pending" })
+    .eq("university_id", universityId)
+    .eq("parse_status", "processing");
+
+  while (batchCount < MAX_BATCHES) {
+    batchCount++;
+
+    const { data: pages, error: fetchErr } = await supabase
       .schema("ingestion")
       .from("raw_program_pages")
       .select("id")
@@ -2472,21 +2623,35 @@ async function parsePagesForUniversity(universityId) {
       .eq("parse_status", "pending")
       .limit(50);
 
+    if (fetchErr) {
+      console.error(`[parse] Failed to fetch pages batch: ${fetchErr.message}`);
+      break;
+    }
+
     if (!pages || pages.length === 0) break;
+
+    console.log(`[parse] Batch ${batchCount}: parsing ${pages.length} pages`);
 
     for (let i = 0; i < pages.length; i += CONCURRENCY) {
       const chunk = pages.slice(i, i + CONCURRENCY);
       await Promise.all(
         chunk.map(async (page) => {
           try {
-            await parseProgramPage(page.id);
+            await parseProgramPage(page.id, {
+              prefetchedFeeStructures: prefetchedFeeStructures || [],
+              prefetchedUni: prefetchedUni || null,
+            });
             totalParsed++;
           } catch (e) {
-            console.error(`[parse] Failed page ${page.id}:`, e.message);
+            console.error(`[parse] Failed page ${page.id}: ${e.message}`);
           }
         }),
       );
     }
+  }
+
+  if (batchCount >= MAX_BATCHES) {
+    console.warn(`[parse] Reached max batch limit (${MAX_BATCHES}) for university ${universityId} — stopping`);
   }
 
   return totalParsed;
@@ -2605,19 +2770,29 @@ async function autoFixFieldCategories(universityId) {
 
   if (!programs || programs.length === 0) return 0;
 
+  // Group by category for batch updates instead of N+1 individual updates
+  const categoryGroups = {};
   let fixed = 0;
   for (const p of programs) {
     const assigned = autoAssignFieldCategory(p.program_name);
     if (assigned) {
-      await supabase
-        .schema("ingestion")
-        .from("parsed_programs")
-        .update({ field_category: assigned })
-        .eq("id", p.id);
+      if (!categoryGroups[assigned]) categoryGroups[assigned] = [];
+      categoryGroups[assigned].push(p.id);
       fixed++;
       console.log(`[fix] "${p.program_name}" → "${assigned}"`);
     } else {
       console.log(`[fix] Could not assign category for: "${p.program_name}"`);
+    }
+  }
+
+  for (const [category, ids] of Object.entries(categoryGroups)) {
+    const { error: batchErr } = await supabase
+      .schema("ingestion")
+      .from("parsed_programs")
+      .update({ field_category: category })
+      .in("id", ids);
+    if (batchErr) {
+      console.error(`[fix] Batch update failed for category "${category}": ${batchErr.message}`);
     }
   }
 
@@ -3204,10 +3379,12 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
           return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
         }
 
-        await supabase.schema('ingestion').from('university_fee_structure').delete().eq('university_id', universityId);
-        const { error } = await supabase.schema('ingestion').from('university_fee_structure').insert(feeRows);
-        if (error) { console.error('[fees] Insert error:', error.message); return false; }
-        console.log('[fees] ' + feeRows.length + ' fee rows inserted for ' + uniName);
+        const { error } = await supabase
+          .schema('ingestion')
+          .from('university_fee_structure')
+          .upsert(feeRows, { onConflict: 'university_id,program_level,program_name_pattern,program_type' });
+        if (error) { console.error('[fees] Upsert error:', error.message); return false; }
+        console.log('[fees] ' + feeRows.length + ' fee rows upserted for ' + uniName);
         return true;
 
       } catch (err) {
@@ -3886,31 +4063,26 @@ app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
 // ============================================================
 // START BACKGROUND WORKER — runs every 3 minutes
 // ============================================================
-setInterval(
-  async () => {
-    // Only reset jobs stuck in active processing states for over 2 hours
+setInterval(async () => {
+  try {
+    // Reset jobs stuck in active processing states for over 2 hours
     // NEVER reset ready_for_review or migrated jobs
-    await supabase
+    const { error: resetErr } = await supabase
       .schema("ingestion")
       .from("university_jobs")
-      .update({ status: "queued", error_message: "Reset after timeout" })
-      .in("status", [
-        "crawling",
-        "scraping",
-        "parsing",
-        "fixing",
-        "fee_scraping",
-      ])
-      .not("status", "in", '("ready_for_review","migrated","failed")')
-      .lt(
-        "started_at",
-        new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      );
+      .update({ status: "queued", error_message: "Reset after 2h timeout", updated_at: new Date().toISOString() })
+      .in("status", ["crawling", "scraping", "parsing", "fixing", "fee_scraping"])
+      .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+
+    if (resetErr) {
+      console.error("[worker-interval] Job reset error:", resetErr.message);
+    }
 
     runWorker();
-  },
-  3 * 60 * 1000,
-);
+  } catch (err) {
+    console.error("[worker-interval] Unhandled error in interval:", err.message);
+  }
+}, 3 * 60 * 1000);
 console.log("Background worker started — polling every 3 minutes");
 
 app.post("/scrape-fees-batch", async (req, res) => {
