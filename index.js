@@ -812,29 +812,37 @@ async function parseProgramPage(pageId, { prefetchedFeeStructures = null, prefet
         const baseHostname = new URL(raw.source_url).hostname;
         const toSeed = [];
         const seen = new Set();
+        // Degree keywords that appear in real program names
+        const DEGREE_KEYWORDS = [
+          "master", "msc", "m.sc", "mba", "m.b.a", "mfa", "meng", "m.eng",
+          "med", "m.ed", "mpa", "llm", "l.l.m", "mph", "phd", "ph.d",
+          "doctor", "doctoral", "graduate certificate", "graduate diploma",
+          "postgraduate", "post-graduate",
+        ];
+        // Signals that the link text is a person name, nav item, or non-program content
+        const NON_PROGRAM_TEXT = [
+          "meet ", "our ", "profile", "spotlight", "ambassador", "mentor",
+          "contact", "apply now", "learn more", "read more", "click here",
+          "home", "about", "login", "sign in", "view all", "see all",
+          "news", "event", "blog", "alumni", "giving", "donate",
+        ];
         $listing("a[href]").each(function () {
           const href = $listing(this).attr("href");
-          if (!href) return;
+          if (!href || href.startsWith("mailto:") || href.startsWith("tel:")) return;
           let full;
           try { full = new URL(href, raw.source_url).toString(); } catch { return; }
           if (full.includes("#") || seen.has(full)) return;
           try { if (new URL(full).hostname !== baseHostname) return; } catch { return; }
           if (full.toLowerCase().endsWith(".pdf")) return;
-          // Allowlist: only seed URLs whose path matches known graduate program structures
-          const seedPath = full.toLowerCase();
-          const isGradProgramUrl = [
-            "/programs/graduate/",
-            "/grad/programs/",
-            "/graduate-students/programs/",
-            "/prospective-students/graduate/",
-          ].some((p) => seedPath.includes(p));
-          if (!isGradProgramUrl) return;
-          const isSeedJunk = [
-            "student-ambassador", "spotlight", "/people", "faculty-members",
-            "meet-the-team", "current-students", "undergrad", "executive-education",
-            "@", "student-life", "/events", "/news",
-          ].some((s) => seedPath.includes(s));
-          if (isSeedJunk) return;
+
+          // Primary signal: anchor text must read like a graduate program name
+          const linkText = $listing(this).text().replace(/\s+/g, " ").trim().toLowerCase();
+          if (linkText.length < 6) return;
+          const looksLikeProgram = DEGREE_KEYWORDS.some((k) => linkText.includes(k));
+          if (!looksLikeProgram) return;
+          const looksLikeJunk = NON_PROGRAM_TEXT.some((t) => linkText.includes(t));
+          if (looksLikeJunk) return;
+
           seen.add(full);
           toSeed.push({ university_id: raw.university_id, program_url: full, status: "pending" });
         });
