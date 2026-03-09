@@ -805,10 +805,37 @@ async function parseProgramPage(pageId, { prefetchedFeeStructures = null, prefet
 
   try {
     if (isListingPage(raw.raw_html, raw.source_url)) {
+      // Extract program links from the listing page and seed them into scrape_queue
+      let seeded = 0;
+      try {
+        const $listing = cheerio.load(raw.raw_html);
+        const baseHostname = new URL(raw.source_url).hostname;
+        const toSeed = [];
+        const seen = new Set();
+        $listing("a[href]").each(function () {
+          const href = $listing(this).attr("href");
+          if (!href) return;
+          let full;
+          try { full = new URL(href, raw.source_url).toString(); } catch { return; }
+          if (full.includes("#") || seen.has(full)) return;
+          try { if (new URL(full).hostname !== baseHostname) return; } catch { return; }
+          if (full.toLowerCase().endsWith(".pdf")) return;
+          if (!isProgramUrl(full)) return;
+          seen.add(full);
+          toSeed.push({ university_id: raw.university_id, program_url: full, status: "pending" });
+        });
+        if (toSeed.length > 0) {
+          const { error: seedErr } = await supabase.schema("ingestion").from("scrape_queue")
+            .upsert(toSeed, { onConflict: "program_url" });
+          if (!seedErr) seeded = toSeed.length;
+        }
+      } catch (e) {
+        console.warn(`[parse] Failed to extract links from listing page ${raw.source_url}: ${e.message}`);
+      }
       await supabase.schema("ingestion").from("raw_program_pages")
         .update({ parse_status: "skipped" }).eq("id", pageId);
-      console.log(`[parse] Skipped listing page: ${raw.source_url}`);
-      return { success: true, programs: [], skipped: true };
+      console.log(`[parse] Listing page seeded ${seeded} URLs: ${raw.source_url}`);
+      return { success: true, programs: [], skipped: true, seeded };
     }
 
     const $ = cheerio.load(raw.raw_html);
@@ -2183,25 +2210,28 @@ async function runWorker() {
       return;
     }
 
-    // ---- STEP 2: SCRAPE ----
-    await updateJobStatus(job.id, "scraping");
-    const scrapeResult = await scrapeQueueForUniversity(job.university_id);
-    await supabase
-      .schema("ingestion")
-      .from("university_jobs")
-      .update({ urls_scraped: scrapeResult })
-      .eq("id", job.id);
-    console.log(`[worker] Scraped ${scrapeResult} pages`);
+    // ---- STEP 2 & 3: SCRAPE → PARSE (loop up to 3 rounds if listing pages seed new URLs) ----
+    let totalScraped = 0, totalParsed = 0;
+    const MAX_PIPELINE_ROUNDS = 3;
+    for (let round = 1; round <= MAX_PIPELINE_ROUNDS; round++) {
+      await updateJobStatus(job.id, "scraping");
+      const scraped = await scrapeQueueForUniversity(job.university_id);
+      totalScraped += scraped;
+      console.log(`[worker] Round ${round}: scraped ${scraped} pages`);
 
-    // ---- STEP 3: PARSE ----
-    await updateJobStatus(job.id, "parsing");
-    const parseResult = await parsePagesForUniversity(job.university_id);
+      await updateJobStatus(job.id, "parsing");
+      const { parsed, seeded } = await parsePagesForUniversity(job.university_id);
+      totalParsed += parsed;
+      console.log(`[worker] Round ${round}: parsed ${parsed} pages, seeded ${seeded} new URLs from listing pages`);
+
+      if (seeded === 0 || round === MAX_PIPELINE_ROUNDS) break;
+      console.log(`[worker] Listing pages seeded ${seeded} URLs — running pipeline round ${round + 1}`);
+    }
     await supabase
       .schema("ingestion")
       .from("university_jobs")
-      .update({ urls_parsed: parseResult })
+      .update({ urls_scraped: totalScraped, urls_parsed: totalParsed })
       .eq("id", job.id);
-    console.log(`[worker] Parsed ${parseResult} pages`);
 
     // ---- STEP 4: SCRAPE FEE STRUCTURE (intelligent — tries form-based then static) ----
     await updateJobStatus(job.id, "fee_scraping");
@@ -2265,64 +2295,64 @@ async function updateJobStatus(jobId, status, errorMessage = null) {
   }
 }
 
+const PROGRAM_URL_SIGNALS = [
+  "program",
+  "degree",
+  "graduate",
+  "master",
+  "phd",
+  "doctoral",
+  "course",
+  "faculty",
+  "school",
+  "department",
+  "study",
+  "academic",
+  "msc",
+  "mba",
+  "med",
+  "llm",
+  "meng",
+  "certificate",
+  "diploma",
+];
+
+const SKIP_URL_SIGNALS = [
+  "news",
+  "event",
+  "blog",
+  "contact",
+  "about",
+  "login",
+  "apply",
+  "alumni",
+  "giving",
+  "donate",
+  "campus",
+  "map",
+  "directory",
+  "privacy",
+  "accessibility",
+  "copyright",
+  "sitemap",
+  "search",
+  "career",
+  "job",
+  "staff",
+  "faculty-staff",
+  "research-staff",
+];
+
+function isProgramUrl(url) {
+  const path = url.toLowerCase();
+  const hasProgram = PROGRAM_URL_SIGNALS.some((s) => path.includes(s));
+  const shouldSkip = SKIP_URL_SIGNALS.some((s) => path.includes(s));
+  return hasProgram && !shouldSkip;
+}
+
 async function crawlDirectory(universityId, dirUrl, depth = 1) {
   const parsedBase = new URL(dirUrl);
   const baseDomain = parsedBase.hostname;
-
-  const PROGRAM_URL_SIGNALS = [
-    "program",
-    "degree",
-    "graduate",
-    "master",
-    "phd",
-    "doctoral",
-    "course",
-    "faculty",
-    "school",
-    "department",
-    "study",
-    "academic",
-    "msc",
-    "mba",
-    "med",
-    "llm",
-    "meng",
-    "certificate",
-    "diploma",
-  ];
-
-  const SKIP_URL_SIGNALS = [
-    "news",
-    "event",
-    "blog",
-    "contact",
-    "about",
-    "login",
-    "apply",
-    "alumni",
-    "giving",
-    "donate",
-    "campus",
-    "map",
-    "directory",
-    "privacy",
-    "accessibility",
-    "copyright",
-    "sitemap",
-    "search",
-    "career",
-    "job",
-    "staff",
-    "faculty-staff",
-    "research-staff",
-  ];
-
-  function isProgramUrl(url) {
-    const path = url.toLowerCase();
-    const hasProgram = PROGRAM_URL_SIGNALS.some((s) => path.includes(s));
-    const shouldSkip = SKIP_URL_SIGNALS.some((s) => path.includes(s));
-    return hasProgram && !shouldSkip;
-  }
 
   async function fetchPage(url) {
     let html = null;
@@ -2598,6 +2628,7 @@ async function parsePagesForUniversity(universityId) {
   const CONCURRENCY = 5;
   const MAX_BATCHES = 40; // safety cap
   let totalParsed = 0;
+  let totalSeeded = 0;
   let batchCount = 0;
 
   // Pre-fetch shared data once — avoids N+1 queries per page
@@ -2647,11 +2678,12 @@ async function parsePagesForUniversity(universityId) {
       await Promise.all(
         chunk.map(async (page) => {
           try {
-            await parseProgramPage(page.id, {
+            const result = await parseProgramPage(page.id, {
               prefetchedFeeStructures: prefetchedFeeStructures || [],
               prefetchedUni: prefetchedUni || null,
             });
             totalParsed++;
+            if (result?.seeded) totalSeeded += result.seeded;
           } catch (e) {
             console.error(`[parse] Failed page ${page.id}: ${e.message}`);
           }
@@ -2664,7 +2696,7 @@ async function parsePagesForUniversity(universityId) {
     console.warn(`[parse] Reached max batch limit (${MAX_BATCHES}) for university ${universityId} — stopping`);
   }
 
-  return totalParsed;
+  return { parsed: totalParsed, seeded: totalSeeded };
 }
 
 async function autoFixFieldCategories(universityId) {
@@ -3882,13 +3914,22 @@ app.post("/worker/reprocess/:university_id", async (req, res) => {
       .eq('university_id', university_id)
       .in('parse_status', ['failed', 'processing']);
 
-    const scraped = await scrapeQueueForUniversity(university_id);
-    summary.scraped = scraped;
-    console.log(`[reprocess] Scraped ${scraped} pages`);
+    let totalScraped = 0, totalParsed = 0;
+    const MAX_PIPELINE_ROUNDS = 3;
+    for (let round = 1; round <= MAX_PIPELINE_ROUNDS; round++) {
+      const scraped = await scrapeQueueForUniversity(university_id);
+      totalScraped += scraped;
+      console.log(`[reprocess] Round ${round}: scraped ${scraped} pages`);
 
-    const parsed = await parsePagesForUniversity(university_id);
-    summary.parsed = parsed;
-    console.log(`[reprocess] Parsed ${parsed} pages`);
+      const { parsed, seeded } = await parsePagesForUniversity(university_id);
+      totalParsed += parsed;
+      console.log(`[reprocess] Round ${round}: parsed ${parsed} pages, seeded ${seeded} new URLs from listing pages`);
+
+      if (seeded === 0 || round === MAX_PIPELINE_ROUNDS) break;
+      console.log(`[reprocess] Listing pages seeded ${seeded} URLs — running pipeline round ${round + 1}`);
+    }
+    summary.scraped = totalScraped;
+    summary.parsed = totalParsed;
 
     const fixed = await autoFixFieldCategories(university_id);
     summary.fixed = fixed;
