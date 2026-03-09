@@ -805,7 +805,9 @@ async function parseProgramPage(pageId, { prefetchedFeeStructures = null, prefet
 
   try {
     if (isListingPage(raw.raw_html, raw.source_url)) {
-      // Extract program links from the listing page and seed them into scrape_queue
+      // ── STEP A: seed individual program links for detail-page scraping ────────
+      // For universities whose individual program pages ARE scrappable, this seeds
+      // them into scrape_queue so they get processed as detail pages.
       let seeded = 0;
       try {
         const $listing = cheerio.load(raw.raw_html);
@@ -885,12 +887,150 @@ async function parseProgramPage(pageId, { prefetchedFeeStructures = null, prefet
           if (!seedErr) seeded = toSeed.length;
         }
       } catch (e) {
-        console.warn(`[parse] Failed to extract links from listing page ${raw.source_url}: ${e.message}`);
+        console.warn(`[parse] Failed to seed links from listing page ${raw.source_url}: ${e.message}`);
       }
+
+      // ── STEP B: extract program entries directly from this listing page ───────
+      // Many universities render individual program detail pages client-side
+      // (React/Vue), so those URLs are unscrappable. The listing page itself is
+      // often the only static HTML we have. We extract whatever is visible in the
+      // program cards/rows — name, degree level, type, field — leaving fields that
+      // only appear on detail pages (tuition, deadlines, requirements) as null.
+      let listingExtracted = 0;
+      try {
+        const $lp = cheerio.load(raw.raw_html);
+        $lp("script, style, nav, footer, header, .menu, .navigation, .breadcrumb").remove();
+
+        let listingText = "";
+        for (const sel of ["main", "article", ".content", "#content", "[role='main']", ".page-content", ".main-content"]) {
+          const el = $lp(sel);
+          if (el.length && el.text().trim().length > 100) {
+            listingText = el.text().replace(/\s+/g, " ").trim();
+            break;
+          }
+        }
+        if (!listingText) listingText = $lp("body").text().replace(/\s+/g, " ").trim();
+
+        const listingPrompt = `You are extracting a list of graduate programs from a university programs directory page.
+Return STRICT JSON only. No markdown, no explanation.
+
+This page is a programs index — it lists many programs in summary cards or rows.
+Extract EVERY distinct program entry you can find. One object per program.
+
+For each program return ONLY these fields (omit everything else):
+- program_name: Full official name exactly as shown. Include the degree abbreviation in parentheses if visible, e.g. "Chemical Engineering (MSc)", "Business Administration (MBA)", "Philosophy (PhD)".
+- degree_level: "PG" for Masters / PhD / Graduate Certificate / Graduate Diploma. "UG" for Bachelor. Default to "PG" for graduate school pages.
+- program_type: "research" (thesis-based), "professional" (coursework/no thesis), "doctoral" (any PhD or EdD), or null if unclear.
+- field_category: exactly one of:
+    "engineering & tech", "business, management and economics", "science & applied science",
+    "medicine, health and life science", "social science & humanities", "arts, design & creative studies",
+    "law, public policy & governance", "hospitality, tourism & service industry",
+    "education & teaching", "agriculture, sustainability & environmental studies"
+
+Do NOT guess or include tuition, deadlines, IELTS, GRE, duration, or any field not visible on this listing page.
+
+Example output:
+[
+  {"program_name": "Chemical Engineering (MSc)", "degree_level": "PG", "program_type": "research", "field_category": "engineering & tech"},
+  {"program_name": "Business Administration (MBA)", "degree_level": "PG", "program_type": "professional", "field_category": "business, management and economics"},
+  {"program_name": "Philosophy (PhD)", "degree_level": "PG", "program_type": "doctoral", "field_category": "social science & humanities"}
+]
+
+Page content:
+${listingText.substring(0, 10000)}`;
+
+        const listingCompletion = await Promise.race([
+          openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: listingPrompt }],
+            temperature: 0,
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI timeout after 60s")), 60000)),
+        ]);
+
+        const rawListing = listingCompletion.choices[0].message.content;
+        let listingPrograms;
+        try {
+          listingPrograms = JSON.parse(rawListing.replace(/```json|```/g, "").trim());
+        } catch {
+          const match = rawListing.match(/\[[\s\S]*\]/);
+          if (match) listingPrograms = JSON.parse(match[0]);
+        }
+
+        if (Array.isArray(listingPrograms) && listingPrograms.length > 0) {
+          const feeStructures = prefetchedFeeStructures !== null
+            ? prefetchedFeeStructures
+            : (await supabase.schema("ingestion").from("university_fee_structure").select("*").eq("university_id", raw.university_id)).data;
+
+          const toInsert = [];
+          for (const p of listingPrograms) {
+            if (!p.program_name) continue;
+            const { data: existing } = await supabase
+              .schema("ingestion").from("parsed_programs")
+              .select("id")
+              .eq("university_id", raw.university_id)
+              .eq("program_name", p.program_name)
+              .eq("degree_level", p.degree_level || "PG")
+              .limit(1);
+            if (existing && existing.length > 0) continue;
+
+            const tuitionCAD = resolveTuition(p.program_name, p.program_type, raw.university_id, feeStructures);
+            const CAD_TO_USD = 0.74;
+
+            toInsert.push({
+              raw_page_id: raw.id,
+              university_id: raw.university_id,
+              program_name: p.program_name,
+              degree_level: p.degree_level || "PG",
+              program_type: p.program_type || null,
+              field_category: VALID_FIELD_CATEGORIES.includes(p.field_category) ? p.field_category : null,
+              tuition_usd: tuitionCAD ? Math.round(tuitionCAD * CAD_TO_USD) : null,
+              // Fields only available on detail pages — not present on a listing page
+              duration_years: null,
+              duration_confidence: "low",
+              official_duration_value: null,
+              official_duration_unit: null,
+              official_duration_text: null,
+              total_credits_required: null,
+              credit_system: null,
+              completion_time_value: null,
+              completion_time_unit: null,
+              tuition_raw_text: null,
+              internship_available: false,
+              gre_required: false,
+              gmat_required: false,
+              scholarship_available: false,
+              scholarship_details: null,
+              funding_guaranteed: false,
+              ielts_minimum: null,
+              pte_minimum: null,
+              toefl_minimum: null,
+              application_deadline_intl: null,
+              application_materials: [],
+              min_gpa_percentage: null,
+              accepts_backlogs: true,
+              subjects_required: [],
+              work_experience_required: 0,
+              validation_status: "pending",
+              parse_status: "parsed",
+            });
+          }
+
+          if (toInsert.length > 0) {
+            const { error: insertErr } = await supabase
+              .schema("ingestion").from("parsed_programs")
+              .upsert(toInsert, { onConflict: "raw_page_id,program_name" });
+            if (!insertErr) listingExtracted = toInsert.length;
+          }
+        }
+      } catch (e) {
+        console.warn(`[parse] Listing page direct extraction failed for ${raw.source_url}: ${e.message}`);
+      }
+
       await supabase.schema("ingestion").from("raw_program_pages")
-        .update({ parse_status: "skipped" }).eq("id", pageId);
-      console.log(`[parse] Listing page seeded ${seeded} URLs: ${raw.source_url}`);
-      return { success: true, programs: [], skipped: true, seeded };
+        .update({ parse_status: "parsed" }).eq("id", pageId);
+      console.log(`[parse] Listing page: seeded=${seeded} links, extracted=${listingExtracted} programs: ${raw.source_url}`);
+      return { success: true, programs: [], seeded, listingExtracted };
     }
 
     const $ = cheerio.load(raw.raw_html);
