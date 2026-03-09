@@ -1759,9 +1759,7 @@ app.post("/migrate", async (req, res) => {
         }
 
         if (!finalTuitionUSD) {
-          console.log(`[migrate-skip] No tuition for: ${p.program_name}`);
-          skipped++;
-          continue;
+          console.log(`[migrate-warn] No tuition resolved for: ${p.program_name} — inserting with null`);
         }
 
         const { error: insertError } = await supabase
@@ -4014,10 +4012,12 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
           if (tuitionCAD) finalTuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
         }
 
+        // Do NOT skip programs with no resolved tuition — attempt the insert.
+        // Programs from listing pages will often have null tuition; the DB constraint
+        // (if any) will surface a real error. Hard-skipping here silently drops
+        // every listing-page-extracted program and inflates the skipped count.
         if (!finalTuitionUSD) {
-          console.log(`[migrate-skip] No tuition: ${p.program_name}`);
-          skipped++;
-          continue;
+          console.log(`[migrate-warn] No tuition resolved for: ${p.program_name} — inserting with null`);
         }
 
         const { error: insertError } = await supabase.schema("core")
@@ -4049,7 +4049,10 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
             source_parsed_id: p.id,
             migrated_at: new Date().toISOString(),
             data_quality: "parsed"
-          }, { onConflict: "university_id,name,degree_level,program_type", ignoreDuplicates: true });
+          // ignoreDuplicates removed: conflicts must UPDATE, not silently do nothing.
+          // With ignoreDuplicates: true, Supabase returns error: null even when no row
+          // was written — every existing program appeared to succeed while being skipped.
+          }, { onConflict: "university_id,name,degree_level,program_type" });
 
         if (insertError) {
           console.error(`Migration failed for ${p.program_name}:`, insertError.message);
