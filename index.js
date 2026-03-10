@@ -3191,6 +3191,40 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
   }
 
+  // Fallback: when no fee structure matches the exact program_type, retry the
+  // type-specific lookups (named pattern, then default) with a canonical fallback
+  // type before giving up. Runs for all program types including null/undefined.
+  //   research     → doctoral  (research masters often share doctoral fee bands)
+  //   professional → masters
+  //   null / other → masters   (safe default)
+  {
+    const fallbackType = programType === 'research' ? 'doctoral' : 'masters';
+
+    const fallbackSpecific = levelFees.filter(f =>
+      f.program_type === fallbackType &&
+      f.program_name_pattern &&
+      f.program_name_pattern !== `default_${level}` &&
+      nameLower.includes(f.program_name_pattern.toLowerCase())
+    );
+    if (fallbackSpecific.length > 0) {
+      fallbackSpecific.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+      const fee = fallbackSpecific[0];
+      return fee.fee_type === 'flat_annual'
+        ? fee.international_fee
+        : fee.international_fee * (fee.instalments_per_year || 2);
+    }
+
+    const fallbackDefault = levelFees.find(f =>
+      f.program_type === fallbackType &&
+      f.program_name_pattern === `default_${level}`
+    );
+    if (fallbackDefault) {
+      return fallbackDefault.fee_type === 'flat_annual'
+        ? fallbackDefault.international_fee
+        : fallbackDefault.international_fee * (fallbackDefault.instalments_per_year || 2);
+    }
+  }
+
   return null;
 }
 
