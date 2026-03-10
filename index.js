@@ -3191,6 +3191,36 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
   }
 
+  // Fallback for professional programs: many universities store a single
+  // "masters" fee structure that covers both research and professional streams.
+  // If nothing matched above, retry the type-specific lookups substituting
+  // "masters" before giving up.
+  if (programType === 'professional') {
+    const mastersFallbackSpecific = levelFees.filter(f =>
+      f.program_type === 'masters' &&
+      f.program_name_pattern &&
+      f.program_name_pattern !== `default_${level}` &&
+      nameLower.includes(f.program_name_pattern.toLowerCase())
+    );
+    if (mastersFallbackSpecific.length > 0) {
+      mastersFallbackSpecific.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+      const fee = mastersFallbackSpecific[0];
+      return fee.fee_type === 'flat_annual'
+        ? fee.international_fee
+        : fee.international_fee * (fee.instalments_per_year || 2);
+    }
+
+    const mastersFallbackDefault = levelFees.find(f =>
+      f.program_type === 'masters' &&
+      f.program_name_pattern === `default_${level}`
+    );
+    if (mastersFallbackDefault) {
+      return mastersFallbackDefault.fee_type === 'flat_annual'
+        ? mastersFallbackDefault.international_fee
+        : mastersFallbackDefault.international_fee * (mastersFallbackDefault.instalments_per_year || 2);
+    }
+  }
+
   return null;
 }
 
