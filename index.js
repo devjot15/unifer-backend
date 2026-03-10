@@ -4426,6 +4426,501 @@ app.post("/scrape-fees-batch", async (req, res) => {
   console.log("[fees-batch] Complete");
 });
 
+// ============================================================
+// RANKING DATA INGESTION
+// POST /ingest/rankings         — load a CSV ranking file into DB
+// POST /ingest/rankings/preview — validate CSV column detection (dry run)
+// GET  /ingest/frameworks       — list frameworks for admin dropdown
+// GET  /ingest/subjects         — list subjects for QS Subject dropdown
+//
+// Usage:
+//   1. Download CSV from QS / THE / ARWU website (Save As CSV from Excel)
+//   2. POST to /ingest/rankings/preview with framework_id + csv_text to verify
+//   3. POST to /ingest/rankings with framework_id + year + csv_text to ingest
+//   For QS Subject rankings also pass subject_id (UUID from core.subjects)
+// ============================================================
+
+// Column name synonyms per framework_id — all lowercase, space-normalised
+// _institution / _rank / _overall are shared across all frameworks
+const RANKING_COLUMN_MAPS = {
+  _institution: [
+    "institution", "university", "name", "institution name",
+    "university name", "school",
+  ],
+  _rank: [
+    "rank", "world rank", "2026 rank", "2025 rank", "2024 rank",
+    "ranking", "#", "2026", "2025",
+  ],
+  _overall: [
+    "overall score", "overall", "total score", "scores overall",
+    "score", "composite score",
+  ],
+
+  // QS World University Rankings
+  "00000000-0000-0000-0000-000000000001": {
+    academic_reputation:    ["academic reputation score", "academic reputation"],
+    employer_reputation:    ["employer reputation score", "employer reputation"],
+    faculty_student_ratio:  ["faculty/student ratio score", "faculty/student ratio", "faculty student ratio"],
+    citations_per_faculty:  ["citations per faculty score", "citations per faculty"],
+    international_faculty:  ["international faculty ratio score", "international faculty ratio", "international faculty"],
+    international_students: ["international student ratio score", "international student ratio", "international students"],
+    employment_outcomes:    ["employment outcomes score", "employment outcomes"],
+    sustainability:         ["sustainability score", "sustainability"],
+  },
+
+  // THE World University Rankings
+  "00000000-0000-0000-0000-000000000002": {
+    teaching_reputation:           ["teaching"],
+    research_reputation:           ["research environment", "research env"],
+    research_income:               ["research income"],
+    research_productivity:         ["research productivity"],
+    citation_impact:               ["research quality", "citations", "citation impact"],
+    intl_student_ratio:            ["international outlook", "international"],
+    industry_income:               ["industry income", "industry"],
+    staff_to_student_ratio:        ["staff to student ratio"],
+    doctorate_to_bachelor_ratio:   ["doctoral to bachelor ratio", "doctorate to bachelor ratio"],
+  },
+
+  // ARWU (Shanghai)
+  "00000000-0000-0000-0000-000000000003": {
+    alumni_award: ["alumni"],
+    award:        ["award"],
+    hici:         ["hici", "hi ci"],
+    ns:           ["n&s", "ns", "n/s"],
+    pub:          ["pub"],
+    pcp:          ["pcp"],
+  },
+
+  // QS Subject Rankings (subject-specific editions)
+  "00000000-0000-0000-0000-000000000004": {
+    academic_reputation: ["academic reputation score", "academic reputation"],
+    employer_reputation: ["employer reputation score", "employer reputation"],
+    citations_per_paper: ["citations per paper", "citations per paper score"],
+    h_index_citations:   ["h-index citations", "h-index", "hindex", "h index score"],
+  },
+
+  // NIRF (India)
+  "00000000-0000-0000-0000-000000000010": {
+    teaching_learning_resources: ["tlr", "teaching learning resources", "teaching, learning & resources"],
+    research_professional:       ["rp", "research & professional practice", "research professional"],
+    graduation_outcomes:         ["go", "graduation outcomes"],
+    outreach_inclusivity:        ["oi", "outreach & inclusivity", "outreach inclusivity"],
+    peer_perception:             ["pr", "peer perception", "perception"],
+  },
+};
+
+// ── CSV parser (no external dependency) ────────────────────────────────────
+
+function parseCSVText(text) {
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim()
+    .split("\n");
+  if (lines.length < 2) return [];
+  const headers = parseCSVRow(lines[0]).map((h) =>
+    h.trim().toLowerCase().replace(/\s+/g, " "),
+  );
+  return lines
+    .slice(1)
+    .filter((l) => l.trim())
+    .map((line) => {
+      const values = parseCSVRow(line);
+      const obj = {};
+      headers.forEach((h, i) => {
+        obj[h] = (values[i] || "").trim();
+      });
+      return obj;
+    });
+}
+
+function parseCSVRow(line) {
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+// ── Value parsers ───────────────────────────────────────────────────────────
+
+// Handles "1", "=1", "501-600", "1001+", "1,001-1,200"
+function parseRankValue(raw) {
+  if (!raw || raw === "-" || raw.toLowerCase() === "n/a" || raw === "")
+    return { rank_number: null, rank_band: null };
+  const cleaned = raw
+    .replace(/,/g, "")
+    .replace(/^=/, "")
+    .replace(/=+$/, "")
+    .trim();
+  if (/^\d+-\d+$/.test(cleaned))
+    return { rank_number: null, rank_band: cleaned };
+  if (/^\d+\+$/.test(cleaned))
+    return { rank_number: null, rank_band: cleaned };
+  const n = parseInt(cleaned, 10);
+  if (!isNaN(n) && n > 0) return { rank_number: n, rank_band: null };
+  return { rank_number: null, rank_band: raw.trim() || null };
+}
+
+function parseScore(raw) {
+  if (!raw || raw === "-" || raw.toLowerCase() === "n/a" || raw === "")
+    return null;
+  const n = parseFloat(raw.replace(/,/g, ""));
+  return isNaN(n) ? null : n;
+}
+
+function findCol(row, synonyms) {
+  for (const s of synonyms) {
+    if (row[s] !== undefined) return row[s];
+  }
+  return undefined;
+}
+
+// ── Log-scale rank normalisation (mirrors core.normalize_rank SQL fn) ───────
+
+function normalizeRankLog(rank, maxRank) {
+  if (!rank || !maxRank || rank <= 0 || maxRank <= 0) return null;
+  return parseFloat((1.0 - Math.log(rank) / Math.log(maxRank)).toFixed(4));
+}
+
+function normalizeBandLog(band, maxRank) {
+  if (!band) return null;
+  if (/^\d+\+$/.test(band)) {
+    return normalizeRankLog(parseInt(band, 10) + 100, maxRank);
+  }
+  if (/^\d+-\d+$/.test(band)) {
+    const [lo, hi] = band.split("-").map(Number);
+    return normalizeRankLog(Math.round((lo + hi) / 2), maxRank);
+  }
+  const n = parseInt(band, 10);
+  return isNaN(n) ? null : normalizeRankLog(n, maxRank);
+}
+
+// ── University name matching ─────────────────────────────────────────────────
+
+function normalizeUniName(name) {
+  return name
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)/g, "")  // remove "(MIT)" style suffixes
+    .replace(/^the\s+/i, "")       // strip leading "The "
+    .replace(/[,.']/g, "")         // strip punctuation
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchUniversity(rawName, universities) {
+  if (!rawName) return null;
+  const target = normalizeUniName(rawName);
+  // 1. Exact match on normalized name
+  let match = universities.find((u) => normalizeUniName(u.name) === target);
+  if (match) return match;
+  // 2. One contains the other (handles "MIT" ↔ "Massachusetts Institute of Technology")
+  match = universities.find((u) => {
+    const n = normalizeUniName(u.name);
+    return n.includes(target) || target.includes(n);
+  });
+  return match || null;
+}
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+// Preview: detect columns, return sample rows — no DB writes
+app.post("/ingest/rankings/preview", async (req, res) => {
+  try {
+    const { framework_id, csv_text } = req.body;
+    if (!csv_text) return res.status(400).json({ error: "csv_text required" });
+
+    const rows = parseCSVText(csv_text);
+    if (rows.length === 0)
+      return res.status(400).json({ error: "CSV empty or invalid" });
+
+    const headers = Object.keys(rows[0]);
+    const colMap = framework_id ? RANKING_COLUMN_MAPS[framework_id] || {} : {};
+
+    const detected = {};
+    const nameCol = headers.find((h) =>
+      RANKING_COLUMN_MAPS._institution.includes(h),
+    );
+    const rankCol = headers.find((h) =>
+      RANKING_COLUMN_MAPS._rank.includes(h),
+    );
+    const overallCol = headers.find((h) =>
+      RANKING_COLUMN_MAPS._overall.includes(h),
+    );
+    if (nameCol)    detected.institution   = nameCol;
+    if (rankCol)    detected.rank          = rankCol;
+    if (overallCol) detected.overall_score = overallCol;
+    for (const [key, synonyms] of Object.entries(colMap)) {
+      const found = headers.find((h) => synonyms.includes(h));
+      if (found) detected[key] = found;
+    }
+
+    const sample = rows.slice(0, 10).map((row) => ({
+      name:          findCol(row, RANKING_COLUMN_MAPS._institution) || "(not found)",
+      rank:          findCol(row, RANKING_COLUMN_MAPS._rank)        || "(not found)",
+      overall_score: findCol(row, RANKING_COLUMN_MAPS._overall)     || "(not found)",
+    }));
+
+    res.json({ total_rows: rows.length, headers, detected_columns: detected, sample });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Main ingestion route
+app.post("/ingest/rankings", async (req, res) => {
+  try {
+    const { framework_id, year, subject_id = null, csv_text } = req.body;
+
+    if (!framework_id || !year || !csv_text)
+      return res.status(400).json({ error: "framework_id, year, and csv_text are required" });
+
+    // 1. Parse CSV
+    const rows = parseCSVText(csv_text);
+    if (rows.length === 0)
+      return res.status(400).json({ error: "CSV is empty or has no data rows" });
+
+    // 2. Validate framework
+    const { data: framework, error: fErr } = await supabase
+      .schema("core")
+      .from("ranking_frameworks")
+      .select("id, short_name")
+      .eq("id", framework_id)
+      .single();
+    if (fErr || !framework)
+      return res.status(404).json({ error: "Framework not found" });
+
+    // 3. Load universities for name matching
+    const { data: universities } = await supabase
+      .schema("core")
+      .from("universities")
+      .select("id, name");
+    if (!universities)
+      return res.status(500).json({ error: "Could not load universities" });
+
+    // 4. Load sub-indicator definitions for this framework
+    const { data: subIndicators } = await supabase
+      .schema("core")
+      .from("ranking_sub_indicators")
+      .select("id, indicator_key")
+      .eq("framework_id", framework_id);
+    const siKeyToId = {};
+    (subIndicators || []).forEach((si) => {
+      siKeyToId[si.indicator_key] = si.id;
+    });
+
+    // 5. Get or create ranking edition
+    let editionQuery = supabase
+      .schema("core")
+      .from("ranking_editions")
+      .select("id")
+      .eq("framework_id", framework_id)
+      .eq("year", year);
+    editionQuery = subject_id
+      ? editionQuery.eq("subject_id", subject_id)
+      : editionQuery.is("subject_id", null);
+
+    const { data: existingEdition } = await editionQuery.maybeSingle();
+    let editionId;
+
+    if (existingEdition) {
+      editionId = existingEdition.id;
+    } else {
+      const { data: newEdition, error: eErr } = await supabase
+        .schema("core")
+        .from("ranking_editions")
+        .insert({ framework_id, year, subject_id, published_date: `${year}-01-01` })
+        .select("id")
+        .single();
+      if (eErr) throw eErr;
+      editionId = newEdition.id;
+    }
+
+    const colMap = RANKING_COLUMN_MAPS[framework_id] || {};
+
+    // 6. Parse each row; match universities
+    const parsed = [];
+    const unmatched = [];
+
+    for (const row of rows) {
+      const rawName    = findCol(row, RANKING_COLUMN_MAPS._institution);
+      const rawRank    = findCol(row, RANKING_COLUMN_MAPS._rank);
+      const rawOverall = findCol(row, RANKING_COLUMN_MAPS._overall);
+
+      if (!rawName) continue;
+
+      const uni = matchUniversity(rawName, universities);
+      if (!uni) {
+        if (!unmatched.includes(rawName)) unmatched.push(rawName);
+        continue;
+      }
+
+      const { rank_number, rank_band } = parseRankValue(rawRank || "");
+      const raw_overall_score = parseScore(rawOverall || "");
+
+      // Extract sub-indicator scores for columns present in this CSV
+      const indicators = {};
+      for (const [key, synonyms] of Object.entries(colMap)) {
+        const rawVal = findCol(row, synonyms);
+        const score  = parseScore(rawVal || "");
+        if (score !== null && siKeyToId[key]) {
+          indicators[siKeyToId[key]] = score;
+        }
+      }
+
+      parsed.push({ university_id: uni.id, rank_number, rank_band, raw_overall_score, indicators });
+    }
+
+    if (parsed.length === 0) {
+      return res.json({
+        inserted: 0,
+        skipped: 0,
+        unmatched_count: unmatched.length,
+        unmatched: unmatched.slice(0, 50),
+        message: "No universities matched. Ensure university names in core.universities align with the CSV.",
+      });
+    }
+
+    // 7. Compute max rank for log normalisation
+    const maxRank = Math.max(
+      ...parsed.map((p) => p.rank_number || 0),
+      1500,
+    );
+
+    // 8. Upsert university_rankings + track inserted IDs for sub-indicators
+    let inserted = 0;
+    let skipped  = 0;
+    const rankingIdMap = {};
+
+    for (const p of parsed) {
+      let composite_score = null;
+      if (p.rank_number)  composite_score = normalizeRankLog(p.rank_number, maxRank);
+      else if (p.rank_band) composite_score = normalizeBandLog(p.rank_band, maxRank);
+
+      const { data: upserted, error: uErr } = await supabase
+        .schema("core")
+        .from("university_rankings")
+        .upsert(
+          {
+            university_id:     p.university_id,
+            edition_id:        editionId,
+            rank_number:       p.rank_number,
+            rank_band:         p.rank_band,
+            raw_overall_score: p.raw_overall_score,
+            composite_score,
+          },
+          { onConflict: "university_id,edition_id" },
+        )
+        .select("id")
+        .single();
+
+      if (uErr) { skipped++; continue; }
+      inserted++;
+      rankingIdMap[p.university_id] = upserted.id;
+    }
+
+    // 9. Upsert sub-indicator scores (normalise raw scores within this edition)
+    const indicatorMaxMap = {};
+    for (const p of parsed) {
+      for (const [siId, rawScore] of Object.entries(p.indicators)) {
+        if (rawScore > (indicatorMaxMap[siId] || 0)) indicatorMaxMap[siId] = rawScore;
+      }
+    }
+
+    let siInserted = 0;
+    for (const p of parsed) {
+      const rankingId = rankingIdMap[p.university_id];
+      if (!rankingId) continue;
+      for (const [siId, rawScore] of Object.entries(p.indicators)) {
+        const maxScore = indicatorMaxMap[siId] || 1;
+        const normalized_score = parseFloat((rawScore / maxScore).toFixed(4));
+        const { error: siErr } = await supabase
+          .schema("core")
+          .from("university_sub_indicator_scores")
+          .upsert(
+            {
+              university_ranking_id: rankingId,
+              sub_indicator_id:      siId,
+              raw_score:             rawScore,
+              normalized_score,
+            },
+            { onConflict: "university_ranking_id,sub_indicator_id" },
+          );
+        if (!siErr) siInserted++;
+      }
+    }
+
+    console.log(
+      `[ingest] ${framework.short_name} ${year}: ${inserted} universities, ${siInserted} sub-indicator scores`,
+    );
+
+    res.json({
+      framework:            framework.short_name,
+      year,
+      subject_id:           subject_id || null,
+      edition_id:           editionId,
+      rows_in_csv:          rows.length,
+      inserted,
+      skipped,
+      sub_indicator_scores: siInserted,
+      unmatched_count:      unmatched.length,
+      unmatched:            unmatched.slice(0, 50),
+      message:              `Ingested ${inserted} universities into ${framework.short_name} ${year}`,
+    });
+  } catch (err) {
+    console.error("[ingest/rankings]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List frameworks (for admin dropdown)
+app.get("/ingest/frameworks", async (req, res) => {
+  try {
+    const { data } = await supabase
+      .schema("core")
+      .from("ranking_frameworks")
+      .select("id, name, short_name, type, region, trust_tier, subject_scope")
+      .eq("active", true)
+      .order("trust_tier")
+      .order("name");
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List subjects (for QS Subject dropdown)
+app.get("/ingest/subjects", async (req, res) => {
+  try {
+    const { data } = await supabase
+      .schema("core")
+      .from("subjects")
+      .select("id, name, short_name, broad_area, qs_subject_key")
+      .eq("active", true)
+      .order("broad_area")
+      .order("name");
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT} — worker enabled`);
