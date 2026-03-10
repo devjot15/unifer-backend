@@ -208,6 +208,22 @@ app.post("/recommend", async (req, res) => {
       });
     }
 
+    // Subject-level ranking map: "universityId:subjectId" → composite_score
+    // When a course has subject_id set, we prefer this over the blended overall score.
+    // Example: MIT might be #200 overall but #3 in CS — a CS student should see #3.
+    const { data: subjectRankData } = await supabase
+      .from("university_subject_ranking")
+      .select("university_id, subject_id, composite_score");
+
+    const subjectRankMap = {};
+    if (subjectRankData) {
+      subjectRankData.forEach((r) => {
+        if (r.composite_score != null) {
+          subjectRankMap[`${r.university_id}:${r.subject_id}`] = r.composite_score;
+        }
+      });
+    }
+
     const countryMap = {};
     if (countryData) {
       countryData.forEach((c) => {
@@ -458,7 +474,7 @@ app.post("/recommend", async (req, res) => {
       );
     }
 
-    function computeUniversityScore(university, country, answers, rankingMap) {
+    function computeUniversityScore(university, country, answers, rankingMap, subjectRankMap, courseSubjectId) {
       let locationScore =
         answers.location_preference === "Anywhere in the country"
           ? 1
@@ -484,7 +500,20 @@ app.post("/recommend", async (req, res) => {
       let admissionWeight =
         admissionWeightMap[answers.admission_speed_importance] || 0;
 
-      const compositeRanking = rankingMap[university.id] ?? 0.5;
+      // Use subject-specific ranking if available — much more accurate signal.
+      // e.g. MIT #200 overall but #3 in CS: a CS student should see the #3 score.
+      const overallRanking = rankingMap[university.id] ?? 0.5;
+      const subjectRanking =
+        courseSubjectId && subjectRankMap
+          ? subjectRankMap[`${university.id}:${courseSubjectId}`] ?? null
+          : null;
+      // Blend: if subject ranking exists, weight it 70% vs 30% overall.
+      // This preserves the overall signal (faculty ratio, intl outlook, etc.)
+      // while prioritising the discipline-specific rank.
+      const compositeRanking =
+        subjectRanking != null
+          ? 0.7 * subjectRanking + 0.3 * overallRanking
+          : overallRanking;
 
       const admissionSpeedScore = university.admission_speed_score ?? 0.5;
       let admissionScore = admissionWeight * admissionSpeedScore;
@@ -528,6 +557,8 @@ app.post("/recommend", async (req, res) => {
         country,
         answers,
         rankingMap,
+        subjectRankMap,
+        course.subject_id || null,
       );
 
       // FINAL ADDITIVE SCORE
@@ -584,6 +615,16 @@ app.post("/recommend", async (req, res) => {
         );
       else if (courseScore >= 0.4)
         explanation.push("Reasonable course fit based on your priorities");
+
+      // If subject-specific ranking was used, surface that as an explanation
+      if (course.subject_id && subjectRankMap) {
+        const subjectScore = subjectRankMap[`${university.id}:${course.subject_id}`];
+        if (subjectScore != null && subjectScore >= 0.7) {
+          explanation.push("Highly ranked in your specific subject area");
+        } else if (subjectScore != null && subjectScore >= 0.5) {
+          explanation.push("Well ranked in your specific subject area");
+        }
+      }
 
       if (universityScore >= 0.7)
         explanation.push(
