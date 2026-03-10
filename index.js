@@ -1500,11 +1500,9 @@ app.post("/parse-batch", async (req, res) => {
   const limit = req.body.limit || 20;
   const concurrency = req.body.concurrency || 5;
 
-  res.json({
-    message: `Starting parallel parse — limit: ${limit}, concurrency: ${concurrency}`,
-  });
+  res.json({ message: "Started", status: "running" });
 
-  (async () => {
+  setImmediate(async () => {
     const { data: pages } = await supabase
       .schema("ingestion")
       .from("raw_program_pages")
@@ -1595,152 +1593,160 @@ app.post("/crawl-university", async (req, res) => {
 // ==============================
 
 app.post("/process-queue", async (req, res) => {
-  try {
-    const limit = req.body.limit || 500;
-    const university_id = req.body.university_id;
+  const limit = req.body.limit || 500;
+  const university_id = req.body.university_id;
 
-    let query = supabase
-      .schema("ingestion")
-      .from("scrape_queue")
-      .select("*")
-      .eq("status", "pending");
+  res.json({ message: "Started", status: "running" });
 
-    if (university_id) {
-      query = query.eq("university_id", university_id);
-    }
-
-    const { data: queueItems, error: qErr } = await query.limit(limit);
-
-    if (qErr) return res.status(500).json({ error: qErr });
-    if (!queueItems || queueItems.length === 0) {
-      return res.json({ message: "Queue is empty" });
-    }
-
-    console.log(`Processing ${queueItems.length} URLs from queue`);
-
-    const results = { success: 0, failed: 0, skipped: 0 };
-
-    for (const item of queueItems) {
-      try {
+  setImmediate(async () => {
+    try {
+      // Reset any stale "processing" items back to "pending"
+      if (university_id) {
         await supabase
           .schema("ingestion")
           .from("scrape_queue")
-          .update({ status: "processing" })
-          .eq("id", item.id);
+          .update({ status: "pending" })
+          .eq("status", "processing")
+          .eq("university_id", university_id);
+      }
 
-        const scrapeResponse = await axios.get(item.program_url, {
-          headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
-          timeout: 30000,
-        });
+      let query = supabase
+        .schema("ingestion")
+        .from("scrape_queue")
+        .select("*")
+        .eq("status", "pending");
 
-        let html = scrapeResponse.data;
+      if (university_id) {
+        query = query.eq("university_id", university_id);
+      }
 
-        if (!html || html.length < 500) {
-          console.log(
-            `[queue] Axios got small page, trying Browserless for: ${item.program_url}`,
-          );
-          try {
-            const browser = await puppeteer.connect({ browserWSEndpoint });
-            const page = await browser.newPage();
-            await page.goto(item.program_url, {
-              waitUntil: "domcontentloaded",
-              timeout: 30000,
-            });
-            await new Promise((r) => setTimeout(r, 3000));
-            html = await page.content();
-            await browser.disconnect();
-            console.log(
-              `[queue] Browserless got ${html.length} chars for: ${item.program_url}`,
-            );
-          } catch (bErr) {
-            console.error(`[queue] Browserless also failed: ${bErr.message}`);
-            await supabase
-              .schema("ingestion")
-              .from("scrape_queue")
-              .update({
-                status: "failed",
-                error_message: `Browserless failed: ${bErr.message}`,
-              })
-              .eq("id", item.id);
-            results.failed++;
-            continue;
-          }
+      const { data: queueItems, error: qErr } = await query.limit(limit);
+
+      if (qErr) { console.error("[queue] Query error:", qErr); return; }
+      if (!queueItems || queueItems.length === 0) {
+        console.log("[queue] Queue is empty");
+        return;
+      }
+
+      console.log(`Processing ${queueItems.length} URLs from queue`);
+
+      const results = { success: 0, failed: 0, skipped: 0 };
+
+      for (const item of queueItems) {
+        try {
+          await supabase
+            .schema("ingestion")
+            .from("scrape_queue")
+            .update({ status: "processing" })
+            .eq("id", item.id);
+
+          const scrapeResponse = await axios.get(item.program_url, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; UNIFERBot/1.0)" },
+            timeout: 30000,
+          });
+
+          let html = scrapeResponse.data;
 
           if (!html || html.length < 500) {
-            await supabase
-              .schema("ingestion")
-              .from("scrape_queue")
-              .update({
-                status: "failed",
-                error_message: "Page too small even after Browserless",
-              })
-              .eq("id", item.id);
-            results.failed++;
-            continue;
+            console.log(
+              `[queue] Axios got small page, trying Browserless for: ${item.program_url}`,
+            );
+            try {
+              const browser = await puppeteer.connect({ browserWSEndpoint });
+              const page = await browser.newPage();
+              await page.goto(item.program_url, {
+                waitUntil: "domcontentloaded",
+                timeout: 30000,
+              });
+              await new Promise((r) => setTimeout(r, 3000));
+              html = await page.content();
+              await browser.disconnect();
+              console.log(
+                `[queue] Browserless got ${html.length} chars for: ${item.program_url}`,
+              );
+            } catch (bErr) {
+              console.error(`[queue] Browserless also failed: ${bErr.message}`);
+              await supabase
+                .schema("ingestion")
+                .from("scrape_queue")
+                .update({
+                  status: "failed",
+                  error_message: `Browserless failed: ${bErr.message}`,
+                })
+                .eq("id", item.id);
+              results.failed++;
+              continue;
+            }
+
+            if (!html || html.length < 500) {
+              await supabase
+                .schema("ingestion")
+                .from("scrape_queue")
+                .update({
+                  status: "failed",
+                  error_message: "Page too small even after Browserless",
+                })
+                .eq("id", item.id);
+              results.failed++;
+              continue;
+            }
           }
+
+          await supabase.schema("ingestion").from("raw_program_pages").upsert(
+            {
+              university_id: item.university_id,
+              source_url: item.program_url,
+              raw_html: html,
+              parse_status: "pending",
+            },
+            { onConflict: "source_url" },
+          );
+
+          await supabase
+            .schema("ingestion")
+            .from("scrape_queue")
+            .update({ status: "scraped", scraped_at: new Date().toISOString() })
+            .eq("id", item.id);
+
+          results.success++;
+          console.log(
+            `[queue] ✓ ${results.success}/${queueItems.length} scraped: ${item.program_url}`,
+          );
+          await delay(1500);
+        } catch (err) {
+          console.error(
+            `[queue] ✗ Failed to scrape: ${item.program_url}`,
+            err.message,
+          );
+          await supabase
+            .schema("ingestion")
+            .from("scrape_queue")
+            .update({ status: "failed", error_message: err.message })
+            .eq("id", item.id);
+          results.failed++;
         }
-
-        await supabase.schema("ingestion").from("raw_program_pages").upsert(
-          {
-            university_id: item.university_id,
-            source_url: item.program_url,
-            raw_html: html,
-            parse_status: "pending",
-          },
-          { onConflict: "source_url" },
-        );
-
-        await supabase
-          .schema("ingestion")
-          .from("scrape_queue")
-          .update({ status: "scraped", scraped_at: new Date().toISOString() })
-          .eq("id", item.id);
-
-        results.success++;
-        console.log(
-          `[queue] ✓ ${results.success}/${queueItems.length} scraped: ${item.program_url}`,
-        );
-        await delay(1500);
-      } catch (err) {
-        console.error(
-          `[queue] ✗ Failed to scrape: ${item.program_url}`,
-          err.message,
-        );
-        await supabase
-          .schema("ingestion")
-          .from("scrape_queue")
-          .update({ status: "failed", error_message: err.message })
-          .eq("id", item.id);
-        results.failed++;
       }
-    }
 
-    if (university_id && results.success > 0) {
-      console.log(`[queue] Parsing ${results.success} newly scraped pages...`);
-      try {
-        const parsed = await parsePagesForUniversity(university_id);
-        results.parsed = parsed;
-        console.log(`[queue] Parsed ${parsed} programs`);
+      if (university_id && results.success > 0) {
+        console.log(`[queue] Parsing ${results.success} newly scraped pages...`);
+        try {
+          const parsed = await parsePagesForUniversity(university_id);
+          results.parsed = parsed;
+          console.log(`[queue] Parsed ${parsed} programs`);
 
-        const fixed = await autoFixFieldCategories(university_id);
-        results.fixed = fixed;
-        console.log(`[queue] Fixed ${fixed} field categories`);
-      } catch (parseErr) {
-        console.error('[queue] Parse step failed:', parseErr.message);
-        results.parse_error = parseErr.message;
+          const fixed = await autoFixFieldCategories(university_id);
+          results.fixed = fixed;
+          console.log(`[queue] Fixed ${fixed} field categories`);
+        } catch (parseErr) {
+          console.error("[queue] Parse step failed:", parseErr.message);
+        }
       }
-    }
 
-    res.json({
-      message: "Queue processing complete",
-      ...results,
-    });
-  } catch (err) {
-    console.error("Queue processing error:", err.message);
-    res
-      .status(500)
-      .json({ error: "Queue processing failed", details: err.message });
-  }
+      console.log(`[queue] Complete — success: ${results.success}, failed: ${results.failed}`);
+    } catch (err) {
+      console.error("[queue] Processing error:", err.message);
+    }
+  });
 });
 
 // ==============================
