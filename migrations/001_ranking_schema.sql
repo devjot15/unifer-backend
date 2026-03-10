@@ -1,28 +1,57 @@
 -- =============================================================================
 -- Migration 001: Ranking Schema
 --
+-- Context:
+--   Supabase exposes the 'public' schema by default via its REST API.
+--   'core' schema is accessed only through the explicit .schema("core") client
+--   call. Two tables were historically placed (or have views) in 'public' so
+--   they can be queried without a schema prefix in index.js:
+--     - public.country_normalized
+--     - public.university_composite_ranking   ← this migration touches this one
+--
 -- Strategy:
---   - Keeps existing university_composite_ranking table intact (no breaking changes)
---   - Adds new tables for multi-framework ranking data (composite + sub-indicators)
---   - Replaces university_composite_ranking with a VIEW derived from new tables,
---     with a fallback to the legacy score until real data is loaded
+--   - Preserve existing public.university_composite_ranking as _legacy (data safe)
+--   - New ranking tables go into 'core' (consistent with all other data tables)
+--   - Replacement VIEW lives in 'public' so index.js needs zero changes
 --   - trust_tier: 1=domestic (highest trust), 2=global, 3=govt (lowest trust)
 -- =============================================================================
 
 
 -- -----------------------------------------------------------------------------
 -- Step 1: Preserve existing data
+-- Handles both TABLE and VIEW cases (public schema, not core)
 -- -----------------------------------------------------------------------------
 
-ALTER TABLE core.university_composite_ranking
-  RENAME TO university_composite_ranking_legacy;
+DO $$
+BEGIN
+  -- If it is a plain table
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name   = 'university_composite_ranking'
+      AND table_type   = 'BASE TABLE'
+  ) THEN
+    ALTER TABLE public.university_composite_ranking
+      RENAME TO university_composite_ranking_legacy;
+
+  -- If it is a view
+  ELSIF EXISTS (
+    SELECT 1 FROM information_schema.views
+    WHERE table_schema = 'public'
+      AND table_name   = 'university_composite_ranking'
+  ) THEN
+    ALTER VIEW public.university_composite_ranking
+      RENAME TO university_composite_ranking_legacy;
+  END IF;
+END;
+$$;
 
 
 -- -----------------------------------------------------------------------------
--- Step 2: Ranking frameworks master table
+-- Step 2: Ranking frameworks master table  (core schema)
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE core.ranking_frameworks (
+CREATE TABLE IF NOT EXISTS core.ranking_frameworks (
   id            UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   name          TEXT    NOT NULL,                   -- 'QS World University Rankings'
   short_name    TEXT    NOT NULL,                   -- 'QS World'
@@ -43,10 +72,10 @@ COMMENT ON TABLE core.ranking_frameworks IS
 
 
 -- -----------------------------------------------------------------------------
--- Step 3: Per-year editions of each framework
+-- Step 3: Per-year editions of each framework  (core schema)
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE core.ranking_editions (
+CREATE TABLE IF NOT EXISTS core.ranking_editions (
   id            UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   framework_id  UUID    NOT NULL REFERENCES core.ranking_frameworks(id) ON DELETE CASCADE,
   year          INTEGER NOT NULL,
@@ -59,16 +88,14 @@ CREATE TABLE core.ranking_editions (
 COMMENT ON TABLE core.ranking_editions IS
   'One row per annual edition of a ranking framework. is_latest = TRUE for most recent year.';
 
--- Trigger: keep is_latest accurate when a new edition is inserted
+-- Trigger: keep is_latest accurate when a new edition is inserted/updated
 CREATE OR REPLACE FUNCTION core.refresh_latest_edition()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-  -- Mark all editions for this framework as not latest
   UPDATE core.ranking_editions
   SET    is_latest = FALSE
   WHERE  framework_id = NEW.framework_id;
 
-  -- Mark the highest year as latest
   UPDATE core.ranking_editions
   SET    is_latest = TRUE
   WHERE  id = (
@@ -82,52 +109,50 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_refresh_latest_edition ON core.ranking_editions;
 CREATE TRIGGER trg_refresh_latest_edition
 AFTER INSERT OR UPDATE ON core.ranking_editions
 FOR EACH ROW EXECUTE FUNCTION core.refresh_latest_edition();
 
 
 -- -----------------------------------------------------------------------------
--- Step 4: Composite rank per university per edition
+-- Step 4: Composite rank per university per edition  (core schema)
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE core.university_rankings (
+CREATE TABLE IF NOT EXISTS core.university_rankings (
   id                UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   university_id     UUID    NOT NULL REFERENCES core.universities(id) ON DELETE CASCADE,
   edition_id        UUID    NOT NULL REFERENCES core.ranking_editions(id) ON DELETE CASCADE,
   rank_number       INTEGER,             -- exact rank (NULL if banded, e.g. 501-600)
   rank_band         TEXT,                -- '501-600'; NULL if exact rank is known
-  composite_score   NUMERIC(6,4),        -- 0-1 normalised score (we compute, see note)
-  raw_overall_score NUMERIC(7,3),        -- score as published (e.g. QS publishes 0-100)
+  composite_score   NUMERIC(6,4),        -- 0-1 normalised score (we compute via helper fn)
+  raw_overall_score NUMERIC(7,3),        -- score as published (e.g. QS 0-100, THE 0-100)
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (university_id, edition_id),
-  -- Either rank_number or rank_band must be present
   CHECK (rank_number IS NOT NULL OR rank_band IS NOT NULL)
 );
 
 COMMENT ON COLUMN core.university_rankings.composite_score IS
-  '0-1 normalised rank score we compute. For ranked universities: 1 - ((rank-1) / max_rank_in_edition). For banded, use mid-point of band.';
+  '0-1 normalised rank score. Computed via core.refresh_composite_scores(edition_id). Uses log scale.';
 COMMENT ON COLUMN core.university_rankings.raw_overall_score IS
-  'Score as published by the framework (e.g. QS publishes 0-100 overall score, THE publishes 0-100).';
+  'Score as published by the framework (e.g. QS overall score 0-100).';
 
-CREATE INDEX idx_university_rankings_university ON core.university_rankings(university_id);
-CREATE INDEX idx_university_rankings_edition    ON core.university_rankings(edition_id);
+CREATE INDEX IF NOT EXISTS idx_university_rankings_university ON core.university_rankings(university_id);
+CREATE INDEX IF NOT EXISTS idx_university_rankings_edition    ON core.university_rankings(edition_id);
 
 
 -- -----------------------------------------------------------------------------
--- Step 5: Sub-indicator (pillar) definitions per framework
+-- Step 5: Sub-indicator (pillar) definitions per framework  (core schema)
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE core.ranking_sub_indicators (
+CREATE TABLE IF NOT EXISTS core.ranking_sub_indicators (
   id                   UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   framework_id         UUID    NOT NULL REFERENCES core.ranking_frameworks(id) ON DELETE CASCADE,
-  indicator_key        TEXT    NOT NULL,  -- 'academic_reputation', 'citations_per_faculty'
-  indicator_label      TEXT    NOT NULL,  -- human-readable display name
-  official_weight_pct  NUMERIC(5,2),      -- official weight % in the framework (may be NULL if undisclosed)
-  parameter_category   TEXT               -- bridge to quiz preference vectors later:
-                                          -- 'research' | 'employability' | 'teaching'
-                                          -- | 'prestige' | 'international' | 'experience'
+  indicator_key        TEXT    NOT NULL,
+  indicator_label      TEXT    NOT NULL,
+  official_weight_pct  NUMERIC(5,2),
+  parameter_category   TEXT
                         CHECK (parameter_category IN (
                           'research', 'employability', 'teaching',
                           'prestige', 'international', 'experience'
@@ -137,53 +162,51 @@ CREATE TABLE core.ranking_sub_indicators (
 );
 
 COMMENT ON TABLE core.ranking_sub_indicators IS
-  'Pillar/sub-indicator definitions per framework. parameter_category is the future bridge to quiz-driven weighting.';
+  'Pillar definitions per framework. parameter_category bridges to quiz-driven weighting later.';
 
 
 -- -----------------------------------------------------------------------------
--- Step 6: Actual sub-indicator scores per university per edition
+-- Step 6: Sub-indicator scores per university per edition  (core schema)
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE core.university_sub_indicator_scores (
+CREATE TABLE IF NOT EXISTS core.university_sub_indicator_scores (
   id                    UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   university_ranking_id UUID    NOT NULL REFERENCES core.university_rankings(id) ON DELETE CASCADE,
   sub_indicator_id      UUID    NOT NULL REFERENCES core.ranking_sub_indicators(id) ON DELETE CASCADE,
-  raw_score             NUMERIC(7,3),    -- as published by the framework
-  normalized_score      NUMERIC(6,4),    -- 0-1 normalised (we compute)
+  raw_score             NUMERIC(7,3),
+  normalized_score      NUMERIC(6,4),
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (university_ranking_id, sub_indicator_id)
 );
 
 COMMENT ON TABLE core.university_sub_indicator_scores IS
-  'Actual sub-indicator scores per university per ranking edition. Both raw and 0-1 normalised.';
+  'Sub-indicator scores per university per edition. raw_score as published; normalized_score 0-1.';
 
-CREATE INDEX idx_sub_scores_ranking ON core.university_sub_indicator_scores(university_ranking_id);
-CREATE INDEX idx_sub_scores_indicator ON core.university_sub_indicator_scores(sub_indicator_id);
+CREATE INDEX IF NOT EXISTS idx_sub_scores_ranking   ON core.university_sub_indicator_scores(university_ranking_id);
+CREATE INDEX IF NOT EXISTS idx_sub_scores_indicator ON core.university_sub_indicator_scores(sub_indicator_id);
 
 
 -- -----------------------------------------------------------------------------
--- Step 7: Replace university_composite_ranking with a VIEW
+-- Step 7: Replacement VIEW in PUBLIC schema
 --
--- Logic:
---   For each university, weighted average of composite_score across latest editions,
---   weighted by trust_tier (tier 1 = weight 3, tier 2 = weight 2, tier 3 = weight 1).
---   Falls back to legacy score if no new ranking data exists for that university.
+-- Must live in public so index.js can query it without .schema() prefix.
+-- Weighted average of composite_score across latest editions per framework,
+-- weighted by trust_tier (tier 1 = weight 3, tier 2 = weight 2, tier 3 = weight 1).
+-- Falls back to legacy score until real ranking data is loaded.
 -- -----------------------------------------------------------------------------
 
-CREATE OR REPLACE VIEW core.university_composite_ranking AS
+CREATE OR REPLACE VIEW public.university_composite_ranking AS
 WITH latest_scores AS (
   SELECT
     ur.university_id,
     ur.composite_score,
-    rf.trust_tier,
-    -- tier weight: domestic(1) → 3, global(2) → 2, govt(3) → 1
-    (4 - rf.trust_tier) AS tier_weight
-  FROM core.university_rankings ur
-  JOIN core.ranking_editions    re ON re.id          = ur.edition_id
-  JOIN core.ranking_frameworks  rf ON rf.id          = re.framework_id
-  WHERE re.is_latest = TRUE
-    AND rf.active    = TRUE
+    (4 - rf.trust_tier) AS tier_weight    -- tier 1→3, tier 2→2, tier 3→1
+  FROM core.university_rankings  ur
+  JOIN core.ranking_editions     re ON re.id = ur.edition_id
+  JOIN core.ranking_frameworks   rf ON rf.id = re.framework_id
+  WHERE re.is_latest          = TRUE
+    AND rf.active             = TRUE
     AND ur.composite_score IS NOT NULL
 ),
 aggregated AS (
@@ -196,28 +219,33 @@ aggregated AS (
 SELECT
   u.id,
   COALESCE(
-    agg.computed_score,            -- new weighted score from new ranking tables
-    leg.final_score,               -- legacy score if no new data yet
-    0.5                            -- absolute fallback
+    agg.computed_score,   -- weighted score from new ranking tables (once data is loaded)
+    leg.final_score,      -- legacy flat score in the meantime
+    0.5                   -- absolute fallback
   ) AS final_score
 FROM core.universities u
-LEFT JOIN aggregated                          agg ON agg.university_id = u.id
-LEFT JOIN core.university_composite_ranking_legacy leg ON leg.id        = u.id;
+LEFT JOIN aggregated                                   agg ON agg.university_id = u.id
+LEFT JOIN public.university_composite_ranking_legacy   leg ON leg.id            = u.id;
 
-COMMENT ON VIEW core.university_composite_ranking IS
-  'Drop-in replacement for the old table. Weighted average of composite_score across latest ranking editions (trust_tier weighted). Falls back to legacy score until new data is loaded.';
+COMMENT ON VIEW public.university_composite_ranking IS
+  'Public-schema drop-in replacement for the old table. Consumed by index.js without schema prefix.
+   Computes final_score as trust-tier-weighted average of composite_score across latest ranking editions.
+   Falls back to legacy score until core.university_rankings is populated.';
 
 
 -- -----------------------------------------------------------------------------
--- Step 8: Convenience view — per-university ranking summary (for display)
+-- Step 8: Display view in public schema
+--
+-- Exposes per-framework rank data for the frontend (QS #10, THE #15, etc.)
+-- Also in public so it can be queried directly if needed.
 -- -----------------------------------------------------------------------------
 
-CREATE OR REPLACE VIEW core.university_ranking_summary AS
+CREATE OR REPLACE VIEW public.university_ranking_summary AS
 SELECT
-  u.id                          AS university_id,
-  u.name                        AS university_name,
-  rf.short_name                 AS framework,
-  rf.type                       AS framework_type,
+  u.id                  AS university_id,
+  u.name                AS university_name,
+  rf.short_name         AS framework,
+  rf.type               AS framework_type,
   rf.trust_tier,
   re.year,
   ur.rank_number,
@@ -230,5 +258,5 @@ JOIN core.ranking_editions    re ON re.id            = ur.edition_id
 JOIN core.ranking_frameworks  rf ON rf.id            = re.framework_id
 ORDER BY u.name, rf.trust_tier, re.year DESC;
 
-COMMENT ON VIEW core.university_ranking_summary IS
-  'Flat view of all ranking data per university for display/export. Use this to show QS #10, THE #15 etc. alongside recommendations.';
+COMMENT ON VIEW public.university_ranking_summary IS
+  'Per-framework ranking display view. Use to show QS #10, THE #15 etc. alongside recommendations.';
