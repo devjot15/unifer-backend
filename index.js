@@ -11,7 +11,7 @@ async function fetchWithPuppeteer(url) {
   const browser = await puppeteer.connect({ browserWSEndpoint });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
     // Accept cookies if present
     try {
@@ -65,7 +65,7 @@ async function fetchWithPuppeteer(url) {
     const html = await page.content();
     return html;
   } finally {
-    await browser.close();
+    await browser.disconnect();
   }
 }
 const { createClient } = require("@supabase/supabase-js");
@@ -1517,7 +1517,7 @@ app.post("/crawl-university", async (req, res) => {
       university_id,
       directory_url,
       directory_urls,
-      depth = 1,
+      depth = 2,
     } = req.body;
 
     if (!university_id) {
