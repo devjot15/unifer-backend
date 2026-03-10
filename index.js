@@ -3191,33 +3191,37 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
   }
 
-  // Fallback for professional programs: many universities store a single
-  // "masters" fee structure that covers both research and professional streams.
-  // If nothing matched above, retry the type-specific lookups substituting
-  // "masters" before giving up.
-  if (programType === 'professional') {
-    const mastersFallbackSpecific = levelFees.filter(f =>
-      f.program_type === 'masters' &&
+  // Fallback: when no fee structure matches the exact program_type, retry the
+  // type-specific lookups (named pattern, then default) with a canonical fallback
+  // type before giving up. Runs for all program types including null/undefined.
+  //   research     → doctoral  (research masters often share doctoral fee bands)
+  //   professional → masters
+  //   null / other → masters   (safe default)
+  {
+    const fallbackType = programType === 'research' ? 'doctoral' : 'masters';
+
+    const fallbackSpecific = levelFees.filter(f =>
+      f.program_type === fallbackType &&
       f.program_name_pattern &&
       f.program_name_pattern !== `default_${level}` &&
       nameLower.includes(f.program_name_pattern.toLowerCase())
     );
-    if (mastersFallbackSpecific.length > 0) {
-      mastersFallbackSpecific.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
-      const fee = mastersFallbackSpecific[0];
+    if (fallbackSpecific.length > 0) {
+      fallbackSpecific.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
+      const fee = fallbackSpecific[0];
       return fee.fee_type === 'flat_annual'
         ? fee.international_fee
         : fee.international_fee * (fee.instalments_per_year || 2);
     }
 
-    const mastersFallbackDefault = levelFees.find(f =>
-      f.program_type === 'masters' &&
+    const fallbackDefault = levelFees.find(f =>
+      f.program_type === fallbackType &&
       f.program_name_pattern === `default_${level}`
     );
-    if (mastersFallbackDefault) {
-      return mastersFallbackDefault.fee_type === 'flat_annual'
-        ? mastersFallbackDefault.international_fee
-        : mastersFallbackDefault.international_fee * (mastersFallbackDefault.instalments_per_year || 2);
+    if (fallbackDefault) {
+      return fallbackDefault.fee_type === 'flat_annual'
+        ? fallbackDefault.international_fee
+        : fallbackDefault.international_fee * (fallbackDefault.instalments_per_year || 2);
     }
   }
 
