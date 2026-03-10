@@ -1517,7 +1517,7 @@ app.post("/crawl-university", async (req, res) => {
       university_id,
       directory_url,
       directory_urls,
-      depth = 2,
+      depth = 1,
     } = req.body;
 
     if (!university_id) {
