@@ -2537,7 +2537,7 @@ const SKIP_URL_SIGNALS = [
 ];
 
 function isProgramUrl(url) {
-  const path = url.toLowerCase();
+  const path = new URL(url).pathname.toLowerCase();
   const hasProgram = PROGRAM_URL_SIGNALS.some((s) => path.includes(s));
   const shouldSkip = SKIP_URL_SIGNALS.some((s) => path.includes(s));
   return hasProgram && !shouldSkip;
