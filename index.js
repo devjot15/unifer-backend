@@ -2535,6 +2535,220 @@ async function updateJobStatus(jobId, status, errorMessage = null) {
   }
 }
 
+// ============================================================
+// PIPELINE WORKER — Stage-by-stage bulk ingestion for 500+ universities
+// All universities complete stage N before any university starts stage N+1.
+// A university that fails stage N is automatically skipped for N+1 onward.
+// ============================================================
+
+const PIPELINE_STAGES = ['crawl', 'scrape', 'parse', 'fee_scrape', 'fix'];
+const STAGE_CONCURRENCY = { crawl: 3, scrape: 5, parse: 5, fee_scrape: 3, fix: 5 };
+
+let pipelineWorkerRunning = false;
+
+async function runPipelineWorker() {
+  if (pipelineWorkerRunning) {
+    console.log('[pipeline] Already running, skipping');
+    return;
+  }
+  pipelineWorkerRunning = true;
+  try {
+    // Find the active stage: lowest stage that still has pending or running jobs
+    let activeStage = null;
+    for (const stage of PIPELINE_STAGES) {
+      const { count } = await supabase
+        .schema('ingestion')
+        .from('pipeline_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('stage', stage)
+        .in('status', ['pending', 'running']);
+      if (count > 0) { activeStage = stage; break; }
+    }
+
+    if (!activeStage) {
+      console.log('[pipeline] No active pipeline jobs');
+      pipelineWorkerRunning = false;
+      return;
+    }
+
+    // Pick up to CONCURRENCY pending jobs at the active stage
+    const limit = STAGE_CONCURRENCY[activeStage] || 3;
+    const { data: jobs } = await supabase
+      .schema('ingestion')
+      .from('pipeline_jobs')
+      .select('*')
+      .eq('stage', activeStage)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(limit);
+
+    if (!jobs || jobs.length === 0) {
+      console.log(`[pipeline] Stage "${activeStage}": waiting for running jobs to finish`);
+      pipelineWorkerRunning = false;
+      return;
+    }
+
+    console.log(`[pipeline] Stage "${activeStage}": processing ${jobs.length} universities concurrently`);
+
+    // Mark all picked jobs as running before processing starts
+    await Promise.all(jobs.map(job =>
+      supabase.schema('ingestion').from('pipeline_jobs')
+        .update({ status: 'running', started_at: new Date().toISOString(), attempts: (job.attempts || 0) + 1 })
+        .eq('id', job.id)
+    ));
+
+    // Process concurrently
+    await Promise.all(jobs.map(job => executePipelineStage(job)));
+
+  } catch (err) {
+    console.error('[pipeline] Unexpected worker error:', err.message);
+  }
+  pipelineWorkerRunning = false;
+}
+
+async function executePipelineStage(job) {
+  const { id, university_id, stage, attempts, max_attempts } = job;
+  try {
+    let result;
+    switch (stage) {
+      case 'crawl':      result = await pipelineCrawl(university_id);           break;
+      case 'scrape':     result = await pipelineScrape(university_id);          break;
+      case 'parse':      result = await pipelineParse(university_id);           break;
+      case 'fee_scrape': result = await pipelineFeeScrapeSafe(university_id);   break;
+      case 'fix':        result = await pipelineFix(university_id);             break;
+      default: throw new Error(`Unknown pipeline stage: ${stage}`);
+    }
+
+    await supabase.schema('ingestion').from('pipeline_jobs')
+      .update({ status: 'complete', completed_at: new Date().toISOString(), error_message: null })
+      .eq('id', id);
+
+    console.log(`[pipeline] ✓ ${stage} complete for ${university_id}`, result);
+
+  } catch (err) {
+    const currentAttempts = (attempts || 0) + 1;
+    const maxAttempts = max_attempts || 3;
+    console.error(`[pipeline] ✗ ${stage} failed for ${university_id} (attempt ${currentAttempts}/${maxAttempts}): ${err.message}`);
+
+    if (currentAttempts >= maxAttempts) {
+      // Permanently failed — mark stage failed and skip all downstream stages
+      await supabase.schema('ingestion').from('pipeline_jobs')
+        .update({ status: 'failed', error_message: err.message, completed_at: new Date().toISOString() })
+        .eq('id', id);
+
+      const nextStages = PIPELINE_STAGES.slice(PIPELINE_STAGES.indexOf(stage) + 1);
+      if (nextStages.length > 0) {
+        await supabase.schema('ingestion').from('pipeline_jobs')
+          .update({ status: 'skipped', error_message: `Skipped: upstream stage "${stage}" failed` })
+          .eq('university_id', university_id)
+          .in('stage', nextStages)
+          .eq('status', 'pending');
+        console.log(`[pipeline] Skipped [${nextStages.join(', ')}] for ${university_id}`);
+      }
+    } else {
+      // Retry on next worker cycle
+      await supabase.schema('ingestion').from('pipeline_jobs')
+        .update({ status: 'pending', error_message: `Attempt ${currentAttempts} failed: ${err.message}` })
+        .eq('id', id);
+    }
+  }
+}
+
+// ---- Stage executors ----
+
+async function pipelineCrawl(universityId) {
+  const { data: uni } = await supabase.schema('core').from('universities')
+    .select('website_url').eq('id', universityId).single();
+
+  const { data: existingJob } = await supabase.schema('ingestion').from('university_jobs')
+    .select('directory_urls, crawl_depth')
+    .eq('university_id', universityId)
+    .order('created_at', { ascending: false })
+    .limit(1).single();
+
+  let directoryUrls = existingJob?.directory_urls;
+  const crawlDepth = existingJob?.crawl_depth || 1;
+
+  if (!directoryUrls || directoryUrls.length === 0) {
+    if (!uni?.website_url) throw new Error('No website URL configured for this university');
+    directoryUrls = await discoverDirectoryUrls(uni.website_url);
+  }
+  if (!directoryUrls || directoryUrls.length === 0) {
+    throw new Error('Could not discover any directory URLs');
+  }
+
+  let totalDiscovered = 0;
+  for (const dirUrl of directoryUrls) {
+    try {
+      const count = await crawlDirectory(universityId, dirUrl, crawlDepth);
+      totalDiscovered += count;
+      console.log(`[pipeline/crawl] ${dirUrl} → ${count} URLs`);
+    } catch (e) {
+      console.error(`[pipeline/crawl] ${dirUrl} failed: ${e.message}`);
+    }
+  }
+
+  if (totalDiscovered === 0) throw new Error('No program URLs discovered during crawl');
+  return { urls_discovered: totalDiscovered };
+}
+
+async function pipelineScrape(universityId) {
+  let total = 0;
+  for (let round = 1; round <= 3; round++) {
+    const scraped = await scrapeQueueForUniversity(universityId);
+    total += scraped;
+    console.log(`[pipeline/scrape] Round ${round}: ${scraped} pages`);
+    if (scraped === 0) break;
+  }
+  return { urls_scraped: total };
+}
+
+async function pipelineParse(universityId) {
+  let totalParsed = 0, totalSeeded = 0;
+  for (let round = 1; round <= 3; round++) {
+    const { parsed, seeded } = await parsePagesForUniversity(universityId);
+    totalParsed += parsed;
+    totalSeeded += seeded;
+    console.log(`[pipeline/parse] Round ${round}: ${parsed} parsed, ${seeded} seeded`);
+    if (seeded === 0) break;
+    // Scrape newly seeded listing-page URLs before the next parse round
+    if (round < 3) {
+      const extra = await scrapeQueueForUniversity(universityId);
+      console.log(`[pipeline/parse] Scraped ${extra} additional pages from listing pages`);
+    }
+  }
+  return { parsed: totalParsed, seeded: totalSeeded };
+}
+
+async function pipelineFeeScrapeSafe(universityId) {
+  // Fee scraping failure is non-fatal — programs will have null tuition but pipeline continues
+  try {
+    const result = await scrapeFeeStructureIntelligent(universityId);
+    if (!result) console.warn(`[pipeline/fee_scrape] No fees found for ${universityId} — tuition will be null`);
+    return { success: !!result };
+  } catch (err) {
+    console.warn(`[pipeline/fee_scrape] Error for ${universityId}: ${err.message} — continuing`);
+    return { success: false, warning: err.message };
+  }
+}
+
+async function pipelineFix(universityId) {
+  const fixed = await autoFixFieldCategories(universityId);
+  const { count } = await supabase.schema('ingestion').from('parsed_programs')
+    .select('*', { count: 'exact', head: true })
+    .eq('university_id', universityId)
+    .eq('validation_status', 'pending')
+    .not('field_category', 'is', null);
+
+  // Mark the corresponding university_job as ready_for_review
+  await supabase.schema('ingestion').from('university_jobs')
+    .update({ status: 'ready_for_review', programs_ready: count || 0, completed_at: new Date().toISOString() })
+    .eq('university_id', universityId)
+    .in('status', ['queued', 'crawling', 'scraping', 'parsing', 'fee_scraping', 'fixing']);
+
+  return { fixed, programs_ready: count || 0 };
+}
+
 const PROGRAM_URL_SIGNALS = [
   "program",
   "degree",
@@ -4396,12 +4610,122 @@ app.get("/worker/diagnose-fees/:university_id", async (req, res) => {
 });
 
 // ============================================================
+// POST /worker/run-pipeline
+// Bulk-queue universities for stage-by-stage processing.
+// Responds immediately — background worker picks up jobs.
+//
+// Body: {
+//   university_ids: ["uuid1", "uuid2", ...],   // required
+//   directory_urls_map: { "uuid1": ["https://..."], ... },  // optional
+//   crawl_depth: 1   // optional, default 1
+// }
+// ============================================================
+app.post('/worker/run-pipeline', async (req, res) => {
+  const { university_ids, directory_urls_map = {}, crawl_depth = 1 } = req.body;
+
+  if (!university_ids || !Array.isArray(university_ids) || university_ids.length === 0) {
+    return res.status(400).json({ error: 'university_ids must be a non-empty array' });
+  }
+
+  const { data: unis, error: uniErr } = await supabase
+    .schema('core').from('universities')
+    .select('id, name').in('id', university_ids);
+  if (uniErr) return res.status(500).json({ error: uniErr.message });
+
+  const validIds = (unis || []).map(u => u.id);
+  if (validIds.length === 0) return res.status(404).json({ error: 'No valid university IDs found' });
+
+  // Create one pipeline_jobs row per university per stage
+  const jobs = [];
+  for (const uid of validIds) {
+    for (const stage of PIPELINE_STAGES) {
+      jobs.push({ university_id: uid, stage, status: 'pending', attempts: 0, max_attempts: 3 });
+    }
+  }
+
+  const { error: jobErr } = await supabase.schema('ingestion').from('pipeline_jobs')
+    .upsert(jobs, { onConflict: 'university_id,stage' });
+  if (jobErr) return res.status(500).json({ error: jobErr.message });
+
+  // Create university_jobs entries (for backward-compat with /worker/review and /worker/migrate)
+  for (const uid of validIds) {
+    await supabase.schema('ingestion').from('university_jobs').insert({
+      university_id: uid,
+      directory_urls: directory_urls_map[uid] || [],
+      crawl_depth,
+      status: 'queued',
+    });
+  }
+
+  res.json({
+    queued: validIds.length,
+    skipped_not_found: university_ids.length - validIds.length,
+    total_stage_jobs: jobs.length,
+    universities: (unis || []).map(u => ({ id: u.id, name: u.name })),
+  });
+
+  runPipelineWorker();
+});
+
+// ============================================================
+// GET /worker/pipeline-status
+// Returns the current state of all pipeline jobs by stage.
+// ============================================================
+app.get('/worker/pipeline-status', async (req, res) => {
+  const { data: jobs } = await supabase.schema('ingestion').from('pipeline_jobs')
+    .select('university_id, stage, status, error_message');
+
+  if (!jobs) return res.status(500).json({ error: 'Failed to fetch pipeline jobs' });
+
+  // Aggregate counts per stage × status
+  const byStage = {};
+  for (const stage of PIPELINE_STAGES) {
+    byStage[stage] = { pending: 0, running: 0, complete: 0, failed: 0, skipped: 0, total: 0 };
+  }
+  const perUniversity = {};
+  for (const job of jobs) {
+    if (byStage[job.stage]) {
+      byStage[job.stage][job.status] = (byStage[job.stage][job.status] || 0) + 1;
+      byStage[job.stage].total++;
+    }
+    if (!perUniversity[job.university_id]) perUniversity[job.university_id] = {};
+    perUniversity[job.university_id][job.stage] = job.status;
+  }
+
+  // Determine active stage (lowest stage with pending or running jobs)
+  let activeStage = null;
+  for (const stage of PIPELINE_STAGES) {
+    if ((byStage[stage].pending + byStage[stage].running) > 0) { activeStage = stage; break; }
+  }
+
+  // Summarise per-university outcomes
+  let readyForReview = 0, universitiesWithFailures = 0;
+  for (const stages of Object.values(perUniversity)) {
+    if (stages.fix === 'complete') readyForReview++;
+    if (Object.values(stages).includes('failed')) universitiesWithFailures++;
+  }
+
+  const failures = jobs
+    .filter(j => j.status === 'failed')
+    .map(j => ({ university_id: j.university_id, stage: j.stage, error: j.error_message }));
+
+  res.json({
+    active_stage: activeStage,
+    pipeline_worker_running: pipelineWorkerRunning,
+    total_universities: Object.keys(perUniversity).length,
+    ready_for_review: readyForReview,
+    universities_with_failures: universitiesWithFailures,
+    by_stage: byStage,
+    failures: failures.slice(0, 50),
+  });
+});
+
+// ============================================================
 // START BACKGROUND WORKER — runs every 3 minutes
 // ============================================================
 setInterval(async () => {
   try {
-    // Reset jobs stuck in active processing states for over 2 hours
-    // NEVER reset ready_for_review or migrated jobs
+    // Reset legacy university_jobs stuck in active states for over 2 hours
     const { error: resetErr } = await supabase
       .schema("ingestion")
       .from("university_jobs")
@@ -4410,10 +4734,23 @@ setInterval(async () => {
       .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
 
     if (resetErr) {
-      console.error("[worker-interval] Job reset error:", resetErr.message);
+      console.error("[worker-interval] university_jobs reset error:", resetErr.message);
+    }
+
+    // Reset pipeline_jobs stuck in 'running' for over 30 minutes back to 'pending'
+    const { error: pipelineResetErr } = await supabase
+      .schema("ingestion")
+      .from("pipeline_jobs")
+      .update({ status: "pending", error_message: "Reset after 30min timeout" })
+      .eq("status", "running")
+      .lt("started_at", new Date(Date.now() - 30 * 60 * 1000).toISOString());
+
+    if (pipelineResetErr) {
+      console.error("[worker-interval] pipeline_jobs reset error:", pipelineResetErr.message);
     }
 
     runWorker();
+    runPipelineWorker();
   } catch (err) {
     console.error("[worker-interval] Unhandled error in interval:", err.message);
   }
