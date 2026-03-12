@@ -2658,7 +2658,7 @@ async function executePipelineStage(job) {
 
 async function pipelineCrawl(universityId) {
   const { data: uni } = await supabase.schema('core').from('universities')
-    .select('website_url').eq('id', universityId).single();
+    .select('website_url, directory_url').eq('id', universityId).single();
 
   const { data: existingJob } = await supabase.schema('ingestion').from('university_jobs')
     .select('directory_urls, crawl_depth')
@@ -2670,8 +2670,12 @@ async function pipelineCrawl(universityId) {
   const crawlDepth = existingJob?.crawl_depth || 1;
 
   if (!directoryUrls || directoryUrls.length === 0) {
-    if (!uni?.website_url) throw new Error('No website URL configured for this university');
-    directoryUrls = await discoverDirectoryUrls(uni.website_url);
+    if (uni?.directory_url) {
+      directoryUrls = [uni.directory_url];
+    } else {
+      if (!uni?.website_url) throw new Error('No website URL configured for this university');
+      directoryUrls = await discoverDirectoryUrls(uni.website_url);
+    }
   }
   if (!directoryUrls || directoryUrls.length === 0) {
     throw new Error('Could not discover any directory URLs');
