@@ -4712,18 +4712,6 @@ app.get('/worker/pipeline-status', async (req, res) => {
 // ============================================================
 setInterval(async () => {
   try {
-    // Reset legacy university_jobs stuck in active states for over 2 hours
-    const { error: resetErr } = await supabase
-      .schema("ingestion")
-      .from("university_jobs")
-      .update({ status: "queued", error_message: "Reset after 2h timeout" })
-      .in("status", ["crawling", "scraping", "parsing", "fixing", "fee_scraping"])
-      .lt("started_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
-
-    if (resetErr) {
-      console.error("[worker-interval] university_jobs reset error:", resetErr.message);
-    }
-
     // Reset pipeline_jobs stuck in 'running' for over 30 minutes back to 'pending'
     const { error: pipelineResetErr } = await supabase
       .schema("ingestion")
@@ -4736,7 +4724,7 @@ setInterval(async () => {
       console.error("[worker-interval] pipeline_jobs reset error:", pipelineResetErr.message);
     }
 
-    runWorker();
+    // Old university_jobs worker (runWorker) disabled — pipeline_jobs worker is the active one
     runPipelineWorker();
   } catch (err) {
     console.error("[worker-interval] Unhandled error in interval:", err.message);
