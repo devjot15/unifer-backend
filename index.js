@@ -4708,11 +4708,12 @@ app.get('/worker/pipeline-status', async (req, res) => {
 });
 
 // ============================================================
-// START BACKGROUND WORKER — runs every 3 minutes
+// START BACKGROUND WORKER — polls every 10 seconds continuously
 // ============================================================
+
+// Reset stuck pipeline_jobs every 3 minutes (separate from polling loop)
 setInterval(async () => {
   try {
-    // Reset pipeline_jobs stuck in 'running' for over 30 minutes back to 'pending'
     const { error: pipelineResetErr } = await supabase
       .schema("ingestion")
       .from("pipeline_jobs")
@@ -4723,14 +4724,22 @@ setInterval(async () => {
     if (pipelineResetErr) {
       console.error("[worker-interval] pipeline_jobs reset error:", pipelineResetErr.message);
     }
-
-    // Old university_jobs worker (runWorker) disabled — pipeline_jobs worker is the active one
-    runPipelineWorker();
   } catch (err) {
-    console.error("[worker-interval] Unhandled error in interval:", err.message);
+    console.error("[worker-interval] Unhandled error in stuck-job reset:", err.message);
   }
 }, 3 * 60 * 1000);
-console.log("Background worker started — polling every 3 minutes");
+
+// Continuous polling loop — runs forever, every 10 seconds
+async function startPipelineWorkerLoop() {
+  try {
+    await runPipelineWorker();
+  } catch (err) {
+    console.error("[pipeline-loop] Unhandled error:", err.message);
+  }
+  setTimeout(startPipelineWorkerLoop, 10 * 1000);
+}
+
+console.log("Background worker started — polling every 10 seconds");
 
 app.post("/scrape-fees-batch", async (req, res) => {
   const { university_ids } = req.body;
@@ -4747,6 +4756,6 @@ app.post("/scrape-fees-batch", async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT} — worker enabled`);
-  runPipelineWorker();
+  startPipelineWorkerLoop();
 });
 // force
