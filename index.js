@@ -1813,9 +1813,12 @@ app.post("/migrate", async (req, res) => {
           console.log(
             `[migrate-fees] ${p.program_name} → resolveTuition: ${JSON.stringify(tuitionResult)}`,
           );
-          if (tuitionResult) {
+          if (tuitionResult && tuitionResult.amount) {
             const rate = CURRENCY_TO_USD[tuitionResult.currency] || 1.0;
             finalTuitionUSD = Math.round(tuitionResult.amount * rate);
+          } else if (tuitionResult && typeof tuitionResult === 'number') {
+            // fallback if resolveTuition still returns a number
+            finalTuitionUSD = Math.round(tuitionResult * CAD_TO_USD);
           }
         }
 
