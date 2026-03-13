@@ -1816,9 +1816,6 @@ app.post("/migrate", async (req, res) => {
           if (tuitionResult && tuitionResult.amount) {
             const rate = CURRENCY_TO_USD[tuitionResult.currency] || 1.0;
             finalTuitionUSD = Math.round(tuitionResult.amount * rate);
-          } else if (tuitionResult && typeof tuitionResult === 'number') {
-            // fallback if resolveTuition still returns a number
-            finalTuitionUSD = Math.round(tuitionResult * CAD_TO_USD);
           }
         }
 
@@ -3416,84 +3413,65 @@ const FEE_PAGE_PATTERNS = [
 
 function resolveTuition(programName, programType, universityId, feeStructures) {
   if (!feeStructures || feeStructures.length === 0) return null;
-
   const level = programType === 'doctoral' ? 'doctoral' : 'masters';
   const nameLower = programName.toLowerCase();
-
   const levelFees = feeStructures.filter(f => f.program_level === level);
-
-  function feeResult(fee) {
+  if (levelFees.length === 0) return null;
+  function feeAmount(fee) {
     const amount = fee.fee_type === 'flat_annual'
       ? fee.international_fee
       : fee.international_fee * (fee.instalments_per_year || 2);
     return { amount, currency: fee.currency || 'CAD' };
   }
-
   if (programType) {
-    const specificWithType = levelFees.filter(f =>
-      f.program_type === programType &&
+    const match = levelFees
+      .filter(f =>
+        f.program_type === programType &&
+        f.program_name_pattern &&
+        f.program_name_pattern !== `default_${level}` &&
+        nameLower.includes(f.program_name_pattern.toLowerCase())
+      )
+      .sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length)[0];
+    if (match) return feeAmount(match);
+  }
+  const matchNoType = levelFees
+    .filter(f =>
+      f.program_type === null &&
       f.program_name_pattern &&
       f.program_name_pattern !== `default_${level}` &&
       nameLower.includes(f.program_name_pattern.toLowerCase())
-    );
-    if (specificWithType.length > 0) {
-      specificWithType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
-      return feeResult(specificWithType[0]);
-    }
-  }
-
-  const specificNoType = levelFees.filter(f =>
-    f.program_type === null &&
-    f.program_name_pattern &&
-    f.program_name_pattern !== `default_${level}` &&
-    nameLower.includes(f.program_name_pattern.toLowerCase())
-  );
-  if (specificNoType.length > 0) {
-    specificNoType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
-    return feeResult(specificNoType[0]);
-  }
-
+    )
+    .sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length)[0];
+  if (matchNoType) return feeAmount(matchNoType);
   if (programType) {
     const defaultWithType = levelFees.find(f =>
       f.program_type === programType &&
       f.program_name_pattern === `default_${level}`
     );
-    if (defaultWithType) return feeResult(defaultWithType);
+    if (defaultWithType) return feeAmount(defaultWithType);
   }
-
   const defaultFee = levelFees.find(f =>
     f.program_name_pattern === `default_${level}` &&
     f.program_type === null
   );
-  if (defaultFee) return feeResult(defaultFee);
-
-  // Fallback: when no fee structure matches the exact program_type, retry the
-  // type-specific lookups (named pattern, then default) with a canonical fallback
-  // type before giving up. Runs for all program types including null/undefined.
-  //   research     → doctoral  (research masters often share doctoral fee bands)
-  //   professional → masters
-  //   null / other → masters   (safe default)
-  {
-    const fallbackType = programType === 'research' ? 'doctoral' : 'masters';
-
-    const fallbackSpecific = levelFees.filter(f =>
-      f.program_type === fallbackType &&
+  if (defaultFee) return feeAmount(defaultFee);
+  const fallbackType = programType === 'research' ? 'doctoral' : 'masters';
+  const fallbackLevel = feeStructures.filter(f => f.program_level === fallbackType);
+  const fallbackMatch = fallbackLevel
+    .filter(f =>
       f.program_name_pattern &&
-      f.program_name_pattern !== `default_${level}` &&
+      f.program_name_pattern !== `default_${fallbackType}` &&
       nameLower.includes(f.program_name_pattern.toLowerCase())
-    );
-    if (fallbackSpecific.length > 0) {
-      fallbackSpecific.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
-      return feeResult(fallbackSpecific[0]);
-    }
-
-    const fallbackDefault = levelFees.find(f =>
-      f.program_type === fallbackType &&
-      f.program_name_pattern === `default_${level}`
-    );
-    if (fallbackDefault) return feeResult(fallbackDefault);
-  }
-
+    )
+    .sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length)[0];
+  if (fallbackMatch) return feeAmount(fallbackMatch);
+  const fallbackDefault = fallbackLevel.find(f =>
+    f.program_name_pattern === `default_${fallbackType}` ||
+    f.program_name_pattern === null
+  );
+  if (fallbackDefault) return feeAmount(fallbackDefault);
+  const anyFee = levelFees[0];
+  if (anyFee) return feeAmount(anyFee);
   return null;
 }
 
