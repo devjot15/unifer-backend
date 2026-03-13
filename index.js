@@ -5,6 +5,21 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const puppeteer = require("puppeteer-core");
 
+// Currency conversion rates to USD
+const CAD_TO_USD = 0.74;
+const GBP_TO_USD = 1.27;
+const EUR_TO_USD = 1.08; // covers Germany and Ireland
+const AUD_TO_USD = 0.65; // covers Australia
+const USD_TO_USD = 1.0;
+
+const CURRENCY_TO_USD = {
+  CAD: CAD_TO_USD,
+  GBP: GBP_TO_USD,
+  EUR: EUR_TO_USD,
+  AUD: AUD_TO_USD,
+  USD: USD_TO_USD,
+};
+
 const browserWSEndpoint = `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_TOKEN || "2U5UENwcHnFsfxg065dfe159c7865e9aaf2ae16ccd0f026e2"}`;
 
 async function fetchWithPuppeteer(url) {
@@ -1015,8 +1030,10 @@ ${listingText.substring(0, 10000)}`;
               .limit(1);
             if (existing && existing.length > 0) continue;
 
-            const tuitionCAD = resolveTuition(p.program_name, p.program_type, raw.university_id, feeStructures);
-            const CAD_TO_USD = 0.74;
+            const tuitionResult = resolveTuition(p.program_name, p.program_type, raw.university_id, feeStructures);
+            const tuitionUSDFromFee = tuitionResult
+              ? Math.round(tuitionResult.amount * (CURRENCY_TO_USD[tuitionResult.currency] || 1.0))
+              : null;
 
             toInsert.push({
               raw_page_id: raw.id,
@@ -1025,7 +1042,7 @@ ${listingText.substring(0, 10000)}`;
               degree_level: p.degree_level || "PG",
               program_type: p.program_type || null,
               field_category: VALID_FIELD_CATEGORIES.includes(p.field_category) ? p.field_category : null,
-              tuition_usd: tuitionCAD ? Math.round(tuitionCAD * CAD_TO_USD) : null,
+              tuition_usd: tuitionUSDFromFee,
               // Fields only available on detail pages — not present on a listing page
               duration_years: null,
               duration_confidence: "low",
@@ -1358,21 +1375,19 @@ ${trimmedText}
         );
       }
 
-      const CAD_TO_USD = 0.74;
-
       console.log(
         `[parse-fees] ${program.program_name} | type=${program.program_type} | uni=${raw.university_id} | feeStructures=${feeStructures?.length || 0}`,
       );
 
-      const tuitionCAD = resolveTuition(
+      const tuitionResult = resolveTuition(
         program.program_name,
         program.program_type,
         raw.university_id,
         feeStructures,
       );
-      console.log(`[parse-fees] resolveTuition returned: ${tuitionCAD}`);
-      const tuition_usd = tuitionCAD
-        ? Math.round(tuitionCAD * CAD_TO_USD)
+      console.log(`[parse-fees] resolveTuition returned: ${JSON.stringify(tuitionResult)}`);
+      const tuition_usd = tuitionResult
+        ? Math.round(tuitionResult.amount * (CURRENCY_TO_USD[tuitionResult.currency] || 1.0))
         : null;
 
       const { data: existingProgram } = await supabase
@@ -1768,8 +1783,6 @@ app.post("/migrate", async (req, res) => {
 
     console.log(`Migrating ${parsed.length} programs to core.courses...`);
 
-    const CAD_TO_USD = 0.74;
-
     let success = 0;
     let failed = 0;
     let skipped = 0;
@@ -1791,17 +1804,18 @@ app.post("/migrate", async (req, res) => {
         let finalTuitionUSD = p.tuition_usd ? Math.round(p.tuition_usd) : null;
 
         if (!finalTuitionUSD) {
-          const tuitionCAD = resolveTuition(
+          const tuitionResult = resolveTuition(
             p.program_name,
             p.program_type,
             p.university_id,
             feeStructures,
           );
           console.log(
-            `[migrate-fees] ${p.program_name} → resolveTuition: ${tuitionCAD}`,
+            `[migrate-fees] ${p.program_name} → resolveTuition: ${JSON.stringify(tuitionResult)}`,
           );
-          if (tuitionCAD) {
-            finalTuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
+          if (tuitionResult) {
+            const rate = CURRENCY_TO_USD[tuitionResult.currency] || 1.0;
+            finalTuitionUSD = Math.round(tuitionResult.amount * rate);
           }
         }
 
@@ -1882,15 +1896,16 @@ app.post("/migrate", async (req, res) => {
         console.log(
           `[migrate-fees] ${course.name} | type=${course.program_type} | uni=${uniId} | feeStructures=${feeStructures?.length || 0}`,
         );
-        const tuitionCAD = resolveTuition(
+        const tuitionResult = resolveTuition(
           course.name,
           course.program_type,
           uniId,
           feeStructures,
         );
-        console.log(`[migrate-fees] resolveTuition returned: ${tuitionCAD}`);
-        if (tuitionCAD) {
-          const tuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
+        console.log(`[migrate-fees] resolveTuition returned: ${JSON.stringify(tuitionResult)}`);
+        if (tuitionResult) {
+          const rate = CURRENCY_TO_USD[tuitionResult.currency] || 1.0;
+          const tuitionUSD = Math.round(tuitionResult.amount * rate);
           await supabase
             .schema("core")
             .from("courses")
@@ -3404,6 +3419,13 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 
   const levelFees = feeStructures.filter(f => f.program_level === level);
 
+  function feeResult(fee) {
+    const amount = fee.fee_type === 'flat_annual'
+      ? fee.international_fee
+      : fee.international_fee * (fee.instalments_per_year || 2);
+    return { amount, currency: fee.currency || 'CAD' };
+  }
+
   if (programType) {
     const specificWithType = levelFees.filter(f =>
       f.program_type === programType &&
@@ -3413,10 +3435,7 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     );
     if (specificWithType.length > 0) {
       specificWithType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
-      const fee = specificWithType[0];
-      return fee.fee_type === 'flat_annual'
-        ? fee.international_fee
-        : fee.international_fee * (fee.instalments_per_year || 2);
+      return feeResult(specificWithType[0]);
     }
   }
 
@@ -3428,10 +3447,7 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
   );
   if (specificNoType.length > 0) {
     specificNoType.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
-    const fee = specificNoType[0];
-    return fee.fee_type === 'flat_annual'
-      ? fee.international_fee
-      : fee.international_fee * (fee.instalments_per_year || 2);
+    return feeResult(specificNoType[0]);
   }
 
   if (programType) {
@@ -3439,22 +3455,14 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       f.program_type === programType &&
       f.program_name_pattern === `default_${level}`
     );
-    if (defaultWithType) {
-      return defaultWithType.fee_type === 'flat_annual'
-        ? defaultWithType.international_fee
-        : defaultWithType.international_fee * (defaultWithType.instalments_per_year || 2);
-    }
+    if (defaultWithType) return feeResult(defaultWithType);
   }
 
   const defaultFee = levelFees.find(f =>
     f.program_name_pattern === `default_${level}` &&
     f.program_type === null
   );
-  if (defaultFee) {
-    return defaultFee.fee_type === 'flat_annual'
-      ? defaultFee.international_fee
-      : defaultFee.international_fee * (defaultFee.instalments_per_year || 2);
-  }
+  if (defaultFee) return feeResult(defaultFee);
 
   // Fallback: when no fee structure matches the exact program_type, retry the
   // type-specific lookups (named pattern, then default) with a canonical fallback
@@ -3473,21 +3481,14 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
     );
     if (fallbackSpecific.length > 0) {
       fallbackSpecific.sort((a, b) => b.program_name_pattern.length - a.program_name_pattern.length);
-      const fee = fallbackSpecific[0];
-      return fee.fee_type === 'flat_annual'
-        ? fee.international_fee
-        : fee.international_fee * (fee.instalments_per_year || 2);
+      return feeResult(fallbackSpecific[0]);
     }
 
     const fallbackDefault = levelFees.find(f =>
       f.program_type === fallbackType &&
       f.program_name_pattern === `default_${level}`
     );
-    if (fallbackDefault) {
-      return fallbackDefault.fee_type === 'flat_annual'
-        ? fallbackDefault.international_fee
-        : fallbackDefault.international_fee * (fallbackDefault.instalments_per_year || 2);
-    }
+    if (fallbackDefault) return feeResult(fallbackDefault);
   }
 
   return null;
@@ -4287,8 +4288,6 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
     let failed = 0;
     let skipped = 0;
 
-    const CAD_TO_USD = 0.74;
-
     const { data: feeStructures } = await supabase
       .schema("ingestion")
       .from("university_fee_structure")
@@ -4306,9 +4305,12 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
         let finalTuitionUSD = p.tuition_usd ? Math.round(p.tuition_usd) : null;
 
         if (!finalTuitionUSD) {
-          const tuitionCAD = resolveTuition(p.program_name, p.program_type, university_id, feeStructures || []);
-          console.log(`[migrate] ${p.program_name} → tuitionCAD: ${tuitionCAD}`);
-          if (tuitionCAD) finalTuitionUSD = Math.round(tuitionCAD * CAD_TO_USD);
+          const tuitionResult = resolveTuition(p.program_name, p.program_type, university_id, feeStructures || []);
+          console.log(`[migrate] ${p.program_name} → resolveTuition: ${JSON.stringify(tuitionResult)}`);
+          if (tuitionResult) {
+            const rate = CURRENCY_TO_USD[tuitionResult.currency] || 1.0;
+            finalTuitionUSD = Math.round(tuitionResult.amount * rate);
+          }
         }
 
         // Do NOT skip programs with no resolved tuition — attempt the insert.
