@@ -1830,7 +1830,7 @@ app.post("/migrate", async (req, res) => {
             name: p.program_name,
             university_id: p.university_id,
             degree_level: p.degree_level,
-            duration_years: p.duration_years,
+            duration_years: p.duration_years ?? undefined,
             tuition_usd: finalTuitionUSD,
             field_category: p.field_category,
             internship_available: p.internship_available || false,
