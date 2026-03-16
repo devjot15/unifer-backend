@@ -2569,6 +2569,7 @@ async function runPipelineWorker() {
     return;
   }
   pipelineWorkerRunning = true;
+  let foundJobs = false;
   try {
     // Find the active stage: lowest stage that still has pending or running jobs
     let activeStage = null;
@@ -2584,43 +2585,41 @@ async function runPipelineWorker() {
 
     if (!activeStage) {
       console.log('[pipeline] No active pipeline jobs');
-      pipelineWorkerRunning = false;
-      return;
+    } else {
+      // Pick up to CONCURRENCY pending jobs at the active stage
+      const limit = STAGE_CONCURRENCY[activeStage] || 3;
+      const { data: jobs } = await supabase
+        .schema('ingestion')
+        .from('pipeline_jobs')
+        .select('*')
+        .eq('stage', activeStage)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(limit);
+
+      if (!jobs || jobs.length === 0) {
+        console.log(`[pipeline] Stage "${activeStage}": waiting for running jobs to finish`);
+      } else {
+        foundJobs = true;
+        console.log(`[pipeline] Stage "${activeStage}": processing ${jobs.length} universities concurrently`);
+
+        // Mark all picked jobs as running before processing starts
+        await Promise.all(jobs.map(job =>
+          supabase.schema('ingestion').from('pipeline_jobs')
+            .update({ status: 'running', started_at: new Date().toISOString(), attempts: (job.attempts || 0) + 1 })
+            .eq('id', job.id)
+        ));
+
+        // Process concurrently
+        await Promise.all(jobs.map(job => executePipelineStage(job)));
+      }
     }
-
-    // Pick up to CONCURRENCY pending jobs at the active stage
-    const limit = STAGE_CONCURRENCY[activeStage] || 3;
-    const { data: jobs } = await supabase
-      .schema('ingestion')
-      .from('pipeline_jobs')
-      .select('*')
-      .eq('stage', activeStage)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-      .limit(limit);
-
-    if (!jobs || jobs.length === 0) {
-      console.log(`[pipeline] Stage "${activeStage}": waiting for running jobs to finish`);
-      pipelineWorkerRunning = false;
-      return;
-    }
-
-    console.log(`[pipeline] Stage "${activeStage}": processing ${jobs.length} universities concurrently`);
-
-    // Mark all picked jobs as running before processing starts
-    await Promise.all(jobs.map(job =>
-      supabase.schema('ingestion').from('pipeline_jobs')
-        .update({ status: 'running', started_at: new Date().toISOString(), attempts: (job.attempts || 0) + 1 })
-        .eq('id', job.id)
-    ));
-
-    // Process concurrently
-    await Promise.all(jobs.map(job => executePipelineStage(job)));
-
   } catch (err) {
     console.error('[pipeline] Unexpected worker error:', err.message);
   }
   pipelineWorkerRunning = false;
+  // Self-schedule: 10s if jobs were processed (more likely pending), 30s if idle
+  setTimeout(runPipelineWorker, foundJobs ? 10 * 1000 : 30 * 1000);
 }
 
 async function executePipelineStage(job) {
@@ -4744,17 +4743,7 @@ setInterval(async () => {
   }
 }, 3 * 60 * 1000);
 
-// Continuous polling loop — runs forever, every 10 seconds
-async function startPipelineWorkerLoop() {
-  try {
-    await runPipelineWorker();
-  } catch (err) {
-    console.error("[pipeline-loop] Unhandled error:", err.message);
-  }
-  setTimeout(startPipelineWorkerLoop, 10 * 1000);
-}
-
-console.log("Background worker started — polling every 10 seconds");
+console.log("Background worker started — self-scheduling (10s active, 30s idle)");
 
 app.post("/scrape-fees-batch", async (req, res) => {
   const { university_ids } = req.body;
@@ -4771,6 +4760,6 @@ app.post("/scrape-fees-batch", async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT} — worker enabled`);
-  startPipelineWorkerLoop();
+  runPipelineWorker();
 });
 // force
