@@ -101,6 +101,81 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// ── OpenAI rate-limit wrapper ────────────────────────────────────────────────
+// Max 3 concurrent calls, 500 ms stagger between acquisitions.
+// On 429: parse retry-after from the error message and wait exactly that long.
+// On RPD limit: throw a hard stop so callers can bail out entirely.
+// Max 3 retries with exponential backoff (1 s → 2 s → 4 s).
+// ─────────────────────────────────────────────────────────────────────────────
+let _openaiActive = 0;
+const _openaiQueue = [];
+function _openaiAcquire() {
+  return new Promise((resolve) => {
+    function tryAcquire() {
+      if (_openaiActive < 3) {
+        _openaiActive++;
+        resolve();
+      } else {
+        _openaiQueue.push(tryAcquire);
+      }
+    }
+    tryAcquire();
+  });
+}
+function _openaiRelease() {
+  _openaiActive--;
+  if (_openaiQueue.length > 0) {
+    setTimeout(() => {
+      const next = _openaiQueue.shift();
+      if (next) next();
+    }, 500); // 500 ms stagger between acquired slots
+  }
+}
+
+async function callOpenAI(params, timeoutMs = 60000) {
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    await _openaiAcquire();
+    try {
+      const result = await Promise.race([
+        openai.chat.completions.create(params),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("OpenAI timeout after " + timeoutMs + "ms")), timeoutMs)
+        ),
+      ]);
+      _openaiRelease();
+      return result;
+    } catch (err) {
+      _openaiRelease();
+      const msg = err.message || "";
+
+      // Hard stop on daily request limit
+      if (msg.toLowerCase().includes("requests per day")) {
+        console.error("[openai] RPD limit reached — halting OpenAI processing:", msg);
+        const rpdErr = new Error("OPENAI_RPD_LIMIT: " + msg);
+        rpdErr.isRpdLimit = true;
+        throw rpdErr;
+      }
+
+      // Retry on 429 / rate limit
+      if ((err.status === 429 || msg.includes("429") || msg.toLowerCase().includes("rate limit")) && attempt < MAX_RETRIES) {
+        // Parse retry-after seconds from message, e.g. "Please try again in 12s" or "retry after 30"
+        const retryMatch = msg.match(/(?:try again in|retry after)\s*(\d+(?:\.\d+)?)\s*s/i)
+          || msg.match(/(\d+(?:\.\d+)?)\s*s(?:econds?)?/i);
+        const retryMs = retryMatch
+          ? Math.ceil(parseFloat(retryMatch[1])) * 1000
+          : Math.pow(2, attempt) * 1000; // exponential fallback: 1s, 2s, 4s
+        console.warn(`[openai] 429 rate limit — waiting ${retryMs}ms before retry ${attempt + 1}/${MAX_RETRIES}`);
+        await new Promise((r) => setTimeout(r, retryMs));
+        continue;
+      }
+
+      throw err;
+    }
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.get("/", (req, res) => {
   res.send("Study Abroad Engine API running 🚀");
 });
@@ -997,14 +1072,11 @@ Example output:
 Page content:
 ${listingText.substring(0, 10000)}`;
 
-        const listingCompletion = await Promise.race([
-          openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{ role: "user", content: listingPrompt }],
-            temperature: 0,
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI timeout after 60s")), 60000)),
-        ]);
+        const listingCompletion = await callOpenAI({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: listingPrompt }],
+          temperature: 0,
+        }, 60000);
 
         const rawListing = listingCompletion.choices[0].message.content;
         let listingPrograms;
@@ -1307,16 +1379,11 @@ Content:
 ${trimmedText}
 `;
 
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0,
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("OpenAI timeout after 60s")), 60000),
-      ),
-    ]);
+    const completion = await callOpenAI({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+    }, 60000);
 
     const rawContent = completion.choices[0].message.content;
     let parsed;
@@ -3348,14 +3415,11 @@ Programs to classify:
 ${names}
 `;
     try {
-      const completion = await Promise.race([
-        openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: categoryPrompt }],
-          temperature: 0,
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
-      ]);
+      const completion = await callOpenAI({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: categoryPrompt }],
+        temperature: 0,
+      }, 30000);
       const result = JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
       if (!Array.isArray(result)) throw new Error("GPT returned non-array");
       for (let i = 0; i < Math.min(result.length, stillNull.length); i++) {
@@ -3838,22 +3902,19 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
                   const screenshotBuf = await page.screenshot({ type: 'jpeg', quality: 70, fullPage: false });
                   const b64 = screenshotBuf.toString('base64');
                   console.log('[fees] DOM read failed — trying vision fallback');
-                  const completion = await Promise.race([
-                    openai.chat.completions.create({
-                      model: 'gpt-4o',
-                      messages: [{ role: 'user', content: [
-                        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
-                        { type: 'text', text:
-                          'University: ' + uniName + '\nLevel: ' + level.dbLevel + ', Faculty: ' + (faculty.label || 'default') + '\n' +
-                          'Extract the international student fee per term shown on screen.\n' +
-                          'Return STRICT JSON only: { "fee_per_term": 9720.89, "raw_text": "..." }\n' +
-                          'Return { "fee_per_term": null } if not visible.'
-                        },
-                      ]}],
-                      temperature: 0, max_tokens: 150,
-                    }),
-                    new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 30000)),
-                  ]);
+                  const completion = await callOpenAI({
+                    model: 'gpt-4o',
+                    messages: [{ role: 'user', content: [
+                      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
+                      { type: 'text', text:
+                        'University: ' + uniName + '\nLevel: ' + level.dbLevel + ', Faculty: ' + (faculty.label || 'default') + '\n' +
+                        'Extract the international student fee per term shown on screen.\n' +
+                        'Return STRICT JSON only: { "fee_per_term": 9720.89, "raw_text": "..." }\n' +
+                        'Return { "fee_per_term": null } if not visible.'
+                      },
+                    ]}],
+                    temperature: 0, max_tokens: 150,
+                  }, 30000);
                   result = JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, '').trim());
                 } catch(e) { console.error('[fees] Vision fallback failed:', e.message); }
               }
@@ -3969,10 +4030,11 @@ Content:
 ${feeText}
 `;
   try {
-    const completion = await Promise.race([
-      openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 60000)),
-    ]);
+    const completion = await callOpenAI({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+    }, 60000);
     return JSON.parse(completion.choices[0].message.content.replace(/```json|```/g, "").trim());
   } catch (err) {
     console.error("[fees] extractFeesFromText failed:", err.message);
