@@ -770,8 +770,10 @@ app.post("/scrape-program", async (req, res) => {
 // LISTING PAGE DETECTOR
 // ============================================================
 const PROGRAM_URL_SIGNALS_GLOBAL = [
-  "program","degree","graduate","master","phd","doctoral","course",
-  "faculty","school","department","msc","mba","med","llm","meng","certificate","diploma",
+  "program","programme","programmes","postgraduate","taught",
+  "degree","graduate","master","phd","doctoral","course",
+  "faculty","school","department","study","academic",
+  "msc","mba","med","llm","meng","certificate","diploma",
 ];
 
 function isListingPage(html, sourceUrl) {
@@ -2770,6 +2772,10 @@ async function pipelineFix(universityId) {
 
 const PROGRAM_URL_SIGNALS = [
   "program",
+  "programme",      // UK spelling
+  "programmes",     // plural
+  "postgraduate",   // very common UK path segment
+  "taught",         // "taught-programmes", "taught-masters"
   "degree",
   "graduate",
   "master",
