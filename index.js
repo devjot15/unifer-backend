@@ -2772,10 +2772,10 @@ async function pipelineFix(universityId) {
 
 const PROGRAM_URL_SIGNALS = [
   "program",
-  "programme",      // UK spelling
-  "programmes",     // plural
-  "postgraduate",   // very common UK path segment
-  "taught",         // "taught-programmes", "taught-masters"
+  "programme",
+  "programmes",
+  "postgraduate",
+  "taught",
   "degree",
   "graduate",
   "master",
