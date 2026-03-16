@@ -4664,6 +4664,15 @@ app.post('/worker/run-pipeline', async (req, res) => {
 // GET /worker/pipeline-status
 // Returns the current state of all pipeline jobs by stage.
 // ============================================================
+app.get('/debug/browserless-token', (req, res) => {
+  const token = process.env.BROWSERLESS_TOKEN;
+  res.json({
+    token_set: !!token,
+    token_length: token ? token.length : 0,
+    token_preview: token ? token.substring(0, 6) + '...' + token.substring(token.length - 4) : 'NOT SET'
+  });
+});
+
 app.get('/worker/pipeline-status', async (req, res) => {
   const { data: jobs } = await supabase.schema('ingestion').from('pipeline_jobs')
     .select('university_id, stage, status, error_message');
