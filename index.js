@@ -205,11 +205,107 @@ app.get("/countries", async (req, res) => {
   res.json(data);
 });
 
+async function getSubScore(universityId, body) {
+  // Step 1: Fetch sub-indicator scores joined to dimension and concept_group
+  const { data: rows, error } = await supabase
+    .schema("rankings")
+    .from("university_sub_indicator_scores")
+    .select("normalized_score, ranking_sub_indicators!inner(dimension, concept_group)")
+    .eq("university_id", universityId)
+    .not("ranking_sub_indicators.concept_group", "is", null);
+
+  if (error || !rows || rows.length === 0) return 0.5;
+
+  // Step 2: Group by (dimension, concept_group) and average normalized_score
+  const conceptBuckets = {}; // { dimension: { concept_group: number[] } }
+  for (const row of rows) {
+    const { dimension, concept_group } = row.ranking_sub_indicators;
+    const score = row.normalized_score;
+    if (score == null) continue;
+    if (!conceptBuckets[dimension]) conceptBuckets[dimension] = {};
+    if (!conceptBuckets[dimension][concept_group]) conceptBuckets[dimension][concept_group] = [];
+    conceptBuckets[dimension][concept_group].push(score);
+  }
+
+  const dimConceptScore = {}; // { dimension: { concept_group: avg } }
+  for (const [dim, concepts] of Object.entries(conceptBuckets)) {
+    dimConceptScore[dim] = {};
+    for (const [concept, scores] of Object.entries(concepts)) {
+      dimConceptScore[dim][concept] = scores.reduce((a, b) => a + b, 0) / scores.length;
+    }
+  }
+
+  // Step 3 & 4: Compute dim_score per dimension
+  const dimScore = {}; // { dimension: number }
+  for (const [dim, concepts] of Object.entries(dimConceptScore)) {
+    const conceptNames = Object.keys(concepts);
+    if (dim === "employability") {
+      // Step 3: Apply career_type boost (2x weight for matching concept)
+      const careerType = body.career_type || null;
+      const weights = {};
+      for (const c of conceptNames) weights[c] = 1;
+
+      if (careerType === "graduate_salary" && concepts["graduate_salary"] == null) {
+        // Fallback: equal weighting of employer_reputation and employment_rate
+      } else if (
+        careerType === "employment_rate" ||
+        careerType === "employer_reputation" ||
+        careerType === "graduate_salary"
+      ) {
+        if (concepts[careerType] != null) weights[careerType] = 2;
+      }
+      // null/missing careerType → equal weighting (all weights stay 1)
+
+      const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+      const weightedSum = conceptNames.reduce((acc, c) => acc + weights[c] * concepts[c], 0);
+      dimScore[dim] = totalWeight > 0 ? weightedSum / totalWeight : null;
+    } else {
+      // Step 4: Simple average of all concept scores
+      const scores = Object.values(concepts);
+      dimScore[dim] = scores.reduce((a, b) => a + b, 0) / scores.length;
+    }
+  }
+
+  // Step 5: Preference vector
+  const DIM_WEIGHT = { high: 0.25, medium: 0.15, low: 0.05 };
+  const answerMap = {
+    employability: body.career_importance,
+    teaching: body.teaching_importance,
+    research: body.research_importance,
+    student_experience: body.student_experience_importance,
+    international: body.international_importance,
+    selectivity: body.selectivity_importance,
+    prestige: body.prestige_importance,
+  };
+
+  // Step 6: Weighted average across dimensions with non-null dim_score
+  let numerator = 0;
+  let denominator = 0;
+  for (const [dim, score] of Object.entries(dimScore)) {
+    if (score == null) continue;
+    const answer = answerMap[dim] || "low";
+    const w = DIM_WEIGHT[answer] || DIM_WEIGHT.low;
+    numerator += w * score;
+    denominator += w;
+  }
+  return denominator > 0 ? numerator / denominator : 0.5;
+}
+
 app.post("/recommend", async (req, res) => {
   try {
     console.log("======== NEW REQUEST ========");
     console.log("BODY:", req.body);
     const answers = req.body;
+    const {
+      career_importance,
+      career_type,
+      teaching_importance,
+      research_importance,
+      student_experience_importance,
+      international_importance,
+      selectivity_importance,
+      prestige_importance,
+    } = req.body;
 
     // 1️⃣ Fetch all data
     const { data: countries, error: cErr } = await supabase
@@ -563,17 +659,7 @@ app.post("/recommend", async (req, res) => {
           ? 0.7 * subjectRanking + 0.3 * overallRanking
           : overallRanking;
 
-      let rankingWeight = 0;
-      if (
-        answers.ranking_importance === "Only want to apply in top institutions"
-      )
-        rankingWeight = 1;
-      if (answers.ranking_importance === "Top and middle institutions are fine")
-        rankingWeight = 0.7;
-      if (
-        answers.ranking_importance === "All institution irrespective of ranking"
-      )
-        rankingWeight = 0.4;
+      let rankingWeight = parseFloat(answers.ranking_importance) || 0;
 
       let rankingScore = rankingWeight * compositeRanking;
 
@@ -583,7 +669,7 @@ app.post("/recommend", async (req, res) => {
     }
 
     // 4️⃣ SCORE PATHWAYS
-    const pathways = eligibleCourses.map((course) => {
+    const pathways = await Promise.all(eligibleCourses.map(async (course) => {
       const university = universities.find(
         (u) => u.id === course.university_id,
       );
@@ -593,14 +679,15 @@ app.post("/recommend", async (req, res) => {
 
       let countryScore = computeCountryScore(country, answers, countryMap);
       let courseScore = computeCourseScore(course, answers);
-      let universityScore = computeUniversityScore(
-        university,
-        country,
-        answers,
-        rankingMap,
-        subjectRankMap,
-        course.subject_id || null,
-      );
+
+      // Step 7: Blend composite ranking score with sub-indicator score
+      const subScore = await getSubScore(university.id, answers);
+      const compositeScore = rankingMap[university.id] ?? null;
+      const alpha = parseFloat(answers.ranking_importance) || 0;
+      const beta = 1 - alpha;
+      const universityScore = compositeScore != null
+        ? alpha * compositeScore + beta * subScore
+        : subScore;
 
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
@@ -694,7 +781,7 @@ app.post("/recommend", async (req, res) => {
         },
         explanation,
       };
-    });
+    }));
 
     // 5️⃣ Sort & Return Top 5
     const top5 = pathways

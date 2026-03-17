@@ -388,6 +388,12 @@ button:disabled {
       <input type="hidden" id="ranking_importance" name="ranking_importance">
       <input type="hidden" id="career_importance" name="career_importance">
       <input type="hidden" id="career_type" name="career_type">
+      <input type="hidden" id="teaching_importance" name="teaching_importance">
+      <input type="hidden" id="research_importance" name="research_importance">
+      <input type="hidden" id="student_experience_importance" name="student_experience_importance">
+      <input type="hidden" id="international_importance" name="international_importance">
+      <input type="hidden" id="selectivity_importance" name="selectivity_importance">
+      <input type="hidden" id="prestige_importance" name="prestige_importance">
 
       <input type="hidden" id="profile_degree_completed" name="profile_degree_completed">
       <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
@@ -648,9 +654,9 @@ button:disabled {
           <h2>Step 5 — University Selection</h2>
           <label>How strongly ranking affects your decision?</label>
           <div class="option-group" data-name="ranking_importance">
-            <div class="option-card" data-value="Only want to apply in top institutions">Top institutions only</div>
-            <div class="option-card" data-value="Top and middle institutions are fine">Top and middle are fine</div>
-            <div class="option-card" data-value="All institution irrespective of ranking">All institutions</div>
+            <div class="option-card" data-value="0.75">Top institutions only</div>
+            <div class="option-card" data-value="0.50">Top and middle are fine</div>
+            <div class="option-card" data-value="0.25">All institutions</div>
           </div>
 
           <label>How much does a university's graduate employment record influence your decision?</label>
@@ -667,6 +673,48 @@ button:disabled {
               <div class="option-card" data-value="graduate_salary">Earning a strong salary in my field</div>
               <div class="option-card" data-value="employer_reputation">Working with globally recognised employers</div>
             </div>
+          </div>
+
+          <label>What kind of learning environment do you prefer?</label>
+          <div class="option-group" data-name="teaching_importance">
+            <div class="option-card" data-value="high">Small classes with high faculty contact</div>
+            <div class="option-card" data-value="medium">Balanced — mix of lectures and smaller sessions</div>
+            <div class="option-card" data-value="low">I'm self-directed, class size doesn't matter much to me</div>
+          </div>
+
+          <label>How research-intensive do you want your university to be?</label>
+          <div class="option-group" data-name="research_importance">
+            <div class="option-card" data-value="high">Very important (I want a university known for cutting-edge research)</div>
+            <div class="option-card" data-value="medium">Somewhat important (A good balance of research and quality teaching works for me)</div>
+            <div class="option-card" data-value="low">Not important (I prefer a teaching-focused university, research output doesn't matter)</div>
+          </div>
+
+          <label>Outside of academics and career outcomes, how much does campus life and student support factor into your university choice?</label>
+          <div class="option-group" data-name="student_experience_importance">
+            <div class="option-card" data-value="high">A lot — facilities, community, and support services matter greatly to me</div>
+            <div class="option-card" data-value="medium">Somewhat — I'd like a decent campus experience but it's not a dealbreaker</div>
+            <div class="option-card" data-value="low">Not much — I'm focused on academics and career, everything else is secondary</div>
+          </div>
+
+          <label>Would you prefer a university with a strong international student and faculty presence?</label>
+          <div class="option-group" data-name="international_importance">
+            <div class="option-card" data-value="high">Yes, strongly — a globally diverse campus is important to me</div>
+            <div class="option-card" data-value="medium">Somewhat — I'd appreciate it but it's not essential</div>
+            <div class="option-card" data-value="low">Not really — this doesn't factor into my decision much</div>
+          </div>
+
+          <label>How selective do you want your university to be in terms of student intake?</label>
+          <div class="option-group" data-name="selectivity_importance">
+            <div class="option-card" data-value="high">Very selective — I want to be among the highest-achieving students</div>
+            <div class="option-card" data-value="medium">Moderately selective — a competitive but accessible environment suits me</div>
+            <div class="option-card" data-value="low">Not a concern — selectivity doesn't factor into my decision</div>
+          </div>
+
+          <label>How important is global name recognition and institutional prestige beyond rankings?</label>
+          <div class="option-group" data-name="prestige_importance">
+            <div class="option-card" data-value="high">Very important</div>
+            <div class="option-card" data-value="medium">Somewhat important</div>
+            <div class="option-card" data-value="low">Not a priority</div>
           </div>
 
           </div>
@@ -1057,6 +1105,12 @@ form.addEventListener("submit", function(e) {
         ranking_importance: document.getElementById("ranking_importance").value,
         career_importance: document.getElementById("career_importance").value,
         career_type: document.getElementById("career_type").value,
+        teaching_importance: document.getElementById("teaching_importance").value,
+        research_importance: document.getElementById("research_importance").value,
+        student_experience_importance: document.getElementById("student_experience_importance").value,
+        international_importance: document.getElementById("international_importance").value,
+        selectivity_importance: document.getElementById("selectivity_importance").value,
+        prestige_importance: document.getElementById("prestige_importance").value,
         total_form_time_seconds: (Date.now() - formStartTime) / 1000,
         completed: true
       })
@@ -1086,6 +1140,12 @@ form.addEventListener("submit", function(e) {
       ranking_importance: document.getElementById("ranking_importance").value,
       career_importance: document.getElementById("career_importance").value,
       career_type: document.getElementById("career_type").value,
+      teaching_importance: document.getElementById("teaching_importance").value,
+      research_importance: document.getElementById("research_importance").value,
+      student_experience_importance: document.getElementById("student_experience_importance").value,
+      international_importance: document.getElementById("international_importance").value,
+      selectivity_importance: document.getElementById("selectivity_importance").value,
+      prestige_importance: document.getElementById("prestige_importance").value,
 
       profile_degree_completed: document.getElementById("profile_degree_completed").value,
       profile_gpa_percentage: document.getElementById("profile_gpa_percentage").value,
