@@ -495,15 +495,6 @@ app.post("/recommend", async (req, res) => {
             ? 0.6
             : 0.3;
 
-      let govWeight =
-        answers.gov_support_importance === "Very strongly"
-          ? 1
-          : answers.gov_support_importance === "Wouldn’t mind"
-            ? 0.6
-            : answers.gov_support_importance === "Don’t mind"
-              ? 0.3
-              : 0.3;
-
       let englishWeight =
         answers.english_preference === "Yes"
           ? 1
@@ -515,11 +506,10 @@ app.post("/recommend", async (req, res) => {
         costWeight * Math.max(0, Math.min(1, costAlignmentScore)) +
         pswWeight * c.psw_score +
         prWeight * c.pr_pathway_clarity_score +
-        govWeight * c.government_support_score +
         englishWeight * c.english_score;
 
       let totalWeight =
-        costWeight + pswWeight + prWeight + govWeight + englishWeight;
+        costWeight + pswWeight + prWeight + englishWeight;
 
       return clamp(weightedSum / totalWeight);
     }

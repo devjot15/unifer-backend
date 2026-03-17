@@ -373,7 +373,7 @@ button:disabled {
 
 <input type="hidden" id="work_permit_importance" name="work_permit_importance">
       <input type="hidden" id="english_preference" name="english_preference">
-      <input type="hidden" id="gov_support_importance" name="gov_support_importance">
+
       <input type="hidden" id="pr_importance" name="pr_importance">
 
       <input type="hidden" id="level" name="level">
@@ -548,13 +548,6 @@ button:disabled {
             <div class="option-card" data-value="Yes">Yes</div>
             <div class="option-card" data-value="Prefer but flexible">Prefer but flexible</div>
             <div class="option-card" data-value="No preference">No preference</div>
-          </div>
-
-          <label>How strongly does government support affect your decision?</label>
-          <div class="option-group" data-name="gov_support_importance">
-            <div class="option-card" data-value="Very strongly">Very strongly</div>
-            <div class="option-card" data-value="Wouldn’t mind">Wouldn’t mind</div>
-            <div class="option-card" data-value="Don’t mind">Don’t mind</div>
           </div>
 
           <label>How strongly does opportunity to immigrate permanently affect your decision?</label>
@@ -1032,7 +1025,6 @@ form.addEventListener("submit", function(e) {
         work_permit_importance: document.getElementById("work_permit_importance").value,
         english_preference: document.getElementById("english_preference").value,
         pr_importance: document.getElementById("pr_importance").value,
-        gov_support_importance: document.getElementById("gov_support_importance").value,
         level: document.getElementById("level").value,
         duration: document.getElementById("duration").value,
         tuition_band: document.getElementById("tuition_band").value,
@@ -1057,7 +1049,6 @@ form.addEventListener("submit", function(e) {
 
       work_permit_importance: document.getElementById("work_permit_importance").value,
       english_preference: document.getElementById("english_preference").value,
-      gov_support_importance: document.getElementById("gov_support_importance").value,
       pr_importance: document.getElementById("pr_importance").value,
 
       level: document.getElementById("level").value,
