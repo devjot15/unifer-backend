@@ -210,6 +210,16 @@ app.post("/recommend", async (req, res) => {
     console.log("======== NEW REQUEST ========");
     console.log("BODY:", req.body);
     const answers = req.body;
+    const {
+      career_importance,
+      career_type,
+      teaching_importance,
+      research_importance,
+      student_experience_importance,
+      international_importance,
+      selectivity_importance,
+      prestige_importance,
+    } = req.body;
 
     // 1️⃣ Fetch all data
     const { data: countries, error: cErr } = await supabase
