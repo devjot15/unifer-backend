@@ -384,7 +384,7 @@ button:disabled {
       <input type="hidden" id="internship_importance" name="internship_importance">
       <input type="hidden" id="scholarship_importance" name="scholarship_importance">
 
-      <input type="hidden" id="location_preference" name="location_preference">
+
       <input type="hidden" id="ranking_importance" name="ranking_importance">
       <input type="hidden" id="career_importance" name="career_importance">
       <input type="hidden" id="admission_speed_importance" name="admission_speed_importance">
@@ -652,13 +652,6 @@ button:disabled {
       <div class="form-step" data-step="5">
         <div class="section" style="border-bottom: none; margin-bottom: 0;">
           <h2>Step 5 — University Selection</h2>
-          <label>What is your preference for location of the campus?</label>
-          <div class="option-group" data-name="location_preference">
-            <div class="option-card" data-value="Main city">Main city</div>
-            <div class="option-card" data-value="Smaller cities">Smaller cities</div>
-            <div class="option-card" data-value="Anywhere in the country">Anywhere in the country</div>
-          </div>
-
           <label>How strongly ranking affects your decision?</label>
           <div class="option-group" data-name="ranking_importance">
             <div class="option-card" data-value="Only want to apply in top institutions">Top institutions only</div>
@@ -1051,7 +1044,6 @@ form.addEventListener("submit", function(e) {
         field: document.getElementById("field").value,
         internship_importance: document.getElementById("internship_importance").value,
         scholarship_importance: document.getElementById("scholarship_importance").value,
-        location_preference: document.getElementById("location_preference").value,
         ranking_importance: document.getElementById("ranking_importance").value,
         career_importance: document.getElementById("career_importance").value,
         admission_speed_importance: document.getElementById("admission_speed_importance").value,
@@ -1082,7 +1074,6 @@ form.addEventListener("submit", function(e) {
       internship_importance: document.getElementById("internship_importance").value,
       scholarship_importance: document.getElementById("scholarship_importance").value,
 
-      location_preference: document.getElementById("location_preference").value,
       ranking_importance: document.getElementById("ranking_importance").value,
       career_importance: document.getElementById("career_importance").value,
       admission_speed_importance: document.getElementById("admission_speed_importance").value,
