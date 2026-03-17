@@ -871,7 +871,7 @@ function validateCurrentStep() {
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
-  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects"];
+  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects", "career_type"];
   groupsInStep.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
     var groupName = group.dataset.name;
@@ -925,6 +925,10 @@ function validateAllFields() {
     var visibleCards = Array.from(group.querySelectorAll(".option-card")).filter(
       function(c) { return c.style.display !== "none"; }
     );
+    if (group.dataset.name === "career_type") {
+      var section = document.getElementById("career_type_section");
+      if (!section || section.style.display === "none") return;
+    }
     if (visibleCards.length > 0 && !group.querySelector(".option-card.selected")) {
       allValid = false;
     }
@@ -1057,7 +1061,7 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-  const optionalFields = ["profile_subjects"];
+  const optionalFields = ["profile_subjects", "career_type"];
 
   for (let input of hiddenInputs) {
     if (!input.value && !optionalFields.includes(input.id)) {
