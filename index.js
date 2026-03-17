@@ -477,13 +477,6 @@ app.post("/recommend", async (req, res) => {
 
       let costWeight = 1;
 
-      const costBandMap = {
-        "$0 - $20K": 20000,
-        "$20K - $30K": 25000,
-        "More than $30K": 35000,
-      };
-      const userCostMidpoint = costBandMap[answers.cost_of_living] || 25000;
-      const maxCostRange = 35000;
       const costAlignmentScore = clamp(
         1 - (c.cost_score != null ? 1 - c.cost_score : 0.5),
       );
@@ -502,15 +495,6 @@ app.post("/recommend", async (req, res) => {
             ? 0.6
             : 0.3;
 
-      let govWeight =
-        answers.gov_support_importance === "Very strongly"
-          ? 1
-          : answers.gov_support_importance === "Wouldn’t mind"
-            ? 0.6
-            : answers.gov_support_importance === "Don’t mind"
-              ? 0.3
-              : 0.3;
-
       let englishWeight =
         answers.english_preference === "Yes"
           ? 1
@@ -522,11 +506,10 @@ app.post("/recommend", async (req, res) => {
         costWeight * Math.max(0, Math.min(1, costAlignmentScore)) +
         pswWeight * c.psw_score +
         prWeight * c.pr_pathway_clarity_score +
-        govWeight * c.government_support_score +
         englishWeight * c.english_score;
 
       let totalWeight =
-        costWeight + pswWeight + prWeight + govWeight + englishWeight;
+        costWeight + pswWeight + prWeight + englishWeight;
 
       return clamp(weightedSum / totalWeight);
     }
@@ -565,31 +548,6 @@ app.post("/recommend", async (req, res) => {
     }
 
     function computeUniversityScore(university, country, answers, rankingMap, subjectRankMap, courseSubjectId) {
-      let locationScore =
-        answers.location_preference === "Anywhere in the country"
-          ? 1
-          : university.location_type === answers.location_preference
-            ? 1
-            : 0;
-
-      const careerScore = university.career_services_score ?? 0.5;
-      const admissionScoreRaw = university.admission_speed_score ?? 0.5;
-
-      let careerWeightMap = {
-        "Very strongly (placement driven institutions)": 1,
-        "Moderately (academics driven institutions)": 0.6,
-        "Not that much": 0.3,
-      };
-      let careerWeight = careerWeightMap[answers.career_importance] || 0;
-
-      let admissionWeightMap = {
-        "Very strongly": 1,
-        "Not that much": 0.6,
-        No: 0.3,
-      };
-      let admissionWeight =
-        admissionWeightMap[answers.admission_speed_importance] || 0;
-
       // Use subject-specific ranking if available — much more accurate signal.
       // e.g. MIT #200 overall but #3 in CS: a CS student should see the #3 score.
       const overallRanking = rankingMap[university.id] ?? 0.5;
@@ -605,9 +563,6 @@ app.post("/recommend", async (req, res) => {
           ? 0.7 * subjectRanking + 0.3 * overallRanking
           : overallRanking;
 
-      const admissionSpeedScore = university.admission_speed_score ?? 0.5;
-      let admissionScore = admissionWeight * admissionSpeedScore;
-
       let rankingWeight = 0;
       if (
         answers.ranking_importance === "Only want to apply in top institutions"
@@ -622,12 +577,8 @@ app.post("/recommend", async (req, res) => {
 
       let rankingScore = rankingWeight * compositeRanking;
 
-      const uniNumerator =
-        locationScore +
-        rankingScore +
-        careerWeight * careerScore +
-        admissionScore;
-      const uniDenominator = 1 + rankingWeight + careerWeight + admissionWeight;
+      const uniNumerator = rankingScore;
+      const uniDenominator = rankingWeight;
       return clamp(uniNumerator / (uniDenominator || 1));
     }
 
@@ -722,17 +673,6 @@ app.post("/recommend", async (req, res) => {
         );
       else if (universityScore >= 0.4)
         explanation.push("Institution meets your core university preferences");
-
-      if (
-        answers.location_preference !== "Anywhere in the country" &&
-        university.location_type === answers.location_preference
-      ) {
-        explanation.push(
-          "Campus location matches your " +
-            answers.location_preference.toLowerCase() +
-            " preference",
-        );
-      }
 
       if (explanation.length === 0) {
         explanation.push(

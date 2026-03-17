@@ -371,10 +371,9 @@ button:disabled {
       <input type="hidden" id="priority_2" name="priority_2">
       <input type="hidden" id="priority_3" name="priority_3">
 
-      <input type="hidden" id="cost_of_living" name="cost_of_living">
-      <input type="hidden" id="work_permit_importance" name="work_permit_importance">
+<input type="hidden" id="work_permit_importance" name="work_permit_importance">
       <input type="hidden" id="english_preference" name="english_preference">
-      <input type="hidden" id="gov_support_importance" name="gov_support_importance">
+
       <input type="hidden" id="pr_importance" name="pr_importance">
 
       <input type="hidden" id="level" name="level">
@@ -385,10 +384,11 @@ button:disabled {
       <input type="hidden" id="internship_importance" name="internship_importance">
       <input type="hidden" id="scholarship_importance" name="scholarship_importance">
 
-      <input type="hidden" id="location_preference" name="location_preference">
+
       <input type="hidden" id="ranking_importance" name="ranking_importance">
       <input type="hidden" id="career_importance" name="career_importance">
-      <input type="hidden" id="admission_speed_importance" name="admission_speed_importance">
+      <input type="hidden" id="career_type" name="career_type">
+
       <input type="hidden" id="profile_degree_completed" name="profile_degree_completed">
       <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
       <input type="hidden" id="profile_backlogs" name="profile_backlogs">
@@ -537,13 +537,6 @@ button:disabled {
       <div class="form-step" data-step="3">
         <div class="section">
           <h2>Step 3 — Country Selection</h2>
-          <label>What is your preferred cost of living per year range?</label>
-          <div class="option-group" data-name="cost_of_living">
-            <div class="option-card" data-value="$0 - $20K">$0 - $20K</div>
-            <div class="option-card" data-value="$20K - $30K">$20K - $30K</div>
-            <div class="option-card" data-value="More than $30K">More than $30K</div>
-          </div>
-
           <label>How does duration of post study work permit effect your decision?</label>
           <div class="option-group" data-name="work_permit_importance">
             <div class="option-card" data-value="Very strongly (3 years and above)">Very strongly (3+ years)</div>
@@ -556,13 +549,6 @@ button:disabled {
             <div class="option-card" data-value="Yes">Yes</div>
             <div class="option-card" data-value="Prefer but flexible">Prefer but flexible</div>
             <div class="option-card" data-value="No preference">No preference</div>
-          </div>
-
-          <label>How strongly does government support affect your decision?</label>
-          <div class="option-group" data-name="gov_support_importance">
-            <div class="option-card" data-value="Very strongly">Very strongly</div>
-            <div class="option-card" data-value="Wouldn’t mind">Wouldn’t mind</div>
-            <div class="option-card" data-value="Don’t mind">Don’t mind</div>
           </div>
 
           <label>How strongly does opportunity to immigrate permanently affect your decision?</label>
@@ -660,13 +646,6 @@ button:disabled {
       <div class="form-step" data-step="5">
         <div class="section" style="border-bottom: none; margin-bottom: 0;">
           <h2>Step 5 — University Selection</h2>
-          <label>What is your preference for location of the campus?</label>
-          <div class="option-group" data-name="location_preference">
-            <div class="option-card" data-value="Main city">Main city</div>
-            <div class="option-card" data-value="Smaller cities">Smaller cities</div>
-            <div class="option-card" data-value="Anywhere in the country">Anywhere in the country</div>
-          </div>
-
           <label>How strongly ranking affects your decision?</label>
           <div class="option-group" data-name="ranking_importance">
             <div class="option-card" data-value="Only want to apply in top institutions">Top institutions only</div>
@@ -674,19 +653,23 @@ button:disabled {
             <div class="option-card" data-value="All institution irrespective of ranking">All institutions</div>
           </div>
 
-          <label>How does career services affect your decision?</label>
+          <label>How much does a university's graduate employment record influence your decision?</label>
           <div class="option-group" data-name="career_importance">
-            <div class="option-card" data-value="Very strongly (placement driven institutions)">Very strongly (placement driven)</div>
-            <div class="option-card" data-value="Moderately (academics driven institutions)">Moderately (academics driven)</div>
-            <div class="option-card" data-value="Not that much">Not that much</div>
+            <div class="option-card" data-value="high">A great deal</div>
+            <div class="option-card" data-value="medium">Somewhat</div>
+            <div class="option-card" data-value="low">Not much</div>
           </div>
 
-          <label>How fast admission is a deciding factor?</label>
-          <div class="option-group" data-name="admission_speed_importance">
-            <div class="option-card" data-value="Very strongly">Very strongly</div>
-            <div class="option-card" data-value="Not that much">Not that much</div>
-            <div class="option-card" data-value="No">No</div>
-          </div></div>
+          <div id="career_type_section" style="display:none;">
+            <label>What matters most about those outcomes?</label>
+            <div class="option-group" data-name="career_type">
+              <div class="option-card" data-value="employment_rate">Getting a job quickly after graduation</div>
+              <div class="option-card" data-value="graduate_salary">Earning a strong salary in my field</div>
+              <div class="option-card" data-value="employer_reputation">Working with globally recognised employers</div>
+            </div>
+          </div>
+
+          </div>
         <div class="nav-buttons">
           <button type="button" class="prev-btn">Back</button>
           <button type="submit" id="submitBtn" class="analyze-btn" disabled>Run Structured Analysis</button>
@@ -949,6 +932,19 @@ document.querySelectorAll(".option-group").forEach(group => {
         }
       }
 
+      if (fieldName === "career_importance") {
+        const careerTypeSection = document.getElementById("career_type_section");
+        const careerTypeInput = document.getElementById("career_type");
+        const val = card.dataset.value;
+        if (val === "high" || val === "medium") {
+          careerTypeSection.style.display = "";
+        } else {
+          careerTypeSection.style.display = "none";
+          careerTypeInput.value = "";
+          careerTypeSection.querySelectorAll(".option-card").forEach(c => c.classList.remove("selected"));
+        }
+      }
+
       group.classList.remove("invalid");
       if (formMessage.textContent && fieldName !== "level") {
         formMessage.textContent = "";
@@ -1049,21 +1045,18 @@ form.addEventListener("submit", function(e) {
         priority_1: document.getElementById("priority_1").value,
         priority_2: document.getElementById("priority_2").value,
         priority_3: document.getElementById("priority_3").value,
-        cost_of_living: document.getElementById("cost_of_living").value,
         work_permit_importance: document.getElementById("work_permit_importance").value,
         english_preference: document.getElementById("english_preference").value,
         pr_importance: document.getElementById("pr_importance").value,
-        gov_support_importance: document.getElementById("gov_support_importance").value,
         level: document.getElementById("level").value,
         duration: document.getElementById("duration").value,
         tuition_band: document.getElementById("tuition_band").value,
         field: document.getElementById("field").value,
         internship_importance: document.getElementById("internship_importance").value,
         scholarship_importance: document.getElementById("scholarship_importance").value,
-        location_preference: document.getElementById("location_preference").value,
         ranking_importance: document.getElementById("ranking_importance").value,
         career_importance: document.getElementById("career_importance").value,
-        admission_speed_importance: document.getElementById("admission_speed_importance").value,
+        career_type: document.getElementById("career_type").value,
         total_form_time_seconds: (Date.now() - formStartTime) / 1000,
         completed: true
       })
@@ -1078,10 +1071,8 @@ form.addEventListener("submit", function(e) {
       priority_2: document.getElementById("priority_2").value,
       priority_3: document.getElementById("priority_3").value,
 
-      cost_of_living: document.getElementById("cost_of_living").value,
       work_permit_importance: document.getElementById("work_permit_importance").value,
       english_preference: document.getElementById("english_preference").value,
-      gov_support_importance: document.getElementById("gov_support_importance").value,
       pr_importance: document.getElementById("pr_importance").value,
 
       level: document.getElementById("level").value,
@@ -1092,10 +1083,9 @@ form.addEventListener("submit", function(e) {
       internship_importance: document.getElementById("internship_importance").value,
       scholarship_importance: document.getElementById("scholarship_importance").value,
 
-      location_preference: document.getElementById("location_preference").value,
       ranking_importance: document.getElementById("ranking_importance").value,
       career_importance: document.getElementById("career_importance").value,
-      admission_speed_importance: document.getElementById("admission_speed_importance").value,
+      career_type: document.getElementById("career_type").value,
 
       profile_degree_completed: document.getElementById("profile_degree_completed").value,
       profile_gpa_percentage: document.getElementById("profile_gpa_percentage").value,
