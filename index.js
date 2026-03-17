@@ -563,17 +563,7 @@ app.post("/recommend", async (req, res) => {
           ? 0.7 * subjectRanking + 0.3 * overallRanking
           : overallRanking;
 
-      let rankingWeight = 0;
-      if (
-        answers.ranking_importance === "Only want to apply in top institutions"
-      )
-        rankingWeight = 1;
-      if (answers.ranking_importance === "Top and middle institutions are fine")
-        rankingWeight = 0.7;
-      if (
-        answers.ranking_importance === "All institution irrespective of ranking"
-      )
-        rankingWeight = 0.4;
+      let rankingWeight = parseFloat(answers.ranking_importance) || 0;
 
       let rankingScore = rankingWeight * compositeRanking;
 
