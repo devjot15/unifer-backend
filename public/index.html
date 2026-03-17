@@ -387,6 +387,7 @@ button:disabled {
 
       <input type="hidden" id="ranking_importance" name="ranking_importance">
       <input type="hidden" id="career_importance" name="career_importance">
+      <input type="hidden" id="career_type" name="career_type">
 
       <input type="hidden" id="profile_degree_completed" name="profile_degree_completed">
       <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
@@ -652,11 +653,20 @@ button:disabled {
             <div class="option-card" data-value="All institution irrespective of ranking">All institutions</div>
           </div>
 
-          <label>How does career services affect your decision?</label>
+          <label>How much does a university's graduate employment record influence your decision?</label>
           <div class="option-group" data-name="career_importance">
-            <div class="option-card" data-value="Very strongly (placement driven institutions)">Very strongly (placement driven)</div>
-            <div class="option-card" data-value="Moderately (academics driven institutions)">Moderately (academics driven)</div>
-            <div class="option-card" data-value="Not that much">Not that much</div>
+            <div class="option-card" data-value="high">A great deal</div>
+            <div class="option-card" data-value="medium">Somewhat</div>
+            <div class="option-card" data-value="low">Not much</div>
+          </div>
+
+          <div id="career_type_section" style="display:none;">
+            <label>What matters most about those outcomes?</label>
+            <div class="option-group" data-name="career_type">
+              <div class="option-card" data-value="employment_rate">Getting a job quickly after graduation</div>
+              <div class="option-card" data-value="graduate_salary">Earning a strong salary in my field</div>
+              <div class="option-card" data-value="employer_reputation">Working with globally recognised employers</div>
+            </div>
           </div>
 
           </div>
@@ -922,6 +932,19 @@ document.querySelectorAll(".option-group").forEach(group => {
         }
       }
 
+      if (fieldName === "career_importance") {
+        const careerTypeSection = document.getElementById("career_type_section");
+        const careerTypeInput = document.getElementById("career_type");
+        const val = card.dataset.value;
+        if (val === "high" || val === "medium") {
+          careerTypeSection.style.display = "";
+        } else {
+          careerTypeSection.style.display = "none";
+          careerTypeInput.value = "";
+          careerTypeSection.querySelectorAll(".option-card").forEach(c => c.classList.remove("selected"));
+        }
+      }
+
       group.classList.remove("invalid");
       if (formMessage.textContent && fieldName !== "level") {
         formMessage.textContent = "";
@@ -1033,6 +1056,7 @@ form.addEventListener("submit", function(e) {
         scholarship_importance: document.getElementById("scholarship_importance").value,
         ranking_importance: document.getElementById("ranking_importance").value,
         career_importance: document.getElementById("career_importance").value,
+        career_type: document.getElementById("career_type").value,
         total_form_time_seconds: (Date.now() - formStartTime) / 1000,
         completed: true
       })
@@ -1061,6 +1085,7 @@ form.addEventListener("submit", function(e) {
 
       ranking_importance: document.getElementById("ranking_importance").value,
       career_importance: document.getElementById("career_importance").value,
+      career_type: document.getElementById("career_type").value,
 
       profile_degree_completed: document.getElementById("profile_degree_completed").value,
       profile_gpa_percentage: document.getElementById("profile_gpa_percentage").value,

@@ -548,15 +548,6 @@ app.post("/recommend", async (req, res) => {
     }
 
     function computeUniversityScore(university, country, answers, rankingMap, subjectRankMap, courseSubjectId) {
-      const careerScore = university.career_services_score ?? 0.5;
-
-      let careerWeightMap = {
-        "Very strongly (placement driven institutions)": 1,
-        "Moderately (academics driven institutions)": 0.6,
-        "Not that much": 0.3,
-      };
-      let careerWeight = careerWeightMap[answers.career_importance] || 0;
-
       // Use subject-specific ranking if available — much more accurate signal.
       // e.g. MIT #200 overall but #3 in CS: a CS student should see the #3 score.
       const overallRanking = rankingMap[university.id] ?? 0.5;
@@ -586,10 +577,8 @@ app.post("/recommend", async (req, res) => {
 
       let rankingScore = rankingWeight * compositeRanking;
 
-      const uniNumerator =
-        rankingScore +
-        careerWeight * careerScore;
-      const uniDenominator = rankingWeight + careerWeight;
+      const uniNumerator = rankingScore;
+      const uniDenominator = rankingWeight;
       return clamp(uniNumerator / (uniDenominator || 1));
     }
 
