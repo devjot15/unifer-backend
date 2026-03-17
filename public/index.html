@@ -387,7 +387,7 @@ button:disabled {
 
       <input type="hidden" id="ranking_importance" name="ranking_importance">
       <input type="hidden" id="career_importance" name="career_importance">
-      <input type="hidden" id="admission_speed_importance" name="admission_speed_importance">
+
       <input type="hidden" id="profile_degree_completed" name="profile_degree_completed">
       <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
       <input type="hidden" id="profile_backlogs" name="profile_backlogs">
@@ -666,12 +666,7 @@ button:disabled {
             <div class="option-card" data-value="Not that much">Not that much</div>
           </div>
 
-          <label>How fast admission is a deciding factor?</label>
-          <div class="option-group" data-name="admission_speed_importance">
-            <div class="option-card" data-value="Very strongly">Very strongly</div>
-            <div class="option-card" data-value="Not that much">Not that much</div>
-            <div class="option-card" data-value="No">No</div>
-          </div></div>
+          </div>
         <div class="nav-buttons">
           <button type="button" class="prev-btn">Back</button>
           <button type="submit" id="submitBtn" class="analyze-btn" disabled>Run Structured Analysis</button>
@@ -1046,7 +1041,6 @@ form.addEventListener("submit", function(e) {
         scholarship_importance: document.getElementById("scholarship_importance").value,
         ranking_importance: document.getElementById("ranking_importance").value,
         career_importance: document.getElementById("career_importance").value,
-        admission_speed_importance: document.getElementById("admission_speed_importance").value,
         total_form_time_seconds: (Date.now() - formStartTime) / 1000,
         completed: true
       })
@@ -1076,7 +1070,6 @@ form.addEventListener("submit", function(e) {
 
       ranking_importance: document.getElementById("ranking_importance").value,
       career_importance: document.getElementById("career_importance").value,
-      admission_speed_importance: document.getElementById("admission_speed_importance").value,
 
       profile_degree_completed: document.getElementById("profile_degree_completed").value,
       profile_gpa_percentage: document.getElementById("profile_gpa_percentage").value,
