@@ -371,8 +371,7 @@ button:disabled {
       <input type="hidden" id="priority_2" name="priority_2">
       <input type="hidden" id="priority_3" name="priority_3">
 
-      <input type="hidden" id="cost_of_living" name="cost_of_living">
-      <input type="hidden" id="work_permit_importance" name="work_permit_importance">
+<input type="hidden" id="work_permit_importance" name="work_permit_importance">
       <input type="hidden" id="english_preference" name="english_preference">
       <input type="hidden" id="gov_support_importance" name="gov_support_importance">
       <input type="hidden" id="pr_importance" name="pr_importance">
@@ -537,13 +536,6 @@ button:disabled {
       <div class="form-step" data-step="3">
         <div class="section">
           <h2>Step 3 — Country Selection</h2>
-          <label>What is your preferred cost of living per year range?</label>
-          <div class="option-group" data-name="cost_of_living">
-            <div class="option-card" data-value="$0 - $20K">$0 - $20K</div>
-            <div class="option-card" data-value="$20K - $30K">$20K - $30K</div>
-            <div class="option-card" data-value="More than $30K">More than $30K</div>
-          </div>
-
           <label>How does duration of post study work permit effect your decision?</label>
           <div class="option-group" data-name="work_permit_importance">
             <div class="option-card" data-value="Very strongly (3 years and above)">Very strongly (3+ years)</div>
@@ -1049,7 +1041,6 @@ form.addEventListener("submit", function(e) {
         priority_1: document.getElementById("priority_1").value,
         priority_2: document.getElementById("priority_2").value,
         priority_3: document.getElementById("priority_3").value,
-        cost_of_living: document.getElementById("cost_of_living").value,
         work_permit_importance: document.getElementById("work_permit_importance").value,
         english_preference: document.getElementById("english_preference").value,
         pr_importance: document.getElementById("pr_importance").value,
@@ -1078,7 +1069,6 @@ form.addEventListener("submit", function(e) {
       priority_2: document.getElementById("priority_2").value,
       priority_3: document.getElementById("priority_3").value,
 
-      cost_of_living: document.getElementById("cost_of_living").value,
       work_permit_importance: document.getElementById("work_permit_importance").value,
       english_preference: document.getElementById("english_preference").value,
       gov_support_importance: document.getElementById("gov_support_importance").value,

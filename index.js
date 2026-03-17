@@ -477,13 +477,6 @@ app.post("/recommend", async (req, res) => {
 
       let costWeight = 1;
 
-      const costBandMap = {
-        "$0 - $20K": 20000,
-        "$20K - $30K": 25000,
-        "More than $30K": 35000,
-      };
-      const userCostMidpoint = costBandMap[answers.cost_of_living] || 25000;
-      const maxCostRange = 35000;
       const costAlignmentScore = clamp(
         1 - (c.cost_score != null ? 1 - c.cost_score : 0.5),
       );
