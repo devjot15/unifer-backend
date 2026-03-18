@@ -227,6 +227,8 @@ async function getSubScore(universityId, body) {
     conceptBuckets[dimension][concept_group].push(score);
   }
 
+  console.log(`[getSubScore] university=${universityId} raw concept buckets:`, JSON.stringify(conceptBuckets, null, 2));
+
   const dimConceptScore = {}; // { dimension: { concept_group: avg } }
   for (const [dim, concepts] of Object.entries(conceptBuckets)) {
     dimConceptScore[dim] = {};
@@ -234,6 +236,8 @@ async function getSubScore(universityId, body) {
       dimConceptScore[dim][concept] = scores.reduce((a, b) => a + b, 0) / scores.length;
     }
   }
+
+  console.log(`[getSubScore] university=${universityId} concept averages (pre-dim):`, JSON.stringify(dimConceptScore, null, 2));
 
   // Step 3 & 4: Compute dim_score per dimension
   const dimScore = {}; // { dimension: number }
@@ -266,6 +270,8 @@ async function getSubScore(universityId, body) {
     }
   }
 
+  console.log(`[getSubScore] university=${universityId} dim_score per dimension:`, JSON.stringify(dimScore, null, 2));
+
   // Step 5: Preference vector
   const DIM_WEIGHT = { high: 0.25, medium: 0.15, low: 0.05 };
   const answerMap = {
@@ -288,7 +294,9 @@ async function getSubScore(universityId, body) {
     numerator += w * score;
     denominator += w;
   }
-  return denominator > 0 ? numerator / denominator : 0.5;
+  const subScore = denominator > 0 ? numerator / denominator : 0.5;
+  console.log(`[getSubScore] university=${universityId} sub_score=${subScore}`);
+  return subScore;
 }
 
 app.post("/recommend", async (req, res) => {
@@ -699,6 +707,8 @@ app.post("/recommend", async (req, res) => {
       if (!isFinite(finalScore)) {
         finalScore = 0;
       }
+
+      console.log(`[pathway] university=${university.name} (${university.id}) compositeScore=${compositeScore} alpha=${alpha} beta=${beta} subScore=${subScore} universityScore=${universityScore} finalScore=${finalScore}`);
 
       const explanation = [];
 
