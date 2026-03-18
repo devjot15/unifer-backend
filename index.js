@@ -206,26 +206,18 @@ app.get("/countries", async (req, res) => {
 });
 
 async function getSubScore(universityId, body) {
-  console.log(`[getSubScore] called with universityId=${universityId}`);
-
   // Step 1: Fetch sub-indicator scores joined to dimension and concept_group
   const { data: rows, error } = await supabase.rpc("get_sub_indicator_scores", {
     p_university_id: universityId
   });
 
-  console.log(`[getSubScore] university=${universityId} supabase error:`, error);
-  console.log(`[getSubScore] university=${universityId} raw rows (${rows ? rows.length : 'null'}):`, JSON.stringify(rows, null, 2));
-
   if (error) {
-    console.log(`[getSubScore] university=${universityId} returning 0.5 due to supabase error:`, error.message, error.code, error.details, error.hint);
     return 0.5;
   }
   if (!rows) {
-    console.log(`[getSubScore] university=${universityId} returning 0.5 because rows is null/undefined`);
     return 0.5;
   }
   if (rows.length === 0) {
-    console.log(`[getSubScore] university=${universityId} returning 0.5 because rows array is empty — no matching sub-indicator scores found`);
     return 0.5;
   }
 
@@ -240,8 +232,6 @@ async function getSubScore(universityId, body) {
     conceptBuckets[dimension][concept_group].push(score);
   }
 
-  console.log(`[getSubScore] university=${universityId} raw concept buckets:`, JSON.stringify(conceptBuckets, null, 2));
-
   const dimConceptScore = {}; // { dimension: { concept_group: avg } }
   for (const [dim, concepts] of Object.entries(conceptBuckets)) {
     dimConceptScore[dim] = {};
@@ -249,8 +239,6 @@ async function getSubScore(universityId, body) {
       dimConceptScore[dim][concept] = scores.reduce((a, b) => a + b, 0) / scores.length;
     }
   }
-
-  console.log(`[getSubScore] university=${universityId} concept averages (pre-dim):`, JSON.stringify(dimConceptScore, null, 2));
 
   // Step 3 & 4: Compute dim_score per dimension
   const dimScore = {}; // { dimension: number }
@@ -283,8 +271,6 @@ async function getSubScore(universityId, body) {
     }
   }
 
-  console.log(`[getSubScore] university=${universityId} dim_score per dimension:`, JSON.stringify(dimScore, null, 2));
-
   // Step 5: Preference vector
   const DIM_WEIGHT = { high: 0.25, medium: 0.15, low: 0.05 };
   const answerMap = {
@@ -308,7 +294,6 @@ async function getSubScore(universityId, body) {
     denominator += w;
   }
   const subScore = denominator > 0 ? numerator / denominator : 0.5;
-  console.log(`[getSubScore] university=${universityId} sub_score=${subScore}`);
   return subScore;
 }
 
@@ -437,6 +422,16 @@ app.post("/recommend", async (req, res) => {
         countryMap[c.id] = c;
       });
     }
+
+    // Static fallback entries for countries not yet present in country_normalized.
+    // TODO: verify the following UUIDs are also present in country_normalized and add
+    // fallback entries here if they are missing (similar to United Kingdom below):
+    //   - Australia    (check country_normalized for the correct UUID)
+    //   - Canada       (check country_normalized for the correct UUID)
+    //   - Germany      (check country_normalized for the correct UUID)
+    //   - Ireland      (check country_normalized for the correct UUID)
+    //   - United States (check country_normalized for the correct UUID)
+    countryMap["f5e7b5c4-3585-4f93-9f4e-449de60ad33b"] = "United Kingdom";
 
     // 2️⃣ PROFILE ELIMINATION (remaining checks not done at DB level)
     const eligibleCourses = courses.filter((course) => {
