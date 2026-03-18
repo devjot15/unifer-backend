@@ -209,12 +209,9 @@ async function getSubScore(universityId, body) {
   console.log(`[getSubScore] called with universityId=${universityId}`);
 
   // Step 1: Fetch sub-indicator scores joined to dimension and concept_group
-  const { data: rows, error } = await supabase
-    .schema("rankings")
-    .from("university_sub_indicator_scores")
-    .select("normalized_score, ranking_sub_indicators!inner(dimension, concept_group)")
-    .eq("university_id", universityId)
-    .not("ranking_sub_indicators.concept_group", "is", null);
+  const { data: rows, error } = await supabase.rpc("get_sub_indicator_scores", {
+    p_university_id: universityId
+  });
 
   console.log(`[getSubScore] university=${universityId} supabase error:`, error);
   console.log(`[getSubScore] university=${universityId} raw rows (${rows ? rows.length : 'null'}):`, JSON.stringify(rows, null, 2));
@@ -235,7 +232,7 @@ async function getSubScore(universityId, body) {
   // Step 2: Group by (dimension, concept_group) and average normalized_score
   const conceptBuckets = {}; // { dimension: { concept_group: number[] } }
   for (const row of rows) {
-    const { dimension, concept_group } = row.ranking_sub_indicators;
+    const { dimension, concept_group } = row;
     const score = row.normalized_score;
     if (score == null) continue;
     if (!conceptBuckets[dimension]) conceptBuckets[dimension] = {};
