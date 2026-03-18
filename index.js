@@ -299,8 +299,6 @@ async function getSubScore(universityId, body) {
 
 app.post("/recommend", async (req, res) => {
   try {
-    console.log("======== NEW REQUEST ========");
-    console.log("BODY:", req.body);
     const answers = req.body;
     const {
       career_importance,
@@ -473,22 +471,6 @@ app.post("/recommend", async (req, res) => {
       return true;
     });
 
-    console.log("Eligible courses count:", eligibleCourses.length);
-    console.log("Total courses fetched:", courses ? courses.length : 0);
-    console.log(
-      "Sample course:",
-      courses ? JSON.stringify(courses[0]) : "none",
-    );
-    console.log(
-      "Answers received:",
-      JSON.stringify({
-        level: answers.level,
-        duration: answers.duration,
-        tuition_band: answers.tuition_band,
-        field: answers.field,
-      }),
-    );
-
     if (eligibleCourses.length === 0) {
       return res.json({
         empty: true,
@@ -570,11 +552,6 @@ app.post("/recommend", async (req, res) => {
     function computeCountryScore(country, answers, countryMap) {
       const c = countryMap[country.id];
       if (!c) {
-        console.warn(
-          "Country not found in countryMap:",
-          country.id,
-          country.name,
-        );
         return 0;
       }
 
@@ -699,8 +676,6 @@ app.post("/recommend", async (req, res) => {
       if (!isFinite(finalScore)) {
         finalScore = 0;
       }
-
-      console.log(`[pathway] university=${university.name} (${university.id}) compositeScore=${compositeScore} alpha=${alpha} beta=${beta} subScore=${subScore} universityScore=${universityScore} finalScore=${finalScore}`);
 
       const explanation = [];
 
