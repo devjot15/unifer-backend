@@ -206,6 +206,8 @@ app.get("/countries", async (req, res) => {
 });
 
 async function getSubScore(universityId, body) {
+  console.log(`[getSubScore] called with universityId=${universityId}`);
+
   // Step 1: Fetch sub-indicator scores joined to dimension and concept_group
   const { data: rows, error } = await supabase
     .schema("rankings")
@@ -214,7 +216,21 @@ async function getSubScore(universityId, body) {
     .eq("university_id", universityId)
     .not("ranking_sub_indicators.concept_group", "is", null);
 
-  if (error || !rows || rows.length === 0) return 0.5;
+  console.log(`[getSubScore] university=${universityId} supabase error:`, error);
+  console.log(`[getSubScore] university=${universityId} raw rows (${rows ? rows.length : 'null'}):`, JSON.stringify(rows, null, 2));
+
+  if (error) {
+    console.log(`[getSubScore] university=${universityId} returning 0.5 due to supabase error:`, error.message, error.code, error.details, error.hint);
+    return 0.5;
+  }
+  if (!rows) {
+    console.log(`[getSubScore] university=${universityId} returning 0.5 because rows is null/undefined`);
+    return 0.5;
+  }
+  if (rows.length === 0) {
+    console.log(`[getSubScore] university=${universityId} returning 0.5 because rows array is empty — no matching sub-indicator scores found`);
+    return 0.5;
+  }
 
   // Step 2: Group by (dimension, concept_group) and average normalized_score
   const conceptBuckets = {}; // { dimension: { concept_group: number[] } }
