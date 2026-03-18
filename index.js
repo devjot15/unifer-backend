@@ -578,11 +578,9 @@ app.post("/recommend", async (req, res) => {
         return 0;
       }
 
-      let costWeight = 1;
-
-      const costAlignmentScore = clamp(
-        1 - (c.cost_score != null ? 1 - c.cost_score : 0.5),
-      );
+      const psw_score = c.post_study_work_years != null ? clamp((c.post_study_work_years - 1.5) / (3 - 1.5)) : 0.5;
+      const pr_score = c.pr_pathway_clarity_score != null ? c.pr_pathway_clarity_score : 0.5;
+      const english_score = c.english_primary_language === true ? 1.0 : c.english_primary_language === false ? 0.0 : 0.5;
 
       let pswWeight =
         answers.work_permit_importance === "Very strongly (3 years and above)"
@@ -605,14 +603,9 @@ app.post("/recommend", async (req, res) => {
             ? 0.6
             : 0.3;
 
-      let weightedSum =
-        costWeight * Math.max(0, Math.min(1, costAlignmentScore)) +
-        pswWeight * c.psw_score +
-        prWeight * c.pr_pathway_clarity_score +
-        englishWeight * c.english_score;
+      let weightedSum = pswWeight * psw_score + prWeight * pr_score + englishWeight * english_score;
 
-      let totalWeight =
-        costWeight + pswWeight + prWeight + englishWeight;
+      let totalWeight = pswWeight + prWeight + englishWeight;
 
       return clamp(weightedSum / totalWeight);
     }
