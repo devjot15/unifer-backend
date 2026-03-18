@@ -386,8 +386,9 @@ app.post("/recommend", async (req, res) => {
     }
 
     const { data: countryData } = await supabase
-      .from("country_normalized")
-      .select("*");
+      .schema("core")
+      .from("countries")
+      .select("id, name, avg_cost_of_living_usd, post_study_work_years, pr_pathway_clarity_score, english_primary_language");
 
     const { data: rankingData } = await supabase
       .from("university_composite_ranking")
@@ -422,16 +423,6 @@ app.post("/recommend", async (req, res) => {
         countryMap[c.id] = c;
       });
     }
-
-    // Static fallback entries for countries not yet present in country_normalized.
-    // TODO: verify the following UUIDs are also present in country_normalized and add
-    // fallback entries here if they are missing (similar to United Kingdom below):
-    //   - Australia    (check country_normalized for the correct UUID)
-    //   - Canada       (check country_normalized for the correct UUID)
-    //   - Germany      (check country_normalized for the correct UUID)
-    //   - Ireland      (check country_normalized for the correct UUID)
-    //   - United States (check country_normalized for the correct UUID)
-    countryMap["f5e7b5c4-3585-4f93-9f4e-449de60ad33b"] = "United Kingdom";
 
     // 2️⃣ PROFILE ELIMINATION (remaining checks not done at DB level)
     const eligibleCourses = courses.filter((course) => {
