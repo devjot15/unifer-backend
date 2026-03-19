@@ -33,7 +33,7 @@ async function fetchWithPuppeteer(url) {
   const browser = await getBrowser();
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
     // Accept cookies if present
     try {
@@ -2941,7 +2941,7 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
         html = await Promise.race([
           fetchWithPuppeteer(url),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Puppeteer timeout")), 45000),
+            setTimeout(() => reject(new Error("Puppeteer timeout")), 75000),
           ),
         ]);
       } catch (e) {
