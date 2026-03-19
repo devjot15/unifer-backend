@@ -1402,7 +1402,7 @@ ${trimmedText}
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0,
-    }, 60000);
+    }, 90000);
 
     const rawContent = completion.choices[0].message.content;
     let parsed;
@@ -4855,8 +4855,11 @@ app.post("/scrape-fees-batch", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
   console.log(`Server running on port ${PORT} — worker enabled`);
+  await supabase.schema('ingestion').from('pipeline_jobs')
+    .update({ status: 'pending', attempts: 0 })
+    .eq('status', 'running');
   runPipelineWorker();
 });
 // force
