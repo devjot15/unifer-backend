@@ -21,12 +21,21 @@ const CURRENCY_TO_USD = {
 };
 
 async function getBrowser() {
+  const { execSync } = require('child_process');
   const launchOptions = {
     headless: 'new',
     args: ['--no-sandbox', '--disable-dev-shm-usage']
   };
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  } else {
+    try {
+      launchOptions.executablePath = execSync('which chromium').toString().trim();
+    } catch (e) {
+      try {
+        launchOptions.executablePath = execSync('which chromium-browser').toString().trim();
+      } catch (e2) {}
+    }
   }
   return puppeteer.launch(launchOptions);
 }
