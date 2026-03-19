@@ -1745,7 +1745,7 @@ app.post("/process-queue", async (req, res) => {
               `[queue] Axios got small page, trying Browserless for: ${item.program_url}`,
             );
             try {
-              const browser = await puppeteer.connect({ browserWSEndpoint });
+              const browser = await getBrowser();
               const page = await browser.newPage();
               await page.goto(item.program_url, {
                 waitUntil: "domcontentloaded",
