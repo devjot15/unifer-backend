@@ -1601,7 +1601,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 app.post("/parse-batch", async (req, res) => {
   const limit = req.body.limit || 20;
-  const concurrency = req.body.concurrency || 5;
+  const concurrency = req.body.concurrency || 2;
 
   res.json({ message: "Started", status: "running" });
 
@@ -2698,7 +2698,11 @@ async function runPipelineWorker() {
         ));
 
         // Process concurrently
-        await Promise.all(jobs.map(job => executePipelineStage(job)));
+        const pipelineLimit = 2;
+        for (let i = 0; i < jobs.length; i += pipelineLimit) {
+          const chunk = jobs.slice(i, i + pipelineLimit);
+          await Promise.all(chunk.map(job => executePipelineStage(job)));
+        }
       }
     }
   } catch (err) {
