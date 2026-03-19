@@ -29,8 +29,8 @@ async function getBrowser() {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--no-zygote',
-      '--single-process',
-      '--disable-setuid-sandbox'
+      '--disable-setuid-sandbox',
+      '--disable-extensions'
     ]
   };
   return puppeteer.launch(launchOptions);
