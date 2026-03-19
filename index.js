@@ -28,7 +28,7 @@ async function getBrowser() {
 }
 
 async function fetchWithPuppeteer(url) {
-  const browser = await puppeteer.connect({ browserWSEndpoint });
+  const browser = await getBrowser();
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
