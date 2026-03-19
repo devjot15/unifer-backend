@@ -94,7 +94,7 @@ async function fetchWithPuppeteer(url) {
     const html = await page.content();
     return html;
   } finally {
-    await browser.disconnect();
+    await browser.close();
   }
 }
 const { createClient } = require("@supabase/supabase-js");
@@ -1753,8 +1753,8 @@ app.post("/process-queue", async (req, res) => {
             console.log(
               `[queue] Axios got small page, trying Browserless for: ${item.program_url}`,
             );
+            const browser = await getBrowser();
             try {
-              const browser = await getBrowser();
               const page = await browser.newPage();
               await page.goto(item.program_url, {
                 waitUntil: "domcontentloaded",
@@ -1762,7 +1762,6 @@ app.post("/process-queue", async (req, res) => {
               });
               await new Promise((r) => setTimeout(r, 3000));
               html = await page.content();
-              await browser.disconnect();
               console.log(
                 `[queue] Browserless got ${html.length} chars for: ${item.program_url}`,
               );
@@ -1778,6 +1777,8 @@ app.post("/process-queue", async (req, res) => {
                 .eq("id", item.id);
               results.failed++;
               continue;
+            } finally {
+              await browser.close();
             }
 
             if (!html || html.length < 500) {
@@ -3977,7 +3978,6 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
         }
 
         await page.close();
-        await browser.disconnect();
 
         if (!feeRows.length) {
           console.log('[fees] No fees extracted — static fallback');
@@ -3994,8 +3994,10 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
 
       } catch (err) {
         console.error('[fees] Fatal: ' + err.message);
-        try { await page.close(); await browser.disconnect(); } catch(e) {}
+        try { await page.close(); } catch(e) {}
         return await extractFeesFromStaticPage(renderedHtml, uniName, universityId, feeUrl);
+      } finally {
+        await browser.close();
       }
     }
 
