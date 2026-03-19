@@ -3730,7 +3730,7 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       if (!feeUrl) { console.log('[fees] No fee page found for ' + uniName); return false; }
       console.log('[fees] Fee URL: ' + feeUrl);
 
-      const browser = await puppeteer.connect({ browserWSEndpoint });
+      const browser = await getBrowser();
       const page = await browser.newPage();
       let renderedHtml = null;
 
