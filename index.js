@@ -20,10 +20,15 @@ const CURRENCY_TO_USD = {
   USD: USD_TO_USD,
 };
 
-const browserWSEndpoint = `wss://production-sfo.browserless.io/chromium?token=${process.env.BROWSERLESS_TOKEN}`;
+async function getBrowser() {
+  return puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-dev-shm-usage']
+  });
+}
 
 async function fetchWithPuppeteer(url) {
-  const browser = await puppeteer.connect({ browserWSEndpoint });
+  const browser = await getBrowser();
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
@@ -299,8 +304,6 @@ async function getSubScore(universityId, body) {
 
 app.post("/recommend", async (req, res) => {
   try {
-    console.log("======== NEW REQUEST ========");
-    console.log("BODY:", req.body);
     const answers = req.body;
     const {
       career_importance,
@@ -473,22 +476,6 @@ app.post("/recommend", async (req, res) => {
       return true;
     });
 
-    console.log("Eligible courses count:", eligibleCourses.length);
-    console.log("Total courses fetched:", courses ? courses.length : 0);
-    console.log(
-      "Sample course:",
-      courses ? JSON.stringify(courses[0]) : "none",
-    );
-    console.log(
-      "Answers received:",
-      JSON.stringify({
-        level: answers.level,
-        duration: answers.duration,
-        tuition_band: answers.tuition_band,
-        field: answers.field,
-      }),
-    );
-
     if (eligibleCourses.length === 0) {
       return res.json({
         empty: true,
@@ -570,11 +557,6 @@ app.post("/recommend", async (req, res) => {
     function computeCountryScore(country, answers, countryMap) {
       const c = countryMap[country.id];
       if (!c) {
-        console.warn(
-          "Country not found in countryMap:",
-          country.id,
-          country.name,
-        );
         return 0;
       }
 
@@ -699,8 +681,6 @@ app.post("/recommend", async (req, res) => {
       if (!isFinite(finalScore)) {
         finalScore = 0;
       }
-
-      console.log(`[pathway] university=${university.name} (${university.id}) compositeScore=${compositeScore} alpha=${alpha} beta=${beta} subScore=${subScore} universityScore=${universityScore} finalScore=${finalScore}`);
 
       const explanation = [];
 
@@ -1765,7 +1745,7 @@ app.post("/process-queue", async (req, res) => {
               `[queue] Axios got small page, trying Browserless for: ${item.program_url}`,
             );
             try {
-              const browser = await puppeteer.connect({ browserWSEndpoint });
+              const browser = await getBrowser();
               const page = await browser.newPage();
               await page.goto(item.program_url, {
                 waitUntil: "domcontentloaded",
@@ -3750,7 +3730,7 @@ function resolveTuition(programName, programType, universityId, feeStructures) {
       if (!feeUrl) { console.log('[fees] No fee page found for ' + uniName); return false; }
       console.log('[fees] Fee URL: ' + feeUrl);
 
-      const browser = await puppeteer.connect({ browserWSEndpoint });
+      const browser = await getBrowser();
       const page = await browser.newPage();
       let renderedHtml = null;
 
