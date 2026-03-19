@@ -3017,6 +3017,16 @@ async function crawlDirectory(universityId, dirUrl, depth = 1) {
         });
       });
 
+      const allLinks = [];
+      $("a[href]").each(function() {
+        const href = $(this).attr("href");
+        if (!href) return;
+        try { allLinks.push(new URL(href, url).toString()); } catch(e) {}
+      });
+      const rejected = allLinks.filter(u => { try { return new URL(u).hostname === baseDomain && !u.includes('#') && !isProgramUrl(u); } catch(e) { return false; } });
+      console.log(`[debug/crawl] ${url} — total links: ${allLinks.length}, rejected by isProgramUrl: ${rejected.length}`);
+      console.log(`[debug/crawl] sample rejected:`, rejected.slice(0, 8));
+
       console.log(`[crawl] ${url} → found ${foundOnPage} program URLs`);
       await new Promise((r) => setTimeout(r, 500));
     }
