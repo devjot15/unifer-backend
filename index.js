@@ -20,7 +20,12 @@ const CURRENCY_TO_USD = {
   USD: USD_TO_USD,
 };
 
-const browserWSEndpoint = `wss://production-sfo.browserless.io/chromium?token=${process.env.BROWSERLESS_TOKEN}`;
+async function getBrowser() {
+  return puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-dev-shm-usage']
+  });
+}
 
 async function fetchWithPuppeteer(url) {
   const browser = await puppeteer.connect({ browserWSEndpoint });
