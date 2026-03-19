@@ -21,10 +21,14 @@ const CURRENCY_TO_USD = {
 };
 
 async function getBrowser() {
-  return puppeteer.launch({
+  const launchOptions = {
     headless: 'new',
     args: ['--no-sandbox', '--disable-dev-shm-usage']
-  });
+  };
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  return puppeteer.launch(launchOptions);
 }
 
 async function fetchWithPuppeteer(url) {
