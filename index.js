@@ -20,20 +20,21 @@ const CURRENCY_TO_USD = {
   USD: USD_TO_USD,
 };
 
+let sharedBrowser = null;
 async function getBrowser() {
-  const launchOptions = {
-    headless: 'new',
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-    args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-zygote',
-      '--disable-setuid-sandbox',
-      '--disable-extensions'
-    ]
-  };
-  return puppeteer.launch(launchOptions);
+  if (!sharedBrowser || !sharedBrowser.connected) {
+    sharedBrowser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--memory-pressure-off',
+        '--max_old_space_size=512'
+      ]
+    });
+  }
+  return sharedBrowser;
 }
 
 async function fetchWithPuppeteer(url) {
