@@ -2659,12 +2659,6 @@ async function runPipelineWorker() {
       if (count > 0) { activeStage = stage; break; }
     }
 
-    if (activeStage === 'parse') {
-      console.log('[pipeline] Parse stage skipped — rate limit pause active');
-      pipelineWorkerRunning = false;
-      return;
-    }
-
     if (!activeStage) {
       console.log('[pipeline] No active pipeline jobs');
     } else {
