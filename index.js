@@ -2698,7 +2698,11 @@ async function runPipelineWorker() {
         ));
 
         // Process concurrently
-        await Promise.all(jobs.map(job => executePipelineStage(job)));
+        const pipelineLimit = 2;
+        for (let i = 0; i < jobs.length; i += pipelineLimit) {
+          const chunk = jobs.slice(i, i + pipelineLimit);
+          await Promise.all(chunk.map(job => executePipelineStage(job)));
+        }
       }
     }
   } catch (err) {
