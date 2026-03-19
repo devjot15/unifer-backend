@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const cheerio = require("cheerio");
-const puppeteer = require("puppeteer-core");
+const puppeteer = require("puppeteer");
 
 // Currency conversion rates to USD
 const CAD_TO_USD = 0.74;
