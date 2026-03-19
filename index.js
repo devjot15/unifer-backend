@@ -24,7 +24,14 @@ async function getBrowser() {
   const launchOptions = {
     headless: 'new',
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--single-process',
+      '--disable-setuid-sandbox'
+    ]
   };
   return puppeteer.launch(launchOptions);
 }
