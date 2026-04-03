@@ -380,6 +380,7 @@ button:disabled {
       <input type="hidden" id="duration" name="duration">
       <input type="hidden" id="tuition_band" name="tuition_band">
       <input type="hidden" id="field" name="field">
+      <input type="hidden" id="sub_field" name="sub_field" value="">
       <input type="hidden" id="gre_filter" name="gre_filter">
       <input type="hidden" id="internship_importance" name="internship_importance">
       <input type="hidden" id="scholarship_importance" name="scholarship_importance">
@@ -641,7 +642,12 @@ button:disabled {
             <div class="option-card" data-value="hospitality, tourism & service industry">Hospitality & Tourism</div>
             <div class="option-card" data-value="education & teaching">Education & Teaching</div>
             <div class="option-card" data-value="agriculture, sustainability & environmental studies">Agriculture & Environment</div>
-          </div></div>
+          </div>
+
+<div class="question-block" id="sub-field-question" style="display:none">
+  <label>Which specific area are you most interested in?</label>
+  <div class="option-group" data-name="sub_field" id="sub-field-options"></div>
+</div></div>
         <div class="nav-buttons">
           <button type="button" class="prev-btn">Back</button>
           <button type="button" class="next-btn">Next</button>
@@ -1010,6 +1016,43 @@ document.querySelectorAll(".option-group").forEach(group => {
   });
 });
 
+const SUB_FIELDS = {
+  "engineering & tech": ["Computer Science & IT","Data Science & Artificial Intelligence","Electrical & Electronic Engineering","Mechanical Engineering","Civil & Structural Engineering","Chemical Engineering","Aerospace Engineering","General & Other Engineering"],
+  "business, management and economics": ["Business & Management","Economics","Accounting & Finance","Marketing","Statistics & Operations Research"],
+  "science & applied science": ["Mathematics","Physics & Astronomy","Chemistry","Earth & Marine Sciences","Materials Science","Biological Sciences"],
+  "medicine, health and life science": ["Medicine","Nursing & Midwifery","Pharmacy & Pharmacology","Dentistry","Public Health","Psychology","Anatomy & Physiology","Allied Health & Therapy"],
+  "social science & humanities": ["Sociology","Politics & International Relations","History","Philosophy","Languages & Linguistics","Communication & Media Studies","Geography","Anthropology & Archaeology","Development & Area Studies","Social Policy & Work"],
+  "arts, design & creative studies": ["Art & Design","Architecture","Music","Performing Arts & Drama","Film, Media & Animation","History of Art","Creative Writing"],
+  "law, public policy & governance": ["Law","Politics & International Relations","Public Policy & Administration","Criminology","Library & Information Science"],
+  "hospitality, tourism & service industry": ["Hospitality & Tourism Management","Sports Science"],
+  "education & teaching": ["Education"],
+  "agriculture, sustainability & environmental studies": ["Agriculture & Forestry","Environmental Sciences","Veterinary Science","Food Science & Nutrition","Ecology & Earth Systems","Land & Property Management"]
+};
+
+document.querySelectorAll('[data-name="field"] .option-card').forEach(card => {
+  card.addEventListener('click', function() {
+    const field = this.getAttribute('data-value');
+    const subFields = SUB_FIELDS[field] || [];
+    const container = document.getElementById('sub-field-options');
+    const question = document.getElementById('sub-field-question');
+    container.innerHTML = '';
+    document.getElementById('sub_field').value = '';
+    subFields.forEach(sf => {
+      const div = document.createElement('div');
+      div.className = 'option-card';
+      div.setAttribute('data-value', sf);
+      div.textContent = sf;
+      div.addEventListener('click', function() {
+        document.getElementById('sub_field').value = sf;
+        container.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+        this.classList.add('selected');
+      });
+      container.appendChild(div);
+    });
+    question.style.display = subFields.length > 0 ? 'block' : 'none';
+  });
+});
+
 function updatePriorityOptions() {
   var p1 = document.getElementById("priority_1").value;
   var p2 = document.getElementById("priority_2").value;
@@ -1104,6 +1147,7 @@ form.addEventListener("submit", function(e) {
         duration: document.getElementById("duration").value,
         tuition_band: document.getElementById("tuition_band").value,
         field: document.getElementById("field").value,
+        sub_field: document.getElementById("sub_field").value,
         internship_importance: document.getElementById("internship_importance").value,
         scholarship_importance: document.getElementById("scholarship_importance").value,
         ranking_importance: document.getElementById("ranking_importance").value,
@@ -1137,6 +1181,7 @@ form.addEventListener("submit", function(e) {
       duration: document.getElementById("duration").value,
       tuition_band: document.getElementById("tuition_band").value,
       field: document.getElementById("field").value,
+      sub_field: document.getElementById("sub_field").value,
       gre_filter: document.getElementById("gre_filter").value,
       internship_importance: document.getElementById("internship_importance").value,
       scholarship_importance: document.getElementById("scholarship_importance").value,
