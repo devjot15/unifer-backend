@@ -438,11 +438,10 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
 
   // Lookup framework→subject_name from taxonomy
   const { data: taxRows, error: taxErr } = await supabase
-    .schema('rankings')
-    .from('subject_taxonomy')
-    .select('framework, subject_name')
-    .eq('field', taxonomyField)
-    .eq('sub_field', answers.sub_field);
+    .rpc('get_subject_taxonomy', {
+      p_field: taxonomyField,
+      p_sub_field: answers.sub_field
+    });
 
   if (taxErr || !taxRows || taxRows.length === 0) {
     console.log('[subject] taxonomy lookup returned no rows for', taxonomyField, answers.sub_field);
