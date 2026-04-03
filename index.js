@@ -430,6 +430,67 @@ async function getSubScore(universityId, body) {
   return subScore;
 }
 
+async function bulkFetchSubjectScores(universityIds, answers, supabase) {
+  if (!answers.sub_field || !answers.field || universityIds.length === 0) return {};
+
+  const taxonomyField = SUBJECT_FIELD_MAP[answers.field];
+  if (!taxonomyField) return {};
+
+  // Lookup framework→subject_name from taxonomy
+  const { data: taxRows, error: taxErr } = await supabase
+    .schema('rankings')
+    .from('subject_taxonomy')
+    .select('framework, subject_name')
+    .eq('field', taxonomyField)
+    .eq('sub_field', answers.sub_field);
+
+  if (taxErr || !taxRows || taxRows.length === 0) {
+    console.log('[subject] taxonomy lookup returned no rows for', taxonomyField, answers.sub_field);
+    return {};
+  }
+
+  const subjectMap = {};
+  taxRows.forEach(r => { subjectMap[r.framework] = r.subject_name; });
+  console.log('[subject] taxonomy matches:', subjectMap);
+
+  const FW_COLS = {
+    QS: 'university_id,academic_score_norm,employer_score_norm,citations_score_norm,h_index_score_norm,irn_score_norm',
+    THE: 'university_id,research_quality_norm,industry_score_norm,international_outlook_norm,research_environment_norm,teaching_score_norm',
+    ARWU: 'university_id,world_class_faculty_norm,world_class_output_norm,high_quality_research_norm,research_impact_norm,international_collab_norm',
+    CUG: 'university_id,entry_standards_norm,student_satisfaction_norm,research_quality_norm,continuation_norm,graduate_prospects_outcomes_norm,graduate_prospects_on_track_norm',
+    Guardian: 'university_id,satisfied_teaching_norm,continuation_norm,expenditure_per_student_norm,student_staff_ratio_norm,career_prospects_norm,value_added_score_norm,average_entry_tariff_norm,satisfied_assessment_norm'
+  };
+  const FW_SCHEMAS = { QS: 'qs', THE: 'the', ARWU: 'arwu', CUG: 'cug', Guardian: 'guardian' };
+
+  const queries = Object.entries(subjectMap).map(async ([fw, subjectName]) => {
+    const table = FW_SCHEMAS[fw];
+    if (!table || !FW_COLS[fw]) return [fw, []];
+    const { data, error } = await supabase
+      .schema('subject_rankings')
+      .from(table)
+      .select(FW_COLS[fw])
+      .eq('subject', subjectName)
+      .in('university_id', universityIds);
+    if (error) console.log(`[subject] ${fw} query error:`, error.message);
+    return [fw, data || []];
+  });
+
+  const results = await Promise.all(queries);
+
+  // Build map: universityId → { QS: {col:val,...}, THE: {...}, ... }
+  const scoreMap = {};
+  results.forEach(([fw, rows]) => {
+    rows.forEach(row => {
+      const uid = row.university_id;
+      if (!scoreMap[uid]) scoreMap[uid] = {};
+      scoreMap[uid][fw] = row;
+    });
+  });
+
+  console.log(`[subject] scoreMap populated for ${Object.keys(scoreMap).length} universities`);
+  return scoreMap;
+}
+
 app.post("/recommend", async (req, res) => {
   try {
     const answers = req.body;
