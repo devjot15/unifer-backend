@@ -607,7 +607,43 @@ app.post("/recommend", async (req, res) => {
       courseQuery = courseQuery.neq("accepts_backlogs", false);
     }
 
-    const { data: courses, error: coErr } = await courseQuery;
+    let { data: courses, error: coErr } = await courseQuery;
+
+    if (answers.sub_field && (!courses || courses.length === 0)) {
+      console.log('[sub_field] no courses found for sub_field, falling back to field_category only');
+      let fallbackQuery = supabase
+        .schema("core")
+        .from("courses")
+        .select("*")
+        .eq("degree_level", answers.level)
+        .eq("field_category", answers.field)
+        .gte("tuition_usd", tBand.min)
+        .lte("tuition_usd", tBand.max)
+        .gte("duration_years", dBand.min)
+        .lte("duration_years", dBand.max);
+
+      if (answers.gre_filter === "Without GRE or GMAT") {
+        fallbackQuery = fallbackQuery.eq("gre_required", false).eq("gmat_required", false);
+      } else if (answers.gre_filter === "Without GRE") {
+        fallbackQuery = fallbackQuery.eq("gre_required", false);
+      } else if (answers.gre_filter === "Without GMAT") {
+        fallbackQuery = fallbackQuery.eq("gmat_required", false);
+      }
+
+      if (answers.profile_gpa_percentage) {
+        fallbackQuery = fallbackQuery.or(
+          `min_gpa_percentage.is.null,min_gpa_percentage.lte.${answers.profile_gpa_percentage}`,
+        );
+      }
+
+      if (answers.profile_backlogs && parseInt(answers.profile_backlogs) > 0) {
+        fallbackQuery = fallbackQuery.neq("accepts_backlogs", false);
+      }
+
+      const { data: fallbackCourses, error: fallbackError } = await fallbackQuery;
+      if (fallbackError) console.error("Fallback courses fetch error:", fallbackError.message);
+      courses = fallbackCourses;
+    }
 
     if (cErr) console.error("Countries fetch error:", cErr.message);
     if (uErr) console.error("Universities fetch error:", uErr.message);
@@ -911,6 +947,8 @@ app.post("/recommend", async (req, res) => {
       const universityScore = compositeScore != null
         ? alpha * compositeScore + beta * blendedSubScore
         : blendedSubScore;
+
+      console.log(`[score] ${university?.canonical_name || course?.university_id} composite=${compositeScore?.toFixed(3)} globalSub=${subScore?.toFixed(3)} subjectSub=${subjectSubScore?.toFixed(3)} delta=${delta} final=${universityScore?.toFixed(3)}`);
 
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
