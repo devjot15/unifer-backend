@@ -112,6 +112,124 @@ const supabase = createClient(
   process.env.SUPABASE_KEY,
 );
 
+// ── Subject sub-indicator constants ──────────────────────────────────────
+
+const SUBJECT_FIELD_MAP = {
+  "engineering & tech": "Engineering & Tech",
+  "business, management and economics": "Business Management & Economics",
+  "science & applied science": "Science & Applied Science",
+  "medicine, health and life science": "Medicine Health & Life Science",
+  "social science & humanities": "Social Science & Humanities",
+  "arts, design & creative studies": "Arts Design & Creative Studies",
+  "law, public policy & governance": "Law Public Policy & Governance",
+  "hospitality, tourism & service industry": "Hospitality Tourism & Service Industry",
+  "education & teaching": "Education & Teaching",
+  "agriculture, sustainability & environmental studies": "Agriculture Sustainability & Environmental Studies"
+};
+
+const SUBJECT_FW_BASE_WEIGHTS = { QS: 5.25, THE: 4.96, ARWU: 4.97, CUG: 4.86, Guardian: 4.81 };
+
+const SUBJECT_FW_MULTIPLIERS = {
+  research: { QS: 0.8, THE: 1.2, ARWU: 1.4, CUG: 0.9, Guardian: 0.7 },
+  balanced: { QS: 1.0, THE: 1.0, ARWU: 1.0, CUG: 1.0, Guardian: 1.0 },
+  industry: { QS: 1.3, THE: 0.9, ARWU: 0.7, CUG: 1.1, Guardian: 1.2 }
+};
+
+const SUBJECT_CONCEPT_GROUPS = {
+  employability: {
+    employer_reputation: { QS: ['employer_score_norm'] },
+    graduate_outcomes: { CUG: ['graduate_prospects_outcomes_norm', 'graduate_prospects_on_track_norm'], Guardian: ['career_prospects_norm'] },
+    industry_link: { THE: ['industry_score_norm'] }
+  },
+  research: {
+    citation_impact: { QS: ['citations_score_norm', 'h_index_score_norm'], THE: ['research_quality_norm'], ARWU: ['research_impact_norm'] },
+    research_env: { THE: ['research_environment_norm'], CUG: ['research_quality_norm'] },
+    top_journal: { ARWU: ['world_class_output_norm', 'high_quality_research_norm'] }
+  },
+  teaching: {
+    teaching_quality: { THE: ['teaching_score_norm'] },
+    student_satisfaction: { CUG: ['student_satisfaction_norm'], Guardian: ['satisfied_teaching_norm', 'satisfied_assessment_norm'] },
+    staff_ratio: { Guardian: ['student_staff_ratio_norm'] },
+    value_added: { Guardian: ['value_added_score_norm'] }
+  },
+  student_experience: {
+    continuation: { CUG: ['continuation_norm'], Guardian: ['continuation_norm'] },
+    spend: { Guardian: ['expenditure_per_student_norm'] }
+  },
+  international: {
+    intl_research: { QS: ['irn_score_norm'], ARWU: ['international_collab_norm'] },
+    intl_outlook: { THE: ['international_outlook_norm'] }
+  },
+  prestige: {
+    academic_rep: { QS: ['academic_score_norm'] },
+    elite_faculty: { ARWU: ['world_class_faculty_norm'] }
+  },
+  selectivity: {
+    entry_tariff: { CUG: ['entry_standards_norm'], Guardian: ['average_entry_tariff_norm'] }
+  }
+};
+
+function getResearchIntent(research_importance) {
+  if (!research_importance) return 'balanced';
+  if (research_importance.startsWith('Very important')) return 'research';
+  if (research_importance.startsWith('Not important')) return 'industry';
+  return 'balanced';
+}
+
+function getSubjectDimWeights(answers) {
+  const w = { high: 0.25, medium: 0.15, low: 0.05 };
+  const intent = getResearchIntent(answers.research_importance);
+  return {
+    employability:      w[answers.career_importance] || 0.15,
+    research:           intent === 'research' ? 0.25 : intent === 'industry' ? 0.05 : 0.15,
+    teaching:           w[answers.teaching_importance] || 0.15,
+    student_experience: w[answers.student_experience_importance] || 0.15,
+    international:      w[answers.international_importance] || 0.15,
+    prestige:           w[answers.prestige_importance] || 0.15,
+    selectivity:        w[answers.selectivity_importance] || 0.15
+  };
+}
+
+function getCoverageConfidence(frameworkCount) {
+  return { 5: 1.0, 4: 0.95, 3: 0.85, 2: 0.70, 1: 0.55 }[frameworkCount] || 0;
+}
+
+function computeSubjectSubScore(fwScores, answers) {
+  const intent = getResearchIntent(answers.research_importance);
+  const multipliers = SUBJECT_FW_MULTIPLIERS[intent];
+  const dimWeights = getSubjectDimWeights(answers);
+  let weightedSum = 0, totalWeight = 0;
+
+  for (const [dim, concepts] of Object.entries(SUBJECT_CONCEPT_GROUPS)) {
+    const conceptScores = [];
+    for (const fwCols of Object.values(concepts)) {
+      const vals = [];
+      for (const [fw, cols] of Object.entries(fwCols)) {
+        const fwData = fwScores[fw];
+        if (!fwData) continue;
+        const adjW = SUBJECT_FW_BASE_WEIGHTS[fw] * multipliers[fw];
+        for (const col of cols) {
+          const v = fwData[col];
+          if (v !== null && v !== undefined) vals.push({ value: v, weight: adjW });
+        }
+      }
+      if (vals.length > 0) {
+        const totalW = vals.reduce((s, x) => s + x.weight, 0);
+        conceptScores.push(vals.reduce((s, x) => s + x.value * x.weight, 0) / totalW);
+      }
+    }
+    if (conceptScores.length > 0) {
+      const dimScore = conceptScores.reduce((a, b) => a + b, 0) / conceptScores.length;
+      const w = dimWeights[dim] || 0.10;
+      weightedSum += w * dimScore;
+      totalWeight += w;
+    }
+  }
+  return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
