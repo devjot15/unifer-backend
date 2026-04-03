@@ -449,7 +449,10 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
   }
 
   const subjectMap = {};
-  taxRows.forEach(r => { subjectMap[r.framework] = r.subject_name; });
+  taxRows.forEach(r => {
+    if (!subjectMap[r.framework]) subjectMap[r.framework] = [];
+    subjectMap[r.framework].push(r.subject_name);
+  });
   console.log('[subject] taxonomy matches:', subjectMap);
 
   const FW_COLS = {
@@ -469,21 +472,25 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
     Guardian: ['satisfied_teaching_norm','continuation_norm','expenditure_per_student_norm','student_staff_ratio_norm','career_prospects_norm','value_added_score_norm','average_entry_tariff_norm','satisfied_assessment_norm']
   };
 
-  const queries = Object.entries(subjectMap).map(async ([fw, subjectName]) => {
+  const queries = Object.entries(subjectMap).map(async ([fw, subjectNames]) => {
     const fwLower = FW_SCHEMAS[fw];
     if (!fwLower || !FW_COL_NAMES[fw]) return [fw, []];
-    const { data, error } = await supabase
-      .rpc('get_subject_scores', {
-        p_framework: fwLower,
-        p_subject: subjectName,
-        p_university_ids: universityIds
-      });
-    if (error) {
-      console.log(`[subject] ${fw} rpc error:`, error.message);
-      return [fw, []];
+    const allRows = [];
+    for (const subjectName of subjectNames) {
+      const { data, error } = await supabase
+        .rpc('get_subject_scores', {
+          p_framework: fwLower,
+          p_subject: subjectName,
+          p_university_ids: universityIds
+        });
+      if (error) {
+        console.log(`[subject] ${fw} rpc error:`, error.message);
+        continue;
+      }
+      if (data) allRows.push(...data);
     }
     const colNames = FW_COL_NAMES[fw];
-    const remapped = (data || []).map(row => {
+    const remapped = allRows.map(row => {
       const obj = { university_id: row.university_id };
       colNames.forEach((name, i) => { obj[name] = row[`c${i+1}`]; });
       return obj;
