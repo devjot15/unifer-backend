@@ -324,6 +324,8 @@ app.post("/recommend", async (req, res) => {
       international_importance,
       selectivity_importance,
       prestige_importance,
+      sub_field,
+      subject_ranking_importance,
     } = req.body;
 
     // 1️⃣ Fetch all data
