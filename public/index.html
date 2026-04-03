@@ -395,6 +395,7 @@ button:disabled {
       <input type="hidden" id="international_importance" name="international_importance">
       <input type="hidden" id="selectivity_importance" name="selectivity_importance">
       <input type="hidden" id="prestige_importance" name="prestige_importance">
+      <input type="hidden" id="subject_ranking_importance" name="subject_ranking_importance" value="">
 
       <input type="hidden" id="profile_degree_completed" name="profile_degree_completed">
       <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
@@ -722,6 +723,15 @@ button:disabled {
             <div class="option-card" data-value="medium">Somewhat important</div>
             <div class="option-card" data-value="low">Not a priority</div>
           </div>
+
+<div class="question-block">
+  <label>How important is your university's subject-specific ranking in your field?</label>
+  <div class="option-group" data-name="subject_ranking_importance">
+    <div class="option-card" data-value="high">Very important — I want the best-ranked university specifically in my subject</div>
+    <div class="option-card" data-value="medium">Somewhat important — factor it in alongside overall reputation</div>
+    <div class="option-card" data-value="low">Not important — overall university quality matters more than subject rank</div>
+  </div>
+</div>
 
           </div>
         <div class="nav-buttons">
@@ -1159,6 +1169,7 @@ form.addEventListener("submit", function(e) {
         international_importance: document.getElementById("international_importance").value,
         selectivity_importance: document.getElementById("selectivity_importance").value,
         prestige_importance: document.getElementById("prestige_importance").value,
+        subject_ranking_importance: document.getElementById("subject_ranking_importance").value,
         total_form_time_seconds: (Date.now() - formStartTime) / 1000,
         completed: true
       })
@@ -1195,6 +1206,7 @@ form.addEventListener("submit", function(e) {
       international_importance: document.getElementById("international_importance").value,
       selectivity_importance: document.getElementById("selectivity_importance").value,
       prestige_importance: document.getElementById("prestige_importance").value,
+      subject_ranking_importance: document.getElementById("subject_ranking_importance").value,
 
       profile_degree_completed: document.getElementById("profile_degree_completed").value,
       profile_gpa_percentage: document.getElementById("profile_gpa_percentage").value,
