@@ -583,6 +583,10 @@ app.post("/recommend", async (req, res) => {
       .gte("duration_years", dBand.min)
       .lte("duration_years", dBand.max);
 
+    if (answers.sub_field) {
+      courseQuery = courseQuery.eq("sub_field", answers.sub_field);
+    }
+
     if (answers.gre_filter === "Without GRE or GMAT") {
       courseQuery = courseQuery
         .eq("gre_required", false)
