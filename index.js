@@ -461,17 +461,34 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
   };
   const FW_SCHEMAS = { QS: 'qs', THE: 'the', ARWU: 'arwu', CUG: 'cug', Guardian: 'guardian' };
 
+  const FW_COL_NAMES = {
+    QS: ['academic_score_norm','employer_score_norm','citations_score_norm','h_index_score_norm','irn_score_norm'],
+    THE: ['research_quality_norm','industry_score_norm','international_outlook_norm','research_environment_norm','teaching_score_norm'],
+    ARWU: ['world_class_faculty_norm','world_class_output_norm','high_quality_research_norm','research_impact_norm','international_collab_norm'],
+    CUG: ['entry_standards_norm','student_satisfaction_norm','research_quality_norm','continuation_norm','graduate_prospects_outcomes_norm','graduate_prospects_on_track_norm'],
+    Guardian: ['satisfied_teaching_norm','continuation_norm','expenditure_per_student_norm','student_staff_ratio_norm','career_prospects_norm','value_added_score_norm','average_entry_tariff_norm','satisfied_assessment_norm']
+  };
+
   const queries = Object.entries(subjectMap).map(async ([fw, subjectName]) => {
-    const table = FW_SCHEMAS[fw];
-    if (!table || !FW_COLS[fw]) return [fw, []];
+    const fwLower = FW_SCHEMAS[fw];
+    if (!fwLower || !FW_COL_NAMES[fw]) return [fw, []];
     const { data, error } = await supabase
-      .schema('subject_rankings')
-      .from(table)
-      .select(FW_COLS[fw])
-      .eq('subject', subjectName)
-      .in('university_id', universityIds);
-    if (error) console.log(`[subject] ${fw} query error:`, error.message);
-    return [fw, data || []];
+      .rpc('get_subject_scores', {
+        p_framework: fwLower,
+        p_subject: subjectName,
+        p_university_ids: universityIds
+      });
+    if (error) {
+      console.log(`[subject] ${fw} rpc error:`, error.message);
+      return [fw, []];
+    }
+    const colNames = FW_COL_NAMES[fw];
+    const remapped = (data || []).map(row => {
+      const obj = { university_id: row.university_id };
+      colNames.forEach((name, i) => { obj[name] = row[`c${i+1}`]; });
+      return obj;
+    });
+    return [fw, remapped];
   });
 
   const results = await Promise.all(queries);
