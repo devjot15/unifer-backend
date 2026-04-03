@@ -506,7 +506,20 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
     rows.forEach(row => {
       const uid = row.university_id;
       if (!scoreMap[uid]) scoreMap[uid] = {};
-      scoreMap[uid][fw] = row;
+      if (!scoreMap[uid][fw]) {
+        scoreMap[uid][fw] = { ...row };
+      } else {
+        const existing = scoreMap[uid][fw];
+        const merged = { university_id: uid };
+        Object.keys(row).forEach(k => {
+          if (k === 'university_id') return;
+          const a = existing[k], b = row[k];
+          merged[k] = (a !== null && a !== undefined && b !== null && b !== undefined)
+            ? (a + b) / 2
+            : (a !== null && a !== undefined ? a : b);
+        });
+        scoreMap[uid][fw] = merged;
+      }
     });
   });
 
