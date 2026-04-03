@@ -1045,10 +1045,19 @@ app.post("/recommend", async (req, res) => {
     }));
 
     // 5️⃣ Sort & Return Top 5
-    const top5 = pathways
+    // Deduplicate: keep highest-scoring course per university
+    const seenUniversities = new Set();
+    const deduplicatedResults = pathways
       .filter((p) => p !== null)
       .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
-      .slice(0, 5);
+      .filter(item => {
+        const uid = item.university;
+        if (seenUniversities.has(uid)) return false;
+        seenUniversities.add(uid);
+        return true;
+      });
+
+    const top5 = deduplicatedResults.slice(0, 5);
 
     res.json(top5);
   } catch (error) {
