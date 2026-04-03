@@ -1045,9 +1045,15 @@ app.post("/recommend", async (req, res) => {
     }));
 
     // 5️⃣ Sort & Return Top 5
+    const seenUniversities = new Set();
     const top5 = pathways
       .filter((p) => p !== null)
       .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
+      .filter((p) => {
+        if (seenUniversities.has(p.university)) return false;
+        seenUniversities.add(p.university);
+        return true;
+      })
       .slice(0, 5);
 
     res.json(top5);
