@@ -842,6 +842,9 @@ app.post("/recommend", async (req, res) => {
     }
 
     // 4️⃣ SCORE PATHWAYS
+    const allUniversityIds = [...new Set(eligibleCourses.map(c => c.university_id).filter(Boolean))];
+    const subjectScoreMap = await bulkFetchSubjectScores(allUniversityIds, answers, supabase);
+
     const pathways = await Promise.all(eligibleCourses.map(async (course) => {
       const university = universities.find(
         (u) => u.id === course.university_id,
@@ -858,9 +861,16 @@ app.post("/recommend", async (req, res) => {
       const compositeScore = rankingMap[university.id] ?? null;
       const alpha = parseFloat(answers.ranking_importance) || 0;
       const beta = 1 - alpha;
-      const universityScore = compositeScore != null
-        ? alpha * compositeScore + beta * subScore
+      const delta = { high: 0.60, medium: 0.35, low: 0.10 }[answers.subject_ranking_importance] || 0.10;
+      const fwScores = subjectScoreMap[university.id] || subjectScoreMap[course.university_id] || null;
+      const subjectSubScore = fwScores ? computeSubjectSubScore(fwScores, answers) : null;
+      const coverageConf = fwScores ? getCoverageConfidence(Object.keys(fwScores).length) : 0;
+      const blendedSubScore = (subjectSubScore !== null)
+        ? (1 - delta) * subScore + delta * subjectSubScore * coverageConf
         : subScore;
+      const universityScore = compositeScore != null
+        ? alpha * compositeScore + beta * blendedSubScore
+        : blendedSubScore;
 
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
