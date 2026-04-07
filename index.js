@@ -590,24 +590,18 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
 
 app.post("/embed-new-courses", async (req, res) => {
   try {
-    const { execFile } = require("child_process");
-    const env = {
-      ...process.env,
-      OPENAI_API_KEY_1: process.env.OPENAI_API_KEY_1,
-      SUPABASE_URL: process.env.SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    };
-    execFile("python3", ["embed_courses.py"], { env }, (error, stdout, stderr) => {
-      if (error) {
-        console.error("[embed] process error:", error.message);
-        return res.status(500).json({ error: error.message });
-      }
-      console.log("[embed] stdout:", stdout);
-      res.json({ success: true, output: stdout });
-    });
-    res.json({ success: true, message: "Embedding job started in background" });
+    const macMiniUrl = process.env.MAC_MINI_EMBED_URL;
+    if (!macMiniUrl) {
+      console.log("[embed] MAC_MINI_EMBED_URL not set — skipping auto-embed");
+      return res.json({ success: true, message: "Auto-embed skipped — MAC_MINI_EMBED_URL not configured" });
+    }
+    const response = await fetch(macMiniUrl, { method: "POST" });
+    const result = await response.json();
+    console.log("[embed] Mac Mini embed job triggered:", result);
+    return res.json({ success: true, message: "Embed job triggered on Mac Mini" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[embed] error triggering embed job:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
