@@ -994,6 +994,7 @@ app.post("/recommend", async (req, res) => {
     // 4️⃣ SCORE PATHWAYS
     const allUniversityIds = [...new Set(eligibleCourses.map(c => c.university_id).filter(Boolean))];
     const subjectScoreMap = await bulkFetchSubjectScores(allUniversityIds, answers, supabase);
+    const courseRelevanceMap = await bulkFetchCourseRelevance(eligibleCourses, answers, supabase);
 
     const pathways = await Promise.all(eligibleCourses.map(async (course) => {
       const university = universities.find(
@@ -1004,7 +1005,7 @@ app.post("/recommend", async (req, res) => {
       if (!country) return null;
 
       let countryScore = computeCountryScore(country, answers, countryMap);
-      let courseScore = computeCourseScore(course, answers);
+      let courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
       // Step 7: Blend composite ranking score with sub-indicator score
       const subScore = await getSubScore(university.id, answers);
