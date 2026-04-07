@@ -127,6 +127,23 @@ const SUBJECT_FIELD_MAP = {
   "agriculture, sustainability & environmental studies": "Agriculture Sustainability & Environmental Studies"
 };
 
+const GLOBAL_FW_BASE_WEIGHTS = { QS: 5.25, THE: 4.96, ARWU: 4.97, CUG: 4.86, Guardian: 4.81, GUG: 4.81 };
+
+const GLOBAL_FW_NAME_MAP = {
+  'QS World University Rankings':                  'QS',
+  'Times Higher Education (THE)':                  'THE',
+  'Academic Ranking of World Universities (ARWU)': 'ARWU',
+  'Complete University Guide':                     'CUG',
+  'Guardian University Guide':                     'Guardian',
+  'Good Universities Guide (GUG)':                 'GUG',
+};
+
+const GLOBAL_FW_MULTIPLIERS = {
+  research: { QS: 0.8, THE: 1.2, ARWU: 1.4, CUG: 0.9, Guardian: 0.7, GUG: 0.7 },
+  balanced: { QS: 1.0, THE: 1.0, ARWU: 1.0, CUG: 1.0, Guardian: 1.0, GUG: 1.0 },
+  industry: { QS: 1.3, THE: 0.9, ARWU: 0.7, CUG: 1.1, Guardian: 1.2, GUG: 1.2 },
+};
+
 const SUBJECT_FW_BASE_WEIGHTS = { QS: 5.25, THE: 4.96, ARWU: 4.97, CUG: 4.86, Guardian: 4.81 };
 
 const SUBJECT_FW_MULTIPLIERS = {
@@ -354,22 +371,30 @@ async function getSubScore(universityId, body) {
     return 0.5;
   }
 
-  // Step 2: Group by (dimension, concept_group) and average normalized_score
-  const conceptBuckets = {}; // { dimension: { concept_group: number[] } }
+  // Step 2: Group by (dimension, concept_group) with framework-weighted scores
+  const intent = getResearchIntent(body.research_importance);
+  const multipliers = GLOBAL_FW_MULTIPLIERS[intent] || GLOBAL_FW_MULTIPLIERS.balanced;
+
+  const conceptBuckets = {}; // { dimension: { concept_group: { value, weight }[] } }
   for (const row of rows) {
-    const { dimension, concept_group } = row;
+    const { dimension, concept_group, framework } = row;
     const score = row.normalized_score;
     if (score == null) continue;
+    const shortName = GLOBAL_FW_NAME_MAP[framework] || null;
+    const baseWeight = shortName ? (GLOBAL_FW_BASE_WEIGHTS[shortName] || 1.0) : 1.0;
+    const intentMultiplier = shortName ? (multipliers[shortName] || 1.0) : 1.0;
+    const adjWeight = baseWeight * intentMultiplier;
     if (!conceptBuckets[dimension]) conceptBuckets[dimension] = {};
     if (!conceptBuckets[dimension][concept_group]) conceptBuckets[dimension][concept_group] = [];
-    conceptBuckets[dimension][concept_group].push(score);
+    conceptBuckets[dimension][concept_group].push({ value: Number(score), weight: adjWeight });
   }
 
-  const dimConceptScore = {}; // { dimension: { concept_group: avg } }
+  const dimConceptScore = {}; // { dimension: { concept_group: weighted_avg } }
   for (const [dim, concepts] of Object.entries(conceptBuckets)) {
     dimConceptScore[dim] = {};
-    for (const [concept, scores] of Object.entries(concepts)) {
-      dimConceptScore[dim][concept] = scores.reduce((a, b) => a + b, 0) / scores.length;
+    for (const [concept, entries] of Object.entries(concepts)) {
+      const totalW = entries.reduce((s, x) => s + x.weight, 0);
+      dimConceptScore[dim][concept] = entries.reduce((s, x) => s + x.value * x.weight, 0) / totalW;
     }
   }
 
