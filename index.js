@@ -527,6 +527,46 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
   return scoreMap;
 }
 
+async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
+  if (!answers.sub_field || !answers.field || eligibleCourses.length === 0) return {};
+
+  const courseIds = eligibleCourses.map(c => c.id).filter(Boolean);
+  if (courseIds.length === 0) return {};
+
+  // Get the stored sub-field embedding
+  const { data: embeddingData, error: embErr } = await supabase
+    .rpc('get_sub_field_embedding', {
+      p_field: answers.field,
+      p_sub_field: answers.sub_field
+    });
+
+  if (embErr || !embeddingData) {
+    console.log('[relevance] sub-field embedding not found for', answers.field, answers.sub_field);
+    return {};
+  }
+
+  // Bulk cosine similarity against all eligible courses
+  const { data: similarities, error: simErr } = await supabase
+    .rpc('get_course_similarities', {
+      p_query_embedding: embeddingData,
+      p_course_ids: courseIds
+    });
+
+  if (simErr || !similarities) {
+    console.log('[relevance] similarity query error:', simErr?.message);
+    return {};
+  }
+
+  // Build map: course_id → similarity score (0–1)
+  const relevanceMap = {};
+  similarities.forEach(row => {
+    relevanceMap[row.course_id] = Math.max(0, Math.min(1, row.similarity));
+  });
+
+  console.log(`[relevance] scores computed for ${Object.keys(relevanceMap).length} courses`);
+  return relevanceMap;
+}
+
 app.post("/recommend", async (req, res) => {
   try {
     const answers = req.body;
@@ -859,36 +899,70 @@ app.post("/recommend", async (req, res) => {
       return clamp(weightedSum / totalWeight);
     }
 
-    function computeCourseScore(course, answers) {
-      let courseComponents = [];
-      let courseWeights = [];
+    function computeIntentAlignment(course, answers) {
+      const ri = answers.research_importance || ‘’;
+      let intent = ‘balanced’;
+      if (ri.startsWith(‘Very important’)) intent = ‘research’;
+      else if (ri.startsWith(‘Not important’)) intent = ‘industry’;
 
-      let internshipWeightMap = {
+      const pType = course.program_type;
+      if (intent === ‘research’) {
+        if (pType === ‘research’) return 1.0;
+        if (pType === ‘professional’) return 0.4;
+        return 0.7;
+      }
+      if (intent === ‘industry’) {
+        if (pType === ‘professional’) return 1.0;
+        if (pType === ‘research’) return 0.3;
+        return 0.7;
+      }
+      // balanced
+      if (pType === ‘research’) return 0.6;
+      if (pType === ‘professional’) return 0.8;
+      return 0.7;
+    }
+
+    function computeLogisticsFit(course, answers) {
+      let components = [];
+      let weights = [];
+
+      const internshipWeightMap = {
         "Very strongly": 1,
         "Wouldn’t mind": 0.6,
         "Don’t care": 0.3,
       };
-      let internshipWeight =
-        internshipWeightMap[answers.internship_importance] || 0;
-      courseComponents.push(
-        internshipWeight * (course.internship_available ? 1 : 0),
-      );
-      courseWeights.push(internshipWeight);
+      const internshipWeight = internshipWeightMap[answers.internship_importance] || 0;
+      components.push(internshipWeight * (course.internship_available ? 1 : 0));
+      weights.push(internshipWeight);
 
-      let scholarshipWeightMap = {
+      const scholarshipWeightMap = {
         "Very strongly (more than 20% of tuition)": 1,
         "Wouldn’t mind getting one (less than 20% of tuition or none)": 0.6,
         "Don’t care": 0.3,
       };
-      let scholarshipWeight =
-        scholarshipWeightMap[answers.scholarship_importance] || 0;
+      const scholarshipWeight = scholarshipWeightMap[answers.scholarship_importance] || 0;
       const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
-      courseComponents.push(scholarshipWeight * scholarshipScore);
-      courseWeights.push(scholarshipWeight);
+      components.push(scholarshipWeight * scholarshipScore);
+      weights.push(scholarshipWeight);
+
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      return totalWeight > 0
+        ? clamp(components.reduce((a, b) => a + b, 0) / totalWeight)
+        : 0.5;
+    }
+
+    function computeCourseScore(course, answers, relevanceMap) {
+      const contentRelevance = relevanceMap[course.id] !== undefined
+        ? relevanceMap[course.id]
+        : 0.5; // neutral fallback if no embedding
+
+      const intentAlignment = computeIntentAlignment(course, answers);
+      const logisticsFit    = computeLogisticsFit(course, answers);
 
       return clamp(
-        courseComponents.reduce((a, b) => a + b, 0) /
-          (courseWeights.reduce((a, b) => a + b, 0) || 1),
+        0.50 * contentRelevance +
+        0.25 * intentAlignment +
+        0.25 * logisticsFit
       );
     }
 
@@ -920,6 +994,7 @@ app.post("/recommend", async (req, res) => {
     // 4️⃣ SCORE PATHWAYS
     const allUniversityIds = [...new Set(eligibleCourses.map(c => c.university_id).filter(Boolean))];
     const subjectScoreMap = await bulkFetchSubjectScores(allUniversityIds, answers, supabase);
+    const courseRelevanceMap = await bulkFetchCourseRelevance(eligibleCourses, answers, supabase);
 
     const pathways = await Promise.all(eligibleCourses.map(async (course) => {
       const university = universities.find(
@@ -930,7 +1005,7 @@ app.post("/recommend", async (req, res) => {
       if (!country) return null;
 
       let countryScore = computeCountryScore(country, answers, countryMap);
-      let courseScore = computeCourseScore(course, answers);
+      let courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
       // Step 7: Blend composite ranking score with sub-indicator score
       const subScore = await getSubScore(university.id, answers);
@@ -999,11 +1074,11 @@ app.post("/recommend", async (req, res) => {
       }
 
       if (courseScore >= 0.7)
-        explanation.push(
-          "Strong course alignment with your academic preferences",
-        );
+        explanation.push("Strong match with your subject area and academic goals");
       else if (courseScore >= 0.4)
-        explanation.push("Reasonable course fit based on your priorities");
+        explanation.push("Good alignment with your field and course preferences");
+      else
+        explanation.push("Course is within your selected field category");
 
       // If subject-specific ranking was used, surface that as an explanation
       if (course.subject_id && subjectRankMap) {
