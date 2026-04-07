@@ -899,36 +899,70 @@ app.post("/recommend", async (req, res) => {
       return clamp(weightedSum / totalWeight);
     }
 
-    function computeCourseScore(course, answers) {
-      let courseComponents = [];
-      let courseWeights = [];
+    function computeIntentAlignment(course, answers) {
+      const ri = answers.research_importance || ‘’;
+      let intent = ‘balanced’;
+      if (ri.startsWith(‘Very important’)) intent = ‘research’;
+      else if (ri.startsWith(‘Not important’)) intent = ‘industry’;
 
-      let internshipWeightMap = {
+      const pType = course.program_type;
+      if (intent === ‘research’) {
+        if (pType === ‘research’) return 1.0;
+        if (pType === ‘professional’) return 0.4;
+        return 0.7;
+      }
+      if (intent === ‘industry’) {
+        if (pType === ‘professional’) return 1.0;
+        if (pType === ‘research’) return 0.3;
+        return 0.7;
+      }
+      // balanced
+      if (pType === ‘research’) return 0.6;
+      if (pType === ‘professional’) return 0.8;
+      return 0.7;
+    }
+
+    function computeLogisticsFit(course, answers) {
+      let components = [];
+      let weights = [];
+
+      const internshipWeightMap = {
         "Very strongly": 1,
         "Wouldn’t mind": 0.6,
         "Don’t care": 0.3,
       };
-      let internshipWeight =
-        internshipWeightMap[answers.internship_importance] || 0;
-      courseComponents.push(
-        internshipWeight * (course.internship_available ? 1 : 0),
-      );
-      courseWeights.push(internshipWeight);
+      const internshipWeight = internshipWeightMap[answers.internship_importance] || 0;
+      components.push(internshipWeight * (course.internship_available ? 1 : 0));
+      weights.push(internshipWeight);
 
-      let scholarshipWeightMap = {
+      const scholarshipWeightMap = {
         "Very strongly (more than 20% of tuition)": 1,
         "Wouldn’t mind getting one (less than 20% of tuition or none)": 0.6,
         "Don’t care": 0.3,
       };
-      let scholarshipWeight =
-        scholarshipWeightMap[answers.scholarship_importance] || 0;
+      const scholarshipWeight = scholarshipWeightMap[answers.scholarship_importance] || 0;
       const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
-      courseComponents.push(scholarshipWeight * scholarshipScore);
-      courseWeights.push(scholarshipWeight);
+      components.push(scholarshipWeight * scholarshipScore);
+      weights.push(scholarshipWeight);
+
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      return totalWeight > 0
+        ? clamp(components.reduce((a, b) => a + b, 0) / totalWeight)
+        : 0.5;
+    }
+
+    function computeCourseScore(course, answers, relevanceMap) {
+      const contentRelevance = relevanceMap[course.id] !== undefined
+        ? relevanceMap[course.id]
+        : 0.5; // neutral fallback if no embedding
+
+      const intentAlignment = computeIntentAlignment(course, answers);
+      const logisticsFit    = computeLogisticsFit(course, answers);
 
       return clamp(
-        courseComponents.reduce((a, b) => a + b, 0) /
-          (courseWeights.reduce((a, b) => a + b, 0) || 1),
+        0.50 * contentRelevance +
+        0.25 * intentAlignment +
+        0.25 * logisticsFit
       );
     }
 
