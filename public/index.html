@@ -927,6 +927,18 @@ function validateCurrentStep() {
     if (!checkPriorities()) return false;
   }
 
+  if (currentStep === 2 && allFilled) {
+    var countryDecidedGroup = document.querySelector('[data-name="country_decided"]');
+    var countryDecidedVal = countryDecidedGroup ? countryDecidedGroup.querySelector('.option-card.selected') : null;
+    if (countryDecidedVal && countryDecidedVal.getAttribute('data-value') === 'Yes') {
+      var selectedCountry = document.getElementById('selected_country').value;
+      if (!selectedCountry) {
+        formMessage.textContent = 'Please select a country to continue.';
+        return false;
+      }
+    }
+  }
+
   if (!allFilled) {
     formMessage.textContent = "Please answer all questions in this step before proceeding.";
   }
