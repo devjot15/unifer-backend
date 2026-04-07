@@ -527,6 +527,46 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
   return scoreMap;
 }
 
+async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
+  if (!answers.sub_field || !answers.field || eligibleCourses.length === 0) return {};
+
+  const courseIds = eligibleCourses.map(c => c.id).filter(Boolean);
+  if (courseIds.length === 0) return {};
+
+  // Get the stored sub-field embedding
+  const { data: embeddingData, error: embErr } = await supabase
+    .rpc('get_sub_field_embedding', {
+      p_field: answers.field,
+      p_sub_field: answers.sub_field
+    });
+
+  if (embErr || !embeddingData) {
+    console.log('[relevance] sub-field embedding not found for', answers.field, answers.sub_field);
+    return {};
+  }
+
+  // Bulk cosine similarity against all eligible courses
+  const { data: similarities, error: simErr } = await supabase
+    .rpc('get_course_similarities', {
+      p_query_embedding: embeddingData,
+      p_course_ids: courseIds
+    });
+
+  if (simErr || !similarities) {
+    console.log('[relevance] similarity query error:', simErr?.message);
+    return {};
+  }
+
+  // Build map: course_id → similarity score (0–1)
+  const relevanceMap = {};
+  similarities.forEach(row => {
+    relevanceMap[row.course_id] = Math.max(0, Math.min(1, row.similarity));
+  });
+
+  console.log(`[relevance] scores computed for ${Object.keys(relevanceMap).length} courses`);
+  return relevanceMap;
+}
+
 app.post("/recommend", async (req, res) => {
   try {
     const answers = req.body;
