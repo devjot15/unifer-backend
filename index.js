@@ -588,6 +588,29 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
   return relevanceMap;
 }
 
+app.post("/embed-new-courses", async (req, res) => {
+  try {
+    const { execFile } = require("child_process");
+    const env = {
+      ...process.env,
+      OPENAI_API_KEY_1: process.env.OPENAI_API_KEY_1,
+      SUPABASE_URL: process.env.SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    };
+    execFile("python3", ["embed_courses.py"], { env }, (error, stdout, stderr) => {
+      if (error) {
+        console.error("[embed] process error:", error.message);
+        return res.status(500).json({ error: error.message });
+      }
+      console.log("[embed] stdout:", stdout);
+      res.json({ success: true, output: stdout });
+    });
+    res.json({ success: true, message: "Embedding job started in background" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/recommend", async (req, res) => {
   try {
     const answers = req.body;
