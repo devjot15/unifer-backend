@@ -1246,7 +1246,14 @@ form.addEventListener("submit", function(e) {
       profile_gre_score: document.getElementById("profile_gre_score").value,
       profile_gmat_score: document.getElementById("profile_gmat_score").value,
       profile_work_experience: document.getElementById("profile_work_experience").value,
-      profile_subjects: document.getElementById("profile_subjects").value
+      profile_subjects: document.getElementById("profile_subjects").value,
+      selected_country: (function() {
+        var decidedCard = document.querySelector('[data-name="country_decided"] .option-card.selected');
+        if (decidedCard && decidedCard.getAttribute('data-value') === 'Yes') {
+          return document.getElementById('selected_country').value || null;
+        }
+        return null;
+      })()
     })
   })
   .then(function(response) { return response.json(); })
