@@ -512,6 +512,24 @@ button:disabled {
         <div class="section">
           <h2>Step 2 — Define Your Priority</h2>
 
+          <label>Have you already decided the country you want to study abroad in?</label>
+          <div class='option-group' data-name='country_decided'>
+            <div class='option-card' data-value='Yes'>Yes</div>
+            <div class='option-card' data-value='No'>No</div>
+          </div>
+
+          <div id='countrySelectWrapper' style='display:none; margin-bottom: 1.5rem;'>
+            <label>Select your country</label>
+            <select id='selected_country' name='selected_country' style='width:100%; padding: 0.75rem; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem;'>
+              <option value=''>-- Select a country --</option>
+              <option value='United Kingdom'>United Kingdom</option>
+              <option value='Canada'>Canada</option>
+              <option value='Australia'>Australia</option>
+              <option value='Germany'>Germany</option>
+              <option value='Ireland'>Ireland</option>
+            </select>
+          </div>
+
           <label>In your decision to study abroad which of the following is more important, select in decreasing order?</label>
 
           <label>Priority 1</label>
@@ -909,6 +927,18 @@ function validateCurrentStep() {
     if (!checkPriorities()) return false;
   }
 
+  if (currentStep === 2 && allFilled) {
+    var countryDecidedGroup = document.querySelector('[data-name="country_decided"]');
+    var countryDecidedVal = countryDecidedGroup ? countryDecidedGroup.querySelector('.option-card.selected') : null;
+    if (countryDecidedVal && countryDecidedVal.getAttribute('data-value') === 'Yes') {
+      var selectedCountry = document.getElementById('selected_country').value;
+      if (!selectedCountry) {
+        formMessage.textContent = 'Please select a country to continue.';
+        return false;
+      }
+    }
+  }
+
   if (!allFilled) {
     formMessage.textContent = "Please answer all questions in this step before proceeding.";
   }
@@ -1216,7 +1246,14 @@ form.addEventListener("submit", function(e) {
       profile_gre_score: document.getElementById("profile_gre_score").value,
       profile_gmat_score: document.getElementById("profile_gmat_score").value,
       profile_work_experience: document.getElementById("profile_work_experience").value,
-      profile_subjects: document.getElementById("profile_subjects").value
+      profile_subjects: document.getElementById("profile_subjects").value,
+      selected_country: (function() {
+        var decidedCard = document.querySelector('[data-name="country_decided"] .option-card.selected');
+        if (decidedCard && decidedCard.getAttribute('data-value') === 'Yes') {
+          return document.getElementById('selected_country').value || null;
+        }
+        return null;
+      })()
     })
   })
   .then(function(response) { return response.json(); })
@@ -1303,6 +1340,21 @@ form.addEventListener("submit", function(e) {
   });
 });
 
+</script>
+
+<script>
+  document.querySelectorAll('[data-name="country_decided"] .option-card').forEach(function(card) {
+    card.addEventListener('click', function() {
+      var val = this.getAttribute('data-value');
+      var wrapper = document.getElementById('countrySelectWrapper');
+      if (val === 'Yes') {
+        wrapper.style.display = 'block';
+      } else {
+        wrapper.style.display = 'none';
+        document.getElementById('selected_country').value = '';
+      }
+    });
+  });
 </script>
 
 </body>

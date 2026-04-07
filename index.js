@@ -686,6 +686,25 @@ app.post("/recommend", async (req, res) => {
       .gte("duration_years", dBand.min)
       .lte("duration_years", dBand.max);
 
+    if (answers.selected_country) {
+      const { data: countryRow } = await supabase
+        .schema('core')
+        .from('countries')
+        .select('id')
+        .eq('name', answers.selected_country)
+        .single();
+      if (countryRow) {
+        const { data: uniIds } = await supabase
+          .schema('core')
+          .from('universities')
+          .select('id')
+          .eq('country_id', countryRow.id);
+        if (uniIds && uniIds.length > 0) {
+          courseQuery = courseQuery.in('university_id', uniIds.map(u => u.id));
+        }
+      }
+    }
+
     if (answers.sub_field) {
       courseQuery = courseQuery.eq("sub_field", answers.sub_field);
     }
@@ -724,6 +743,25 @@ app.post("/recommend", async (req, res) => {
         .lte("tuition_usd", tBand.max)
         .gte("duration_years", dBand.min)
         .lte("duration_years", dBand.max);
+
+      if (answers.selected_country) {
+        const { data: countryRow } = await supabase
+          .schema('core')
+          .from('countries')
+          .select('id')
+          .eq('name', answers.selected_country)
+          .single();
+        if (countryRow) {
+          const { data: uniIds } = await supabase
+            .schema('core')
+            .from('universities')
+            .select('id')
+            .eq('country_id', countryRow.id);
+          if (uniIds && uniIds.length > 0) {
+            fallbackQuery = fallbackQuery.in('university_id', uniIds.map(u => u.id));
+          }
+        }
+      }
 
       if (answers.gre_filter === "Without GRE or GMAT") {
         fallbackQuery = fallbackQuery.eq("gre_required", false).eq("gmat_required", false);
