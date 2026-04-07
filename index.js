@@ -916,7 +916,6 @@ app.post("/recommend", async (req, res) => {
         if (pType === ‘research') return 0.3;
         return 0.7;
       }
-      // balanced
       if (pType === ‘research') return 0.6;
       if (pType === ‘professional') return 0.8;
       return 0.7;
@@ -926,44 +925,24 @@ app.post("/recommend", async (req, res) => {
       let components = [];
       let weights = [];
 
-      const internshipWeightMap = {
-        "Very strongly": 1,
-        "Wouldn't mind": 0.6,
-        "Don't care": 0.3,
-      };
-      const internshipWeight = internshipWeightMap[answers.internship_importance] || 0;
+      const internshipWeight = { ‘Very strongly': 1, ‘Somewhat': 0.6, ‘Don care': 0.3 }[answers.internship_importance] || 0;
       components.push(internshipWeight * (course.internship_available ? 1 : 0));
       weights.push(internshipWeight);
 
-      const scholarshipWeightMap = {
-        "Very strongly (more than 20% of tuition)": 1,
-        "Wouldn't mind getting one (less than 20% of tuition or none)": 0.6,
-        "Don't care": 0.3,
-      };
-      const scholarshipWeight = scholarshipWeightMap[answers.scholarship_importance] || 0;
+      const scholarshipWeight = { ‘Very strongly (more than 20% of tuition)': 1, ‘Somewhat (less than 20% or none)': 0.6, ‘Don care': 0.3 }[answers.scholarship_importance] || 0;
       const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
       components.push(scholarshipWeight * scholarshipScore);
       weights.push(scholarshipWeight);
 
       const totalWeight = weights.reduce((a, b) => a + b, 0);
-      return totalWeight > 0
-        ? clamp(components.reduce((a, b) => a + b, 0) / totalWeight)
-        : 0.5;
+      return totalWeight > 0 ? clamp(components.reduce((a, b) => a + b, 0) / totalWeight) : 0.5;
     }
 
     function computeCourseScore(course, answers, relevanceMap) {
-      const contentRelevance = relevanceMap[course.id] !== undefined
-        ? relevanceMap[course.id]
-        : 0.5; // neutral fallback if no embedding
-
+      const contentRelevance = (relevanceMap && relevanceMap[course.id] !== undefined) ? relevanceMap[course.id] : 0.5;
       const intentAlignment = computeIntentAlignment(course, answers);
-      const logisticsFit    = computeLogisticsFit(course, answers);
-
-      return clamp(
-        0.50 * contentRelevance +
-        0.25 * intentAlignment +
-        0.25 * logisticsFit
-      );
+      const logisticsFit = computeLogisticsFit(course, answers);
+      return clamp(0.50 * contentRelevance + 0.25 * intentAlignment + 0.25 * logisticsFit);
     }
 
     function computeUniversityScore(university, country, answers, rankingMap, subjectRankMap, courseSubjectId) {
