@@ -1074,11 +1074,11 @@ app.post("/recommend", async (req, res) => {
       }
 
       if (courseScore >= 0.7)
-        explanation.push(
-          "Strong course alignment with your academic preferences",
-        );
+        explanation.push("Strong match with your subject area and academic goals");
       else if (courseScore >= 0.4)
-        explanation.push("Reasonable course fit based on your priorities");
+        explanation.push("Good alignment with your field and course preferences");
+      else
+        explanation.push("Course is within your selected field category");
 
       // If subject-specific ranking was used, surface that as an explanation
       if (course.subject_id && subjectRankMap) {
