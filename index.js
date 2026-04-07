@@ -593,7 +593,7 @@ app.post("/embed-new-courses", async (req, res) => {
     const { execFile } = require("child_process");
     const env = {
       ...process.env,
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      OPENAI_API_KEY_1: process.env.OPENAI_API_KEY_1,
       SUPABASE_URL: process.env.SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     };

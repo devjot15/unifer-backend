@@ -2,7 +2,7 @@ import os, time
 from openai import OpenAI
 from supabase import create_client
 
-OPENAI_API_KEY  = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_API_KEY  = os.environ.get("OPENAI_API_KEY_1", "")
 SUPABASE_URL    = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY    = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 EMBEDDING_MODEL = "text-embedding-3-small"
