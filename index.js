@@ -533,7 +533,6 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
   const courseIds = eligibleCourses.map(c => c.id).filter(Boolean);
   if (courseIds.length === 0) return {};
 
-  // Get the stored sub-field embedding
   const { data: embeddingData, error: embErr } = await supabase
     .rpc('get_sub_field_embedding', {
       p_field: answers.field,
@@ -545,11 +544,20 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
     return {};
   }
 
-  // Bulk cosine similarity against all eligible courses
+  // Build BM25 search terms from sub_field name
+  // Convert "Computer Science & IT" → "Computer & Science & IT" for tsquery
+  const bm25Terms = (answers.sub_field || '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(w => w.length > 2)
+    .join(' & ');
+
   const { data: similarities, error: simErr } = await supabase
     .rpc('get_course_similarities', {
       p_query_embedding: embeddingData,
-      p_course_ids: courseIds
+      p_course_ids: courseIds,
+      p_search_terms: bm25Terms
     });
 
   if (simErr || !similarities) {
@@ -557,13 +565,26 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
     return {};
   }
 
-  // Build map: course_id → similarity score (0–1)
-  const relevanceMap = {};
+  // Build raw map
+  const rawMap = {};
   similarities.forEach(row => {
-    relevanceMap[row.course_id] = Math.max(0, Math.min(1, row.similarity));
+    rawMap[row.course_id] = Math.max(0, row.similarity);
   });
 
-  console.log(`[relevance] scores computed for ${Object.keys(relevanceMap).length} courses`);
+  // Min-max normalise within batch to spread scores across 0–1
+  const scores = Object.values(rawMap);
+  const minScore = Math.min(...scores);
+  const maxScore = Math.max(...scores);
+  const range = maxScore - minScore;
+
+  const relevanceMap = {};
+  Object.keys(rawMap).forEach(id => {
+    relevanceMap[id] = range > 0.05
+      ? (rawMap[id] - minScore) / range
+      : rawMap[id];
+  });
+
+  console.log(`[relevance] scores computed for ${Object.keys(relevanceMap).length} courses — raw range: ${minScore.toFixed(3)}–${maxScore.toFixed(3)} → normalised 0–1`);
   return relevanceMap;
 }
 
