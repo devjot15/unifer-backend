@@ -645,6 +645,7 @@ app.post("/embed-new-courses", async (req, res) => {
 app.post("/recommend", async (req, res) => {
   try {
     const answers = req.body;
+    console.log('[debug] selected_country:', answers.selected_country, 'type:', typeof answers.selected_country);
     const {
       career_importance,
       career_type,
