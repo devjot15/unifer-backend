@@ -900,24 +900,24 @@ app.post("/recommend", async (req, res) => {
     }
 
     function computeIntentAlignment(course, answers) {
-      const ri = answers.research_importance || ‘';
-      let intent = ‘balanced';
-      if (ri.startsWith(‘Very important')) intent = ‘research';
-      else if (ri.startsWith(‘Not important')) intent = ‘industry';
+      const ri = answers.research_importance || '';
+      let intent = 'balanced';
+      if (ri.startsWith('Very important')) intent = 'research';
+      else if (ri.startsWith('Not important')) intent = 'industry';
 
       const pType = course.program_type;
-      if (intent === ‘research') {
-        if (pType === ‘research') return 1.0;
-        if (pType === ‘professional') return 0.4;
+      if (intent === 'research') {
+        if (pType === 'research') return 1.0;
+        if (pType === 'professional') return 0.4;
         return 0.7;
       }
-      if (intent === ‘industry') {
-        if (pType === ‘professional') return 1.0;
-        if (pType === ‘research') return 0.3;
+      if (intent === 'industry') {
+        if (pType === 'professional') return 1.0;
+        if (pType === 'research') return 0.3;
         return 0.7;
       }
-      if (pType === ‘research') return 0.6;
-      if (pType === ‘professional') return 0.8;
+      if (pType === 'research') return 0.6;
+      if (pType === 'professional') return 0.8;
       return 0.7;
     }
 
@@ -925,11 +925,21 @@ app.post("/recommend", async (req, res) => {
       let components = [];
       let weights = [];
 
-      const internshipWeight = { ‘Very strongly': 1, ‘Somewhat': 0.6, ‘Don care': 0.3 }[answers.internship_importance] || 0;
+      const iMap = {
+        'Very strongly': 1,
+        'Wouldn\u2019t mind': 0.6,
+        'Don\u2019t care': 0.3,
+      };
+      const internshipWeight = iMap[answers.internship_importance] || 0;
       components.push(internshipWeight * (course.internship_available ? 1 : 0));
       weights.push(internshipWeight);
 
-      const scholarshipWeight = { ‘Very strongly (more than 20% of tuition)': 1, ‘Somewhat (less than 20% or none)': 0.6, ‘Don care': 0.3 }[answers.scholarship_importance] || 0;
+      const sMap = {
+        'Very strongly (more than 20% of tuition)': 1,
+        'Wouldn\u2019t mind getting one (less than 20% of tuition or none)': 0.6,
+        'Don\u2019t care': 0.3,
+      };
+      const scholarshipWeight = sMap[answers.scholarship_importance] || 0;
       const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
       components.push(scholarshipWeight * scholarshipScore);
       weights.push(scholarshipWeight);
