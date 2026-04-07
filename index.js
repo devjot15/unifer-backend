@@ -874,14 +874,14 @@ app.post("/recommend", async (req, res) => {
       let pswWeight =
         answers.work_permit_importance === "Very strongly (3 years and above)"
           ? 1
-          : answers.work_permit_importance.includes("Wouldn’t mind")
+          : answers.work_permit_importance.includes("Wouldn't mind")
             ? 0.6
             : 0.3;
 
       let prWeight =
         answers.pr_importance === "Very strongly"
           ? 1
-          : answers.pr_importance === "Wouldn’t mind"
+          : answers.pr_importance === "Wouldn't mind"
             ? 0.6
             : 0.3;
 
@@ -900,25 +900,25 @@ app.post("/recommend", async (req, res) => {
     }
 
     function computeIntentAlignment(course, answers) {
-      const ri = answers.research_importance || ‘’;
-      let intent = ‘balanced’;
-      if (ri.startsWith(‘Very important’)) intent = ‘research’;
-      else if (ri.startsWith(‘Not important’)) intent = ‘industry’;
+      const ri = answers.research_importance || ‘';
+      let intent = ‘balanced';
+      if (ri.startsWith(‘Very important')) intent = ‘research';
+      else if (ri.startsWith(‘Not important')) intent = ‘industry';
 
       const pType = course.program_type;
-      if (intent === ‘research’) {
-        if (pType === ‘research’) return 1.0;
-        if (pType === ‘professional’) return 0.4;
+      if (intent === ‘research') {
+        if (pType === ‘research') return 1.0;
+        if (pType === ‘professional') return 0.4;
         return 0.7;
       }
-      if (intent === ‘industry’) {
-        if (pType === ‘professional’) return 1.0;
-        if (pType === ‘research’) return 0.3;
+      if (intent === ‘industry') {
+        if (pType === ‘professional') return 1.0;
+        if (pType === ‘research') return 0.3;
         return 0.7;
       }
       // balanced
-      if (pType === ‘research’) return 0.6;
-      if (pType === ‘professional’) return 0.8;
+      if (pType === ‘research') return 0.6;
+      if (pType === ‘professional') return 0.8;
       return 0.7;
     }
 
@@ -928,8 +928,8 @@ app.post("/recommend", async (req, res) => {
 
       const internshipWeightMap = {
         "Very strongly": 1,
-        "Wouldn’t mind": 0.6,
-        "Don’t care": 0.3,
+        "Wouldn't mind": 0.6,
+        "Don't care": 0.3,
       };
       const internshipWeight = internshipWeightMap[answers.internship_importance] || 0;
       components.push(internshipWeight * (course.internship_available ? 1 : 0));
@@ -937,8 +937,8 @@ app.post("/recommend", async (req, res) => {
 
       const scholarshipWeightMap = {
         "Very strongly (more than 20% of tuition)": 1,
-        "Wouldn’t mind getting one (less than 20% of tuition or none)": 0.6,
-        "Don’t care": 0.3,
+        "Wouldn't mind getting one (less than 20% of tuition or none)": 0.6,
+        "Don't care": 0.3,
       };
       const scholarshipWeight = scholarshipWeightMap[answers.scholarship_importance] || 0;
       const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
@@ -1068,7 +1068,7 @@ app.post("/recommend", async (req, res) => {
 
       if (
         course.internship_available &&
-        answers.internship_importance !== "Don’t care"
+        answers.internship_importance !== "Don't care"
       ) {
         explanation.push("Includes internship as part of the curriculum");
       }
