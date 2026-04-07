@@ -144,6 +144,15 @@ const GLOBAL_FW_MULTIPLIERS = {
   industry: { QS: 1.3, THE: 0.9, ARWU: 0.7, CUG: 1.1, Guardian: 1.2, GUG: 1.2 },
 };
 
+const DESTINATION_FW_MULTIPLIERS = {
+  'United Kingdom': { QS: 1.0, THE: 1.0, ARWU: 1.0, CUG: 1.25, Guardian: 1.25, GUG: 1.0 },
+  'Australia':      { QS: 1.0, THE: 1.0, ARWU: 1.0, CUG: 1.0,  Guardian: 1.0,  GUG: 1.25 },
+};
+
+function getDestinationMultipliers(selected_country) {
+  return DESTINATION_FW_MULTIPLIERS[selected_country] || { QS: 1.0, THE: 1.0, ARWU: 1.0, CUG: 1.0, Guardian: 1.0, GUG: 1.0 };
+}
+
 const SUBJECT_FW_BASE_WEIGHTS = { QS: 5.25, THE: 4.96, ARWU: 4.97, CUG: 4.86, Guardian: 4.81 };
 
 const SUBJECT_FW_MULTIPLIERS = {
@@ -224,7 +233,8 @@ function computeSubjectSubScore(fwScores, answers) {
       for (const [fw, cols] of Object.entries(fwCols)) {
         const fwData = fwScores[fw];
         if (!fwData) continue;
-        const adjW = SUBJECT_FW_BASE_WEIGHTS[fw] * multipliers[fw];
+        const destMultipliers = getDestinationMultipliers(answers.selected_country);
+        const adjW = SUBJECT_FW_BASE_WEIGHTS[fw] * multipliers[fw] * (destMultipliers[fw] || 1.0);
         for (const col of cols) {
           const v = fwData[col];
           if (v !== null && v !== undefined) vals.push({ value: v, weight: adjW });
@@ -383,7 +393,9 @@ async function getSubScore(universityId, body) {
     const shortName = GLOBAL_FW_NAME_MAP[framework] || null;
     const baseWeight = shortName ? (GLOBAL_FW_BASE_WEIGHTS[shortName] || 1.0) : 1.0;
     const intentMultiplier = shortName ? (multipliers[shortName] || 1.0) : 1.0;
-    const adjWeight = baseWeight * intentMultiplier;
+    const destMultipliers = getDestinationMultipliers(body.selected_country);
+    const destMultiplier = shortName ? (destMultipliers[shortName] || 1.0) : 1.0;
+    const adjWeight = baseWeight * intentMultiplier * destMultiplier;
     if (!conceptBuckets[dimension]) conceptBuckets[dimension] = {};
     if (!conceptBuckets[dimension][concept_group]) conceptBuckets[dimension][concept_group] = [];
     conceptBuckets[dimension][concept_group].push({ value: Number(score), weight: adjWeight });
