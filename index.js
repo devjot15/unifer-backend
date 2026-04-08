@@ -811,9 +811,8 @@ app.post("/recommend", async (req, res) => {
       .select("id, name, avg_cost_of_living_usd, post_study_work_years, pr_pathway_clarity_score, english_primary_language");
 
     const { data: rankingData } = await supabase
-      .schema('rankings')
-      .from('university_composite_ranking')
-      .select('id, final_score');
+      .from("university_composite_ranking")
+      .select("id, final_score");
 
     const rankingMap = {};
     if (rankingData) {
