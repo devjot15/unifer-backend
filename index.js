@@ -1241,6 +1241,11 @@ app.post("/recommend", async (req, res) => {
 
       let softPathways;
       try {
+        console.log('[soft-duration] extraCourses count:', extraCourses.length);
+        console.log('[soft-duration] subjectScoreMap keys:', Object.keys(subjectScoreMap).length);
+        console.log('[soft-duration] courseRelevanceMap keys:', Object.keys(courseRelevanceMap).length);
+        console.log('[soft-duration] universities count:', universities.length);
+        console.log('[soft-duration] countries count:', countries.length);
         softPathways = await Promise.all(extraCourses.map(async (course) => {
           const university = universities.find(u => u.id === course.university_id);
           if (!university) return null;
@@ -1288,7 +1293,8 @@ app.post("/recommend", async (req, res) => {
           };
         }));
       } catch (softErr) {
-        console.error('[soft-duration] error:', softErr.message, softErr.stack);
+        console.error('[soft-duration] error:', softErr.message);
+        console.error('[soft-duration] stack:', softErr.stack);
         return res.json(primaryTop);
       }
 
