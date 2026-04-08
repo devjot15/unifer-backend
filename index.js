@@ -1305,7 +1305,7 @@ app.post("/recommend", async (req, res) => {
             : 0.70 * blendedSubScore;
 
           const countryScore = computeCountryScore(country, answers, countryMap);
-          const courseScore = await computeCourseScore(course, answers);
+          const courseScore = computeCourseScore(course, answers, null);
 
           const rawFinalScore = weights.Country * countryScore + weights.Course * courseScore + weights.Institution * universityScore;
 
