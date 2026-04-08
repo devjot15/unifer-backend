@@ -812,7 +812,8 @@ app.post("/recommend", async (req, res) => {
 
     const { data: rankingData } = await supabase
       .from("university_composite_ranking")
-      .select("id, final_score");
+      .select("id, final_score")
+      .limit(2000);
 
     const rankingMap = {};
     if (rankingData) {
