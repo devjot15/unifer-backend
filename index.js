@@ -1239,52 +1239,58 @@ app.post("/recommend", async (req, res) => {
         })
         .slice(0, 30);
 
-      const softPathways = await Promise.all(extraCourses.map(async (course) => {
-        const university = universities.find(u => u.id === course.university_id);
-        if (!university) return null;
-        const country = countries.find(c => c.id === university.country_id);
-        if (!country) return null;
+      let softPathways;
+      try {
+        softPathways = await Promise.all(extraCourses.map(async (course) => {
+          const university = universities.find(u => u.id === course.university_id);
+          if (!university) return null;
+          const country = countries.find(c => c.id === university.country_id);
+          if (!country) return null;
 
-        const subScore = await getSubScore(university.id, answers);
-        const compositeScore = rankingMap[university.id] ?? null;
-        const alpha = parseFloat(answers.ranking_importance) || 0;
-        const beta = 1 - alpha;
-        const delta = { high: 0.60, medium: 0.35, low: 0.10 }[answers.subject_ranking_importance] || 0.10;
-        const fwScores = subjectScoreMap[university.id] || subjectScoreMap[course.university_id] || null;
-        const subjectSubScore = fwScores ? computeSubjectSubScore(fwScores, answers) : null;
-        const coverageConf = fwScores ? getCoverageConfidence(Object.keys(fwScores).length) : 0;
-        const blendedSubScore = (subjectSubScore !== null)
-          ? (1 - delta) * subScore + delta * subjectSubScore * coverageConf
-          : subScore;
-        const universityScore = compositeScore != null
-          ? alpha * compositeScore + beta * blendedSubScore
-          : 0.70 * blendedSubScore;
+          const subScore = await getSubScore(university.id, answers);
+          const compositeScore = rankingMap[university.id] ?? null;
+          const alpha = parseFloat(answers.ranking_importance) || 0;
+          const beta = 1 - alpha;
+          const delta = { high: 0.60, medium: 0.35, low: 0.10 }[answers.subject_ranking_importance] || 0.10;
+          const fwScores = subjectScoreMap[university.id] || subjectScoreMap[course.university_id] || null;
+          const subjectSubScore = fwScores ? computeSubjectSubScore(fwScores, answers) : null;
+          const coverageConf = fwScores ? getCoverageConfidence(Object.keys(fwScores).length) : 0;
+          const blendedSubScore = (subjectSubScore !== null)
+            ? (1 - delta) * subScore + delta * subjectSubScore * coverageConf
+            : subScore;
+          const universityScore = compositeScore != null
+            ? alpha * compositeScore + beta * blendedSubScore
+            : 0.70 * blendedSubScore;
 
-        const countryScore = computeCountryScore(country, answers, countryMap);
-        const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
+          const countryScore = computeCountryScore(country, answers, countryMap);
+          const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
-        const rawFinalScore = weights.Country * countryScore + weights.Course * courseScore + weights.Institution * universityScore;
+          const rawFinalScore = weights.Country * countryScore + weights.Course * courseScore + weights.Institution * universityScore;
 
-        const durationDistance = Math.max(0,
-          course.duration_years < dBand.min
-            ? dBand.min - course.duration_years
-            : course.duration_years - dBand.max
-        );
-        const durationPenalty = Math.max(0.70, 1 - durationDistance * 0.10);
-        const finalScore = rawFinalScore * durationPenalty;
+          const durationDistance = Math.max(0,
+            course.duration_years < dBand.min
+              ? dBand.min - course.duration_years
+              : course.duration_years - dBand.max
+          );
+          const durationPenalty = Math.max(0.70, 1 - durationDistance * 0.10);
+          const finalScore = rawFinalScore * durationPenalty;
 
-        return {
-          ...course,
-          university: university.name,
-          university_id: university.id,
-          country: country.name,
-          countryScore,
-          courseScore,
-          institutionScore: universityScore,
-          finalScore,
-          softDuration: true
-        };
-      }));
+          return {
+            ...course,
+            university: university.name,
+            university_id: university.id,
+            country: country.name,
+            countryScore,
+            courseScore,
+            institutionScore: universityScore,
+            finalScore,
+            softDuration: true
+          };
+        }));
+      } catch (softErr) {
+        console.error('[soft-duration] error:', softErr.message, softErr.stack);
+        return res.json(primaryTop);
+      }
 
       const softSeen = new Set(primaryTop.map(p => p.university));
       const softDeduped = softPathways
