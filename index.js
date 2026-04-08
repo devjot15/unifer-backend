@@ -646,6 +646,15 @@ app.post("/recommend", async (req, res) => {
       subject_ranking_importance,
     } = req.body;
 
+    const { priority_1, priority_2, priority_3 } = req.body;
+
+    if (!priority_1 || !priority_2 || !priority_3) {
+      return res.status(400).json({ error: 'All three priorities must be provided.' });
+    }
+    if (priority_1 === priority_2 || priority_1 === priority_3 || priority_2 === priority_3) {
+      return res.status(400).json({ error: 'Priority 1, 2 and 3 must all be different. Please select three distinct priorities.' });
+    }
+
     // 1️⃣ Fetch all data
     const { data: countries, error: cErr } = await supabase
       .schema("core")
