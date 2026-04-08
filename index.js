@@ -821,7 +821,6 @@ app.post("/recommend", async (req, res) => {
         rankingMap[r.id] = r.final_score;
       });
     }
-    console.log('[debug] Cambridge raw value:', JSON.stringify(rankingMap['b554b6d1-1f71-47fe-9d06-746c0fac3ffc']), 'type:', typeof rankingMap['b554b6d1-1f71-47fe-9d06-746c0fac3ffc'], 'rankingMap size:', Object.keys(rankingMap).length);
 
     // Subject-level ranking map: "universityId:subjectId" → composite_score
     // When a course has subject_id set, we prefer this over the blended overall score.
