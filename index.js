@@ -1241,7 +1241,8 @@ app.post("/recommend", async (req, res) => {
         .eq('degree_level', answers.level)
         .eq('field_category', answers.field)
         .gte('tuition_usd', tBand.min)
-        .lte('tuition_usd', tBand.max);
+        .lte('tuition_usd', tBand.max)
+        .limit(100);
 
       if (answers.sub_field) {
         softQuery = softQuery.eq('sub_field', answers.sub_field);
@@ -1283,7 +1284,8 @@ app.post("/recommend", async (req, res) => {
         });
 
         // Score extra courses with duration penalty
-        const softPathways = await Promise.all(extraCourses.map(async (course) => {
+        const limitedExtraCourses = extraCourses.slice(0, 30);
+        const softPathways = await Promise.all(limitedExtraCourses.map(async (course) => {
           const university = universities.find((u) => u.id === course.university_id);
           if (!university) return null;
           const country = countries.find((c) => c.id === university.country_id);
