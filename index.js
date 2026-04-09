@@ -1288,6 +1288,8 @@ app.post("/recommend", async (req, res) => {
 
           return {
             ...course,
+            course: course.name,
+            duration: course.duration_years,
             university: university.name,
             university_id: university.id,
             country: country.name,
@@ -1301,7 +1303,15 @@ app.post("/recommend", async (req, res) => {
               course: Math.round(courseScore * 100) / 100,
               university: Math.round(universityScore * 100) / 100,
             },
-            explanation: [],
+            explanation: [
+              countryScore >= 0.7 ? 'Strong country match based on your living and work preferences' :
+              countryScore >= 0.4 ? 'Moderate country alignment with your preferences' : null,
+              course.internship_available ? 'Includes internship as part of the curriculum' : null,
+              courseScore >= 0.7 ? 'Strong match with your subject area and academic goals' :
+              courseScore >= 0.4 ? 'Good alignment with your field and course preferences' : null,
+              universityScore >= 0.7 ? 'Institution scores well on ranking, location, and services' :
+              universityScore >= 0.5 ? 'Institution meets your core university preferences' : null,
+            ].filter(Boolean),
           };
           }));
           softPathways.push(...batchResults);
