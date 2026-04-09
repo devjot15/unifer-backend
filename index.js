@@ -1295,7 +1295,13 @@ app.post("/recommend", async (req, res) => {
             courseScore,
             institutionScore: universityScore,
             finalScore,
-            softDuration: true
+            softDuration: true,
+            scores: {
+              country: Math.round(countryScore * 100) / 100,
+              course: Math.round(courseScore * 100) / 100,
+              university: Math.round(universityScore * 100) / 100,
+            },
+            explanation: [],
           };
           }));
           softPathways.push(...batchResults);
