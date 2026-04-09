@@ -661,6 +661,15 @@ app.post("/recommend", async (req, res) => {
       .from("countries")
       .select("*");
 
+    const { data: pswRules, error: pswErr } = await supabase.schema('core').from('psw_rules').select('*');
+    const pswRulesMap = {};
+    if (pswRules) {
+      pswRules.forEach(r => {
+        if (!pswRulesMap[r.country_name]) pswRulesMap[r.country_name] = [];
+        pswRulesMap[r.country_name].push(r);
+      });
+    }
+
     const { data: universities, error: uErr } = await supabase
       .schema("core")
       .from("universities")
@@ -971,13 +980,30 @@ app.post("/recommend", async (req, res) => {
       return 1 - (rank - 1) / (maxRank - 1);
     }
 
-    function computeCountryScore(country, answers, countryMap) {
+    function getPswYears(countryName, durationYears, degreeLevel, regionType, pswRulesMap) {
+      const rules = pswRulesMap[countryName];
+      if (!rules || rules.length === 0) return null;
+      const durationMonths = (durationYears || 0) * 12;
+      for (const rule of rules) {
+        const minOk = rule.min_duration_months == null || durationMonths >= rule.min_duration_months;
+        const maxOk = rule.max_duration_months == null || durationMonths < rule.max_duration_months;
+        const levelOk = rule.degree_level == null || rule.degree_level === degreeLevel;
+        const regionOk = rule.region_type == null || rule.region_type === regionType;
+        if (minOk && maxOk && levelOk && regionOk) return rule.psw_years;
+      }
+      return null;
+    }
+
+    function computeCountryScore(country, answers, countryMap, course, universityRegionType, pswRulesMap) {
       const c = countryMap[country.id];
       if (!c) {
         return 0;
       }
 
-      const psw_score = c.post_study_work_years != null ? clamp((c.post_study_work_years - 1.5) / (3 - 1.5)) : 0.5;
+      const pswYears = pswRulesMap
+        ? getPswYears(c.name, course?.duration_years, course?.degree_level, universityRegionType || 'main', pswRulesMap)
+        : null;
+      const psw_score = pswYears != null ? clamp(pswYears / 5.0) : (c.post_study_work_years != null ? clamp(c.post_study_work_years / 5.0) : 0.5);
       const pr_score = c.pr_pathway_clarity_score != null ? c.pr_pathway_clarity_score : 0.5;
       const english_score = c.english_primary_language === true ? 1.0 : c.english_primary_language === false ? 0.0 : 0.5;
 
@@ -1103,7 +1129,7 @@ app.post("/recommend", async (req, res) => {
       const country = countries.find((c) => c.id === university.country_id);
       if (!country) return null;
 
-      let countryScore = computeCountryScore(country, answers, countryMap);
+      let countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap);
       let courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
       // Step 7: Blend composite ranking score with sub-indicator score
@@ -1272,7 +1298,7 @@ app.post("/recommend", async (req, res) => {
             ? alpha * compositeScore + beta * blendedSubScore
             : 0.70 * blendedSubScore;
 
-          const countryScore = computeCountryScore(country, answers, countryMap);
+          const countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap);
           const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
           const rawFinalScore = computeFinalScore(weights, { country: countryScore, course: courseScore, university: universityScore });
