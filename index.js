@@ -1239,9 +1239,11 @@ app.post("/recommend", async (req, res) => {
         })
         .slice(0, 30);
 
-      let softPathways;
+      const softPathways = [];
       try {
-        softPathways = await Promise.all(extraCourses.map(async (course) => {
+        for (let i = 0; i < extraCourses.length; i += 3) {
+          const batch = extraCourses.slice(i, i + 3);
+          const batchResults = await Promise.all(batch.map(async (course) => {
           const university = universities.find(u => u.id === course.university_id);
           if (!university) return null;
           const country = countries.find(c => c.id === university.country_id);
@@ -1286,7 +1288,9 @@ app.post("/recommend", async (req, res) => {
             finalScore,
             softDuration: true
           };
-        }));
+          }));
+          softPathways.push(...batchResults);
+        }
       } catch (softErr) {
         console.error('[soft-duration] error:', softErr.message);
         console.error('[soft-duration] stack:', softErr.stack);
