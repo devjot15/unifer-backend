@@ -1301,9 +1301,14 @@ app.post("/recommend", async (req, res) => {
           softPathways.push(...batchResults);
         }
       } catch (softErr) {
-        console.error('[soft-duration] error:', softErr.message);
-        console.error('[soft-duration] stack:', softErr.stack);
-        return res.json(primaryTop);
+        console.error('[soft-duration] CAUGHT ERROR:', softErr.message);
+        console.error('[soft-duration] CAUGHT STACK:', softErr.stack);
+        try {
+          return res.json(primaryTop);
+        } catch (jsonErr) {
+          console.error('[soft-duration] JSON error:', jsonErr.message);
+          return res.status(500).send('Recommendation failed');
+        }
       }
 
       const softSeen = new Set(primaryTop.map(p => p.university));
