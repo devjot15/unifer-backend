@@ -1240,6 +1240,9 @@ app.post("/recommend", async (req, res) => {
         })
         .slice(0, 30);
 
+      const softUniversityIds = [...new Set(extraCourses.map(c => c.university_id).filter(Boolean))];
+      const softSubjectScoreMap = await bulkFetchSubjectScores(softUniversityIds, answers, supabase);
+
       const softPathways = [];
       try {
         for (let i = 0; i < extraCourses.length; i += 3) {
@@ -1255,7 +1258,7 @@ app.post("/recommend", async (req, res) => {
           const alpha = parseFloat(answers.ranking_importance) || 0;
           const beta = 1 - alpha;
           const delta = { high: 0.60, medium: 0.35, low: 0.10 }[answers.subject_ranking_importance] || 0.10;
-          const fwScores = subjectScoreMap[university.id] || subjectScoreMap[course.university_id] || null;
+          const fwScores = subjectScoreMap[university.id] || softSubjectScoreMap[university.id] || subjectScoreMap[course.university_id] || null;
           const subjectSubScore = fwScores ? computeSubjectSubScore(fwScores, answers) : null;
           const coverageConf = fwScores ? getCoverageConfidence(Object.keys(fwScores).length) : 0;
           const blendedSubScore = (subjectSubScore !== null)
