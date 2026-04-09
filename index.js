@@ -1317,6 +1317,7 @@ app.post("/recommend", async (req, res) => {
         });
 
       const combined = [...primaryTop, ...softDeduped].slice(0, 5);
+      console.log('[soft-duration] combined results:', combined.length);
       return res.json(combined);
     }
 
