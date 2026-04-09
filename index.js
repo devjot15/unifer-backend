@@ -1005,28 +1005,21 @@ app.post("/recommend", async (req, res) => {
         : null;
       const psw_score = pswYears != null ? clamp(pswYears / 5.0) : (c.post_study_work_years != null ? clamp(c.post_study_work_years / 5.0) : 0.5);
       const pr_score = c.pr_pathway_clarity_score != null ? c.pr_pathway_clarity_score : 0.5;
-      const english_score = c.english_primary_language === true ? 1.0 : c.english_primary_language === false ? 0.0 : 0.5;
+      const english_score = c.english_taught_score != null ? c.english_taught_score : 1.0;
 
-      let pswWeight =
-        answers.work_permit_importance === "Very strongly (3 years and above)"
-          ? 1
-          : answers.work_permit_importance.includes("Wouldn't mind")
-            ? 0.6
-            : 0.3;
+      const pswWeight = answers.work_permit_importance === 'Very strongly (3 years and above)' ? 1.0
+        : answers.work_permit_importance?.includes("Wouldn't mind") ? 0.5
+        : 0.0;
 
-      let prWeight =
-        answers.pr_importance === "Very strongly"
-          ? 1
-          : answers.pr_importance === "Wouldn't mind"
-            ? 0.6
-            : 0.3;
+      const prWeight = answers.pr_importance === 'Very strongly' ? 1.0
+        : answers.pr_importance === "Wouldn't mind" ? 0.5
+        : 0.0;
 
-      let englishWeight =
-        answers.english_preference === "Yes"
-          ? 1
-          : answers.english_preference === "Prefer but flexible"
-            ? 0.6
-            : 0.3;
+      const englishWeight = answers.english_preference === 'Yes' ? 1.0
+        : answers.english_preference === 'Prefer but flexible' ? 0.5
+        : 0.0;
+
+      if (pswWeight + prWeight + englishWeight === 0) return 0.5;
 
       let weightedSum = pswWeight * psw_score + prWeight * pr_score + englishWeight * english_score;
 
