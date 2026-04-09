@@ -1091,9 +1091,9 @@ app.post("/recommend", async (req, res) => {
     }
 
     // 4️⃣ SCORE PATHWAYS
-    const allUniversityIds = [...new Set(eligibleCourses.map(c => c.university_id).filter(Boolean))];
+    const allUniversityIds = [...new Set(durationFilteredCourses.map(c => c.university_id).filter(Boolean))];
     const subjectScoreMap = await bulkFetchSubjectScores(allUniversityIds, answers, supabase);
-    const courseRelevanceMap = await bulkFetchCourseRelevance(eligibleCourses, answers, supabase);
+    const courseRelevanceMap = await bulkFetchCourseRelevance(durationFilteredCourses, answers, supabase);
 
     const pathways = await Promise.all(durationFilteredCourses.map(async (course) => {
       const university = universities.find(
