@@ -555,8 +555,9 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
 async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
   if (!answers.sub_field || !answers.field || eligibleCourses.length === 0) return {};
 
-  const courseIds = eligibleCourses.map(c => c.id).filter(Boolean);
-  if (courseIds.length === 0) return {};
+  // Build eligible set for intersection after HNSW scan
+  const eligibleIdSet = new Set(eligibleCourses.map(c => c.id).filter(Boolean));
+  if (eligibleIdSet.size === 0) return {};
 
   const { data: embeddingData, error: embErr } = await supabase
     .rpc('get_sub_field_embedding', {
@@ -569,8 +570,6 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
     return {};
   }
 
-  // Build BM25 search terms from sub_field name
-  // Convert "Computer Science & IT" → "Computer & Science & IT" for tsquery
   const bm25Terms = (answers.sub_field || '')
     .replace(/[^a-zA-Z0-9\s]/g, ' ')
     .trim()
@@ -581,8 +580,8 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
   const { data: similarities, error: simErr } = await supabase
     .rpc('get_course_similarities', {
       p_query_embedding: embeddingData,
-      p_course_ids: courseIds,
-      p_search_terms: bm25Terms
+      p_search_terms:    bm25Terms,
+      p_limit:           2000
     });
 
   if (simErr || !similarities) {
@@ -590,14 +589,17 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
     return {};
   }
 
-  // Build raw map
+  // Intersect HNSW top-2000 with eligibility-filtered courses
   const rawMap = {};
   similarities.forEach(row => {
-    rawMap[row.course_id] = Math.max(0, row.similarity);
+    if (eligibleIdSet.has(row.course_id)) {
+      rawMap[row.course_id] = Math.max(0, row.similarity);
+    }
   });
 
-  // Min-max normalise within batch to spread scores across 0–1
   const scores = Object.values(rawMap);
+  if (scores.length === 0) return {};
+
   const minScore = Math.min(...scores);
   const maxScore = Math.max(...scores);
   const range = maxScore - minScore;
