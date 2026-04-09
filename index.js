@@ -1244,9 +1244,9 @@ app.post("/recommend", async (req, res) => {
       const softSubjectScoreMap = await bulkFetchSubjectScores(softUniversityIds, answers, supabase);
 
       const softSubScoreCache = {};
-      await Promise.all(softUniversityIds.map(async (uid) => {
+      for (const uid of softUniversityIds) {
         softSubScoreCache[uid] = await getSubScore(uid, answers);
-      }));
+      }
 
       const softPathways = [];
       try {
