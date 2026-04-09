@@ -1243,6 +1243,11 @@ app.post("/recommend", async (req, res) => {
       const softUniversityIds = [...new Set(extraCourses.map(c => c.university_id).filter(Boolean))];
       const softSubjectScoreMap = await bulkFetchSubjectScores(softUniversityIds, answers, supabase);
 
+      const softSubScoreCache = {};
+      await Promise.all(softUniversityIds.map(async (uid) => {
+        softSubScoreCache[uid] = await getSubScore(uid, answers);
+      }));
+
       const softPathways = [];
       try {
         for (let i = 0; i < extraCourses.length; i += 3) {
@@ -1253,7 +1258,7 @@ app.post("/recommend", async (req, res) => {
           const country = countries.find(c => c.id === university.country_id);
           if (!country) return null;
 
-          const subScore = await getSubScore(university.id, answers);
+          const subScore = softSubScoreCache[university.id] ?? 0.5;
           const compositeScore = rankingMap[university.id] ?? null;
           const alpha = parseFloat(answers.ranking_importance) || 0;
           const beta = 1 - alpha;
@@ -1271,7 +1276,7 @@ app.post("/recommend", async (req, res) => {
           const countryScore = computeCountryScore(country, answers, countryMap);
           const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
-          const rawFinalScore = weights.Country * countryScore + weights.Course * courseScore + weights.Institution * universityScore;
+          const rawFinalScore = computeFinalScore(weights, { country: countryScore, course: courseScore, university: universityScore });
 
           const durationDistance = Math.max(0,
             course.duration_years < dBand.min
