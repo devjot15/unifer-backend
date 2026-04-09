@@ -1231,6 +1231,7 @@ app.post("/recommend", async (req, res) => {
       .slice(0, 5);
 
     if (primaryTop.length < 5 && softDurationCourses.length > 0) {
+      console.log('[soft-duration] triggered — primaryTop:', primaryTop.length, 'softDurationCourses:', softDurationCourses.length);
       const excludedUniversities = new Set(primaryTop.map(p => p.university));
       const extraCourses = softDurationCourses
         .filter(c => {
