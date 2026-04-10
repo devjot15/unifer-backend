@@ -820,7 +820,7 @@ app.post("/recommend", async (req, res) => {
     const { data: countryData } = await supabase
       .schema("core")
       .from("countries")
-      .select("id, name, avg_cost_of_living_usd, post_study_work_years, pr_pathway_clarity_score, english_primary_language");
+      .select("id, name, avg_cost_of_living_usd, post_study_work_years, pr_pathway_clarity_score, english_primary_language, english_taught_score, job_market_score");
 
     const { data: rankingData } = await supabase
       .from("university_composite_ranking")
@@ -1026,11 +1026,23 @@ app.post("/recommend", async (req, res) => {
         : answers.english_preference === 'Prefer but flexible' ? 0.5
         : 0.0;
 
-      if (pswWeight + prWeight + englishWeight === 0) return 0.5;
+      // Job market signal — derived from career_importance, always contributes
+      // (1.0 / 0.6 / 0.3) to reflect that every student benefits from a strong
+      // job market regardless of whether they intend to stay post-study.
+      const jobWeight = answers.career_importance === 'high' ? 1.0
+        : answers.career_importance === 'medium' ? 0.6
+        : 0.3;
 
-      let weightedSum = pswWeight * psw_score + prWeight * pr_score + englishWeight * english_score;
+      const job_market_score = c.job_market_score != null ? c.job_market_score : 0.5;
 
-      let totalWeight = pswWeight + prWeight + englishWeight;
+      if (pswWeight + prWeight + englishWeight + jobWeight === 0) return 0.5;
+
+      let weightedSum = pswWeight * psw_score
+                      + prWeight * pr_score
+                      + englishWeight * english_score
+                      + jobWeight * job_market_score;
+
+      let totalWeight = pswWeight + prWeight + englishWeight + jobWeight;
 
       return clamp(weightedSum / totalWeight);
     }
