@@ -677,15 +677,16 @@ app.post("/recommend", async (req, res) => {
       .from("universities")
       .select("*");
 
-    const tuitionBounds = {
-      "Less than $12k": { min: 0, max: 11999 },
-      "$12k - $25k": { min: 12000, max: 25000 },
-      "More than $25K": { min: 25001, max: 999999 },
+    const tuitionMax = {
+      "Up to $5k":  5000,
+      "Up to $15k": 15000,
+      "Up to $30k": 30000,
+      "Up to $50k": 50000,
+      "No limit":   null,
     };
-    const tBand = tuitionBounds[answers.tuition_band] || {
-      min: 0,
-      max: 999999,
-    };
+    const maxTuition = tuitionMax[answers.tuition_band] !== undefined
+      ? tuitionMax[answers.tuition_band]
+      : null;
 
     const durationBounds = {
       "1 year or less": { min: 0, max: 1 },
@@ -700,9 +701,9 @@ app.post("/recommend", async (req, res) => {
       .from("courses")
       .select("*")
       .eq("degree_level", answers.level)
-      .eq("field_category", answers.field)
-      .gte("tuition_usd", tBand.min)
-      .lte("tuition_usd", tBand.max);
+      .eq("field_category", answers.field);
+
+    if (maxTuition !== null) courseQuery = courseQuery.lte("tuition_usd", maxTuition);
 
     if (answers.selected_country) {
       const { data: countryRow } = await supabase
@@ -756,9 +757,9 @@ app.post("/recommend", async (req, res) => {
         .from("courses")
         .select("*")
         .eq("degree_level", answers.level)
-        .eq("field_category", answers.field)
-        .gte("tuition_usd", tBand.min)
-        .lte("tuition_usd", tBand.max);
+        .eq("field_category", answers.field);
+
+      if (maxTuition !== null) fallbackQuery = fallbackQuery.lte("tuition_usd", maxTuition);
 
       if (answers.selected_country) {
         const { data: countryRow } = await supabase
