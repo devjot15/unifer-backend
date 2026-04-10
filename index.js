@@ -585,8 +585,12 @@ async function bulkFetchCourseRelevance(eligibleCourses, answers, supabase) {
     });
 
   if (simErr || !similarities) {
-    console.log('[relevance] similarity query error:', simErr?.message);
-    return {};
+    console.log('[relevance] similarity query error:', simErr?.message, '— falling back to neutral scores');
+    // Return neutral 0.5 for all courses rather than empty map
+    // Empty map causes all courses to use 0.5 fallback anyway, but this is explicit
+    const fallbackMap = {};
+    eligibleCourses.forEach(c => { fallbackMap[c.id] = 0.5; });
+    return fallbackMap;
   }
 
   // Intersect HNSW top-2000 with eligibility-filtered courses
