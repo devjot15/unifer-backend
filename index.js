@@ -701,9 +701,9 @@ app.post("/recommend", async (req, res) => {
       .from("courses")
       .select("*")
       .eq("degree_level", answers.level)
-      .eq("field_category", answers.field)
-      .gte("tuition_usd", tBand.min)
-      .lte("tuition_usd", tBand.max);
+      .eq("field_category", answers.field);
+
+    if (maxTuition !== null) courseQuery = courseQuery.lte("tuition_usd", maxTuition);
 
     if (answers.selected_country) {
       const { data: countryRow } = await supabase
@@ -757,9 +757,9 @@ app.post("/recommend", async (req, res) => {
         .from("courses")
         .select("*")
         .eq("degree_level", answers.level)
-        .eq("field_category", answers.field)
-        .gte("tuition_usd", tBand.min)
-        .lte("tuition_usd", tBand.max);
+        .eq("field_category", answers.field);
+
+      if (maxTuition !== null) fallbackQuery = fallbackQuery.lte("tuition_usd", maxTuition);
 
       if (answers.selected_country) {
         const { data: countryRow } = await supabase
