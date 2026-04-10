@@ -1129,7 +1129,7 @@ app.post("/recommend", async (req, res) => {
 
       // Step 7: Blend composite ranking score with sub-indicator score
       const subScore = await getSubScore(university.id, answers);
-      const compositeScore = rankingMap[university.id] ?? null;
+      const compositeScore = rankingMap[university.id] ?? 0.5;
       const alpha = parseFloat(answers.ranking_importance) || 0;
       const beta = 1 - alpha;
       const delta = { high: 0.60, medium: 0.35, low: 0.10 }[answers.subject_ranking_importance] || 0.10;
@@ -1279,7 +1279,7 @@ app.post("/recommend", async (req, res) => {
           if (!country) return null;
 
           const subScore = softSubScoreCache[university.id] ?? 0.5;
-          const compositeScore = rankingMap[university.id] ?? null;
+          const compositeScore = rankingMap[university.id] ?? 0.5;
           const alpha = parseFloat(answers.ranking_importance) || 0;
           const beta = 1 - alpha;
           const delta = { high: 0.60, medium: 0.35, low: 0.10 }[answers.subject_ranking_importance] || 0.10;
