@@ -820,7 +820,7 @@ app.post("/recommend", async (req, res) => {
     const { data: countryData } = await supabase
       .schema("core")
       .from("countries")
-      .select("id, name, avg_cost_of_living_usd, post_study_work_years, pr_pathway_clarity_score, english_primary_language, english_taught_score, job_market_score");
+      .select("id, name, avg_cost_of_living_usd, post_study_work_years, pr_pathway_clarity_score, english_primary_language, english_taught_score, job_market_score, safety_score");
 
     const { data: rankingData } = await supabase
       .from("university_composite_ranking")
@@ -1026,23 +1026,43 @@ app.post("/recommend", async (req, res) => {
         : answers.english_preference === 'Prefer but flexible' ? 0.5
         : 0.0;
 
-      // Job market signal — derived from career_importance, always contributes
-      // (1.0 / 0.6 / 0.3) to reflect that every student benefits from a strong
-      // job market regardless of whether they intend to stay post-study.
+      // Job market signal — derived from career_importance (1.0/0.6/0.3)
+      // Always contributes — every student benefits from a strong job market
+      // regardless of whether they intend to stay post-study.
       const jobWeight = answers.career_importance === 'high' ? 1.0
         : answers.career_importance === 'medium' ? 0.6
         : 0.3;
-
       const job_market_score = c.job_market_score != null ? c.job_market_score : 0.5;
 
-      if (pswWeight + prWeight + englishWeight + jobWeight === 0) return 0.5;
+      // Cost of living signal — derived from tuition_band (proxy for cost sensitivity)
+      // Lower budget selection → higher weight on cost of living score.
+      const costWeightMap = {
+        'Up to $5k':  1.0,
+        'Up to $15k': 0.8,
+        'Up to $30k': 0.5,
+        'Up to $50k': 0.2,
+        'No limit':   0.0,
+      };
+      const costWeight = costWeightMap[answers.tuition_band] ?? 0.3;
+      const cost_score = c.avg_cost_of_living_usd != null
+        ? clamp(1 - (c.avg_cost_of_living_usd - 14000) / (20000 - 14000))
+        : 0.5;
+
+      // Safety signal — fixed weight 0.5, always active
+      // Every international student benefits from being directed toward safer countries.
+      const safetyWeight = 0.5;
+      const safety_score = c.safety_score != null ? c.safety_score : 0.5;
+
+      if (pswWeight + prWeight + englishWeight + jobWeight + costWeight + safetyWeight === 0) return 0.5;
 
       let weightedSum = pswWeight * psw_score
                       + prWeight * pr_score
                       + englishWeight * english_score
-                      + jobWeight * job_market_score;
+                      + jobWeight * job_market_score
+                      + costWeight * cost_score
+                      + safetyWeight * safety_score;
 
-      let totalWeight = pswWeight + prWeight + englishWeight + jobWeight;
+      let totalWeight = pswWeight + prWeight + englishWeight + jobWeight + costWeight + safetyWeight;
 
       return clamp(weightedSum / totalWeight);
     }
