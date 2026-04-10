@@ -1148,7 +1148,7 @@ app.post("/recommend", async (req, res) => {
         ? alpha * compositeScore + beta * blendedSubScore
         : 0.70 * blendedSubScore;
 
-      console.log(`[score] ${university?.canonical_name || course?.university_id} composite=${compositeScore?.toFixed(3)} globalSub=${subScore?.toFixed(3)} subjectSub=${subjectSubScore?.toFixed(3)} delta=${delta} final=${universityScore?.toFixed(3)}`);
+      console.log(`[score] ${university?.canonical_name || course?.university_id} composite=${compositeScore?.toFixed(3)} globalSub=${subScore?.toFixed(3)} subjectSub=${subjectSubScore !== null && subjectSubScore !== undefined ? subjectSubScore.toFixed(3) : 'none'} delta=${delta} final=${universityScore?.toFixed(3)}`);
 
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
