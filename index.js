@@ -155,13 +155,16 @@ const SUBJECT_FW_MULTIPLIERS = {
 const SUBJECT_CONCEPT_GROUPS = {
   employability: {
     employer_reputation: { QS: ['employer_score_norm'] },
-    graduate_outcomes: { CUG: ['graduate_prospects_outcomes_norm', 'graduate_prospects_on_track_norm'], Guardian: ['career_prospects_norm'] },
-    industry_link: { THE: ['industry_score_norm'] }
+    // QS employment_outcomes_norm injected from global sub-indicator system (705 unis)
+    // fills graduate_outcomes for non-UK where CUG/Guardian have no data
+    graduate_outcomes: { QS: ['employment_outcomes_norm'], CUG: ['graduate_prospects_outcomes_norm', 'graduate_prospects_on_track_norm'], Guardian: ['career_prospects_norm'] }
+    // industry_link moved to research — measures industry income/knowledge transfer, not graduate outcomes
   },
   research: {
     citation_impact: { QS: ['citations_score_norm', 'h_index_score_norm'], THE: ['research_quality_norm'], ARWU: ['research_impact_norm'] },
     research_env: { THE: ['research_environment_norm'], CUG: ['research_quality_norm'] },
-    top_journal: { ARWU: ['world_class_output_norm', 'high_quality_research_norm'] }
+    top_journal: { ARWU: ['world_class_output_norm', 'high_quality_research_norm'] },
+    industry_link: { THE: ['industry_score_norm'] }  // moved from employability — knowledge transfer is a research signal
   },
   teaching: {
     teaching_quality: { THE: ['teaching_score_norm'] },
@@ -184,6 +187,20 @@ const SUBJECT_CONCEPT_GROUPS = {
   selectivity: {
     entry_tariff: { CUG: ['entry_standards_norm'], Guardian: ['average_entry_tariff_norm'] }
   }
+};
+
+// How much subject-level data adds signal per dimension vs institution-wide global data.
+// 1.0 = full trust in subject data; lower values let global sub-score fill the gap naturally.
+// Employability and research: subject data is substantially more field-specific (CS employer rep ≠ university employer rep).
+// International and prestige: mostly institution-wide signals — global sub-score already handles these well.
+const DIM_DELTA_MULTIPLIER = {
+  employability:      1.0,
+  research:           1.0,
+  teaching:           0.7,
+  student_experience: 0.4,
+  international:      0.3,
+  prestige:           0.3,
+  selectivity:        0.5
 };
 
 function getResearchIntent(research_importance) {
