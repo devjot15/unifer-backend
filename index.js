@@ -677,8 +677,6 @@ app.post("/recommend", async (req, res) => {
     }
 
     const { data: prScoresData, error: prScoresErr } = await supabase.from('pr_scores').select('*');
-    if (prScoresErr) console.error('[pr-scores] fetch error:', prScoresErr.message);
-    console.log('[pr-scores] rows fetched:', prScoresData?.length ?? 'null');
     const prScoresMap = {};
     if (prScoresData) {
       prScoresData.forEach(r => {
@@ -1054,7 +1052,6 @@ app.post("/recommend", async (req, res) => {
         ? getPswYears(c.name, course?.duration_years, course?.degree_level, universityRegionType || 'main', pswRulesMap)
         : null;
       const psw_score = pswYears != null ? clamp(pswYears / 5.0) : (c.post_study_work_years != null ? clamp(c.post_study_work_years / 5.0) : 0.5);
-      console.log('[pr-debug] country:', c.name, 'field:', answers.field, 'sub_field:', answers.sub_field, 'region:', universityRegionType, 'prScoresMap keys sample:', Object.keys(prScoresMap).slice(0,3));
       const prLookup = (typeof prScoresMap !== 'undefined' && prScoresMap)
         ? getPrScore(c.name, answers.field, answers.sub_field, universityRegionType || 'main', prScoresMap)
         : null;
