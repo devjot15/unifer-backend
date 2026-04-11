@@ -676,7 +676,7 @@ app.post("/recommend", async (req, res) => {
       });
     }
 
-    const { data: prScoresData, error: prScoresErr } = await supabase.schema('core').from('pr_scores').select('*');
+    const { data: prScoresData, error: prScoresErr } = await supabase.from('pr_scores').select('*');
     if (prScoresErr) console.error('[pr-scores] fetch error:', prScoresErr.message);
     console.log('[pr-scores] rows fetched:', prScoresData?.length ?? 'null');
     const prScoresMap = {};
