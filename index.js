@@ -676,6 +676,16 @@ app.post("/recommend", async (req, res) => {
       });
     }
 
+    const { data: prScoresData } = await supabase.schema('core').from('pr_scores').select('*');
+    const prScoresMap = {};
+    if (prScoresData) {
+      prScoresData.forEach(r => {
+        const key = r.country_name + '|' + r.field_category;
+        if (!prScoresMap[key]) prScoresMap[key] = [];
+        prScoresMap[key].push(r);
+      });
+    }
+
     const { data: universities, error: uErr } = await supabase
       .schema("core")
       .from("universities")
@@ -987,6 +997,37 @@ app.post("/recommend", async (req, res) => {
       return 1 - (rank - 1) / (maxRank - 1);
     }
 
+    function getPrScore(countryName, fieldCategory, subField, regionType, prScoresMap) {
+      if (!prScoresMap) return null;
+      const key = countryName + '|' + fieldCategory;
+      const rows = prScoresMap[key];
+      if (!rows || rows.length === 0) return null;
+
+      // Try specific sub_field + region_type match first
+      if (subField && regionType) {
+        const match = rows.find(r => r.sub_field === subField && r.region_type === regionType);
+        if (match) return match.pr_score;
+      }
+
+      // Try sub_field match without region
+      if (subField) {
+        const match = rows.find(r => r.sub_field === subField && r.region_type == null);
+        if (match) return match.pr_score;
+      }
+
+      // Try field-level with region_type
+      if (regionType) {
+        const match = rows.find(r => r.sub_field == null && r.region_type === regionType);
+        if (match) return match.pr_score;
+      }
+
+      // Fall back to field-level no region
+      const match = rows.find(r => r.sub_field == null && r.region_type == null);
+      if (match) return match.pr_score;
+
+      return null;
+    }
+
     function getPswYears(countryName, durationYears, degreeLevel, regionType, pswRulesMap) {
       const rules = pswRulesMap[countryName];
       if (!rules || rules.length === 0) return null;
@@ -1001,7 +1042,7 @@ app.post("/recommend", async (req, res) => {
       return null;
     }
 
-    function computeCountryScore(country, answers, countryMap, course, universityRegionType, pswRulesMap) {
+    function computeCountryScore(country, answers, countryMap, course, universityRegionType, pswRulesMap, prScoresMap) {
       const c = countryMap[country.id];
       if (!c) {
         return 0;
@@ -1011,7 +1052,10 @@ app.post("/recommend", async (req, res) => {
         ? getPswYears(c.name, course?.duration_years, course?.degree_level, universityRegionType || 'main', pswRulesMap)
         : null;
       const psw_score = pswYears != null ? clamp(pswYears / 5.0) : (c.post_study_work_years != null ? clamp(c.post_study_work_years / 5.0) : 0.5);
-      const pr_score = c.pr_pathway_clarity_score != null ? c.pr_pathway_clarity_score : 0.5;
+      const prLookup = (typeof prScoresMap !== 'undefined' && prScoresMap)
+        ? getPrScore(c.name, answers.field, answers.sub_field, universityRegionType || 'main', prScoresMap)
+        : null;
+      const pr_score = prLookup != null ? prLookup : (c.pr_pathway_clarity_score != null ? c.pr_pathway_clarity_score : 0.5);
       const english_score = c.english_taught_score != null ? c.english_taught_score : 1.0;
 
       const pswWeight = answers.work_permit_importance === 'Very strongly (3 years and above)' ? 1.0
@@ -1161,7 +1205,7 @@ app.post("/recommend", async (req, res) => {
       const country = countries.find((c) => c.id === university.country_id);
       if (!country) return null;
 
-      let countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap);
+      let countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
       let courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
       // Step 7: Blend composite ranking score with sub-indicator score
@@ -1330,7 +1374,7 @@ app.post("/recommend", async (req, res) => {
             ? alpha * compositeScore + beta * blendedSubScore
             : 0.70 * blendedSubScore;
 
-          const countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap);
+          const countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
           const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
           const rawFinalScore = computeFinalScore(weights, { country: countryScore, course: courseScore, university: universityScore });
