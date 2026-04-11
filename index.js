@@ -1236,7 +1236,7 @@ app.post("/recommend", async (req, res) => {
       const subjectSubScore = fwScores ? computeSubjectSubScore(fwScores, answers) : null;
       const coverageConf = fwScores ? getCoverageConfidence(Object.keys(fwScores).length) : 0;
       const blendedSubScore = (subjectSubScore !== null)
-        ? (1 - delta) * subScore + delta * subjectSubScore * coverageConf
+        ? (1 - delta) * subScore + delta * subjectSubScore
         : subScore;
       const universityScore = compositeScore != null
         ? alpha * compositeScore + beta * blendedSubScore
@@ -1386,7 +1386,7 @@ app.post("/recommend", async (req, res) => {
           const subjectSubScore = fwScores ? computeSubjectSubScore(fwScores, answers) : null;
           const coverageConf = fwScores ? getCoverageConfidence(Object.keys(fwScores).length) : 0;
           const blendedSubScore = (subjectSubScore !== null)
-            ? (1 - delta) * subScore + delta * subjectSubScore * coverageConf
+            ? (1 - delta) * subScore + delta * subjectSubScore
             : subScore;
           const universityScore = compositeScore != null
             ? alpha * compositeScore + beta * blendedSubScore
