@@ -254,7 +254,7 @@ function computeSubjectSubScore(fwScores, answers) {
     }
     if (conceptScores.length > 0) {
       const dimScore = conceptScores.reduce((a, b) => a + b, 0) / conceptScores.length;
-      const w = dimWeights[dim] || 0.10;
+      const w = (dimWeights[dim] || 0.10) * (DIM_DELTA_MULTIPLIER[dim] || 0.5);
       weightedSum += w * dimScore;
       totalWeight += w;
     }
@@ -566,6 +566,24 @@ async function bulkFetchSubjectScores(universityIds, answers, supabase) {
   });
 
   console.log(`[subject] scoreMap populated for ${Object.keys(scoreMap).length} universities`);
+
+  // Inject QS employment_outcomes from global sub-indicator system.
+  // Subject rankings tables don't have employment outcomes — this fills the
+  // graduate_outcomes concept for non-UK universities (705 uni coverage).
+  const { data: eoRows, error: eoErr } = await supabase
+    .rpc('get_employment_outcomes', { p_university_ids: universityIds });
+  if (eoErr) {
+    console.log('[subject] employment_outcomes fetch error:', eoErr.message);
+  } else if (eoRows) {
+    eoRows.forEach(row => {
+      const uid = row.university_id;
+      if (!scoreMap[uid]) scoreMap[uid] = {};
+      if (!scoreMap[uid]['QS']) scoreMap[uid]['QS'] = {};
+      scoreMap[uid]['QS']['employment_outcomes_norm'] = row.normalized_score;
+    });
+    console.log(`[subject] employment_outcomes injected for ${eoRows.length} universities`);
+  }
+
   return scoreMap;
 }
 
