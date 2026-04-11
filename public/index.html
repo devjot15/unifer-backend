@@ -377,6 +377,7 @@ button:disabled {
       <input type="hidden" id="pr_importance" name="pr_importance">
 
       <input type="hidden" id="level" name="level">
+      <input type="hidden" id="program_type_preference" name="program_type_preference">
       <input type="hidden" id="duration" name="duration">
       <input type="hidden" id="tuition_band" name="tuition_band">
       <input type="hidden" id="field" name="field">
@@ -597,6 +598,15 @@ button:disabled {
           <div class="option-group" data-name="level">
             <div class="option-card" data-value="UG">UG</div>
             <div class="option-card" data-value="PG">PG</div>
+            <div class="option-card" data-value="PhD">PhD</div>
+          </div>
+
+          <div id="programTypeSection" style="display:none;">
+            <label>What type of postgraduate programme are you looking for?</label>
+            <div class="option-group" data-name="program_type_preference">
+              <div class="option-card" data-value="taught">Taught / Coursework-based Masters</div>
+              <div class="option-card" data-value="research">Research Masters</div>
+            </div>
           </div>
 
           <label>What will be ideal course duration for you?</label>
@@ -863,27 +873,45 @@ if (englishScoreGroup) {
 function updateDurationOptions() {
   var level = getFieldValue("level");
   var durationGroup = document.getElementById("durationGroup");
+  var programTypeSection = document.getElementById("programTypeSection");
+  var programTypeInput = document.getElementById("program_type_preference");
 
   if (!durationGroup) return;
 
   var ugOptions = durationGroup.querySelectorAll(".ug-option");
   var pgOptions = durationGroup.querySelectorAll(".pg-option");
 
-  // Reset selection
+  // Reset selections
   document.getElementById("duration").value = "";
+  if (programTypeInput) programTypeInput.value = "";
   formMessage.textContent = "Please reselect your preferred duration for the chosen level.";
   durationGroup.querySelectorAll(".option-card").forEach(function(card) {
     card.classList.remove("selected");
   });
+  if (programTypeSection) {
+    programTypeSection.querySelectorAll(".option-card").forEach(function(card) {
+      card.classList.remove("selected");
+    });
+  }
 
   if (level === "UG") {
     ugOptions.forEach(opt => opt.style.display = "block");
     pgOptions.forEach(opt => opt.style.display = "none");
+    durationGroup.style.display = "";
+    if (programTypeSection) programTypeSection.style.display = "none";
   }
 
   if (level === "PG") {
     ugOptions.forEach(opt => opt.style.display = "none");
     pgOptions.forEach(opt => opt.style.display = "block");
+    durationGroup.style.display = "";
+    if (programTypeSection) programTypeSection.style.display = "";
+  }
+
+  if (level === "PhD") {
+    durationGroup.style.display = "none";
+    if (programTypeSection) programTypeSection.style.display = "none";
+    document.getElementById("duration").value = "More than 1 year";
   }
 }
 
@@ -1186,6 +1214,7 @@ form.addEventListener("submit", function(e) {
         english_preference: document.getElementById("english_preference").value,
         pr_importance: document.getElementById("pr_importance").value,
         level: document.getElementById("level").value,
+        program_type_preference: document.getElementById("program_type_preference").value,
         duration: document.getElementById("duration").value,
         tuition_band: document.getElementById("tuition_band").value,
         field: document.getElementById("field").value,

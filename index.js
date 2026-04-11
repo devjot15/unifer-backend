@@ -714,8 +714,17 @@ app.post("/recommend", async (req, res) => {
       .schema("core")
       .from("courses")
       .select("*")
-      .eq("degree_level", answers.level)
+      .eq("degree_level", answers.level === "PhD" ? "PG" : answers.level)
       .eq("field_category", answers.field);
+
+    // Program type hard filter
+    if (answers.level === "PhD") {
+      courseQuery = courseQuery.eq("program_type", "doctoral");
+    } else if (answers.level === "PG" && answers.program_type_preference === "taught") {
+      courseQuery = courseQuery.eq("program_type", "professional");
+    } else if (answers.level === "PG" && answers.program_type_preference === "research") {
+      courseQuery = courseQuery.eq("program_type", "research");
+    }
 
     if (maxTuition !== null) courseQuery = courseQuery.lte("tuition_usd", maxTuition);
 
@@ -770,8 +779,17 @@ app.post("/recommend", async (req, res) => {
         .schema("core")
         .from("courses")
         .select("*")
-        .eq("degree_level", answers.level)
+        .eq("degree_level", answers.level === "PhD" ? "PG" : answers.level)
         .eq("field_category", answers.field);
+
+      // Apply same program_type filter in fallback
+      if (answers.level === "PhD") {
+        fallbackQuery = fallbackQuery.eq("program_type", "doctoral");
+      } else if (answers.level === "PG" && answers.program_type_preference === "taught") {
+        fallbackQuery = fallbackQuery.eq("program_type", "professional");
+      } else if (answers.level === "PG" && answers.program_type_preference === "research") {
+        fallbackQuery = fallbackQuery.eq("program_type", "research");
+      }
 
       if (maxTuition !== null) fallbackQuery = fallbackQuery.lte("tuition_usd", maxTuition);
 
