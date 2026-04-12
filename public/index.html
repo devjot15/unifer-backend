@@ -663,16 +663,21 @@ button:disabled {
 
           <label>Please select the field which associates the most with the field of study you want to study?</label>
           <div class="option-group" data-name="field">
-            <div class="option-card" data-value="engineering & tech">Engineering & Tech</div>
-            <div class="option-card" data-value="business, management and economics">Business & Economics</div>
-            <div class="option-card" data-value="science & applied science">Science & Applied Science</div>
-            <div class="option-card" data-value="medicine, health and life science">Medicine & Health</div>
-            <div class="option-card" data-value="social science & humanities">Social Science & Humanities</div>
+            <div class="option-card" data-value="engineering & technology">Engineering & Technology</div>
+            <div class="option-card" data-value="computer science & data technology">Computer Science & Data</div>
+            <div class="option-card" data-value="natural sciences">Natural Sciences</div>
+            <div class="option-card" data-value="life sciences & biotechnology">Life Sciences & Biotechnology</div>
+            <div class="option-card" data-value="medicine & clinical health">Medicine & Clinical Health</div>
+            <div class="option-card" data-value="public health & allied health">Public Health & Allied Health</div>
+            <div class="option-card" data-value="business & management">Business & Management</div>
+            <div class="option-card" data-value="economics, finance & accounting">Economics, Finance & Accounting</div>
+            <div class="option-card" data-value="social sciences">Social Sciences</div>
+            <div class="option-card" data-value="humanities & languages">Humanities & Languages</div>
             <div class="option-card" data-value="arts, design & creative studies">Arts & Design</div>
-            <div class="option-card" data-value="law, public policy & governance">Law & Public Policy</div>
-            <div class="option-card" data-value="hospitality, tourism & service industry">Hospitality & Tourism</div>
+            <div class="option-card" data-value="law, politics & governance">Law, Politics & Governance</div>
             <div class="option-card" data-value="education & teaching">Education & Teaching</div>
-            <div class="option-card" data-value="agriculture, sustainability & environmental studies">Agriculture & Environment</div>
+            <div class="option-card" data-value="environment, sustainability & agriculture">Environment & Sustainability</div>
+            <div class="option-card" data-value="hospitality, tourism & service industry">Hospitality & Tourism</div>
           </div>
 
 <div class="question-block" id="sub-field-question" style="display:none">
@@ -1087,16 +1092,74 @@ document.querySelectorAll(".option-group").forEach(group => {
 });
 
 const SUB_FIELDS = {
-  "engineering & tech": ["Computer Science & IT","Data Science & Artificial Intelligence","Electrical & Electronic Engineering","Mechanical Engineering","Civil & Structural Engineering","Chemical Engineering","Aerospace Engineering","General & Other Engineering"],
-  "business, management and economics": ["Business & Management","Economics","Accounting & Finance","Marketing","Statistics & Operations Research"],
-  "science & applied science": ["Mathematics","Physics & Astronomy","Chemistry","Earth & Marine Sciences","Materials Science","Biological Sciences"],
-  "medicine, health and life science": ["Medicine","Nursing & Midwifery","Pharmacy & Pharmacology","Dentistry","Public Health","Psychology","Anatomy & Physiology","Allied Health & Therapy"],
-  "social science & humanities": ["Sociology","Politics & International Relations","History","Philosophy","Languages & Linguistics","Communication & Media Studies","Geography","Anthropology & Archaeology","Development & Area Studies","Social Policy & Work"],
-  "arts, design & creative studies": ["Art & Design","Architecture","Music","Performing Arts & Drama","Film, Media & Animation","History of Art","Creative Writing"],
-  "law, public policy & governance": ["Law","Politics & International Relations","Public Policy & Administration","Criminology","Library & Information Science"],
-  "hospitality, tourism & service industry": ["Hospitality & Tourism Management","Sports Science"],
-  "education & teaching": ["Education"],
-  "agriculture, sustainability & environmental studies": ["Agriculture & Forestry","Environmental Sciences","Veterinary Science","Food Science & Nutrition","Ecology & Earth Systems","Land & Property Management"]
+  "engineering & technology": [
+    "Mechanical Engineering","Civil & Structural Engineering","Chemical Engineering",
+    "Electrical & Electronic Engineering","Aerospace Engineering","Biomedical Engineering",
+    "Manufacturing & Industrial Engineering","Control Systems & Robotics",
+    "Energy & Power Engineering","Engineering Management"
+  ],
+  "computer science & data technology": [
+    "Computer Science & Software Engineering","Data Science & Analytics",
+    "Artificial Intelligence & Machine Learning","Cybersecurity & Information Assurance",
+    "Information Systems & Management","Human-Computer Interaction & UX"
+  ],
+  "natural sciences": [
+    "Mathematics & Statistics","Physics & Astronomy","Chemistry",
+    "Earth & Marine Sciences","Materials Science"
+  ],
+  "life sciences & biotechnology": [
+    "Biological Sciences","Biochemistry & Molecular Biology","Genetics & Genomics",
+    "Neuroscience","Biotechnology & Bioengineering","Microbiology & Immunology"
+  ],
+  "medicine & clinical health": [
+    "Medicine & Surgery","Dentistry & Oral Health","Pharmacy & Pharmacology",
+    "Veterinary Science","Biomedical Sciences"
+  ],
+  "public health & allied health": [
+    "Public Health & Epidemiology","Nursing & Midwifery","Allied Health & Therapy",
+    "Anatomy & Physiology","Mental Health & Counselling",
+    "Global Health & International Development","Health Management & Health Informatics",
+    "Sports Science & Exercise Science","Nutrition & Dietetics"
+  ],
+  "business & management": [
+    "Business & Management","Marketing & Communications","Entrepreneurship & Innovation",
+    "Supply Chain & Operations Management","Human Resource Management","International Business"
+  ],
+  "economics, finance & accounting": [
+    "Accounting & Finance","Economics","Statistics & Operations Research",
+    "Investment & Risk Management","Actuarial Science"
+  ],
+  "social sciences": [
+    "Sociology","Psychology","Criminology & Criminal Justice","Geography & Urban Studies",
+    "Development & Area Studies","Social Policy & Social Work",
+    "Gender, Diversity & Cultural Studies","Cognitive Science"
+  ],
+  "humanities & languages": [
+    "History","Philosophy & Ethics","Languages & Linguistics",
+    "Anthropology & Archaeology","Theology & Religious Studies",
+    "Literature & Creative Writing","Communication & Media Studies"
+  ],
+  "arts, design & creative studies": [
+    "Art & Design","Architecture & Built Environment","Music",
+    "Performing Arts & Drama","Film, Media & Animation","History of Art"
+  ],
+  "law, politics & governance": [
+    "Law","International Law & Human Rights","Corporate & Commercial Law",
+    "Criminal Law & Justice","Public Policy & Administration",
+    "Politics & International Relations","Library & Information Science"
+  ],
+  "education & teaching": [
+    "Education Studies & Policy","Teacher Training & Pedagogy","Educational Psychology",
+    "Higher Education Management","Early Childhood & Special Education","TESOL & Language Education"
+  ],
+  "environment, sustainability & agriculture": [
+    "Environmental Sciences","Agriculture & Forestry","Ecology & Earth Systems",
+    "Sustainable Development & Climate Change","Renewable Energy & Clean Technology",
+    "Land & Property Management","Food Science & Nutrition"
+  ],
+  "hospitality, tourism & service industry": [
+    "Hospitality & Tourism Management","Event Management"
+  ]
 };
 
 document.querySelectorAll('[data-name="field"] .option-card').forEach(card => {
