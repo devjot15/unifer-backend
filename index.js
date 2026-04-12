@@ -115,16 +115,21 @@ const supabase = createClient(
 // ── Subject sub-indicator constants ──────────────────────────────────────
 
 const SUBJECT_FIELD_MAP = {
-  "engineering & tech": "Engineering & Tech",
-  "business, management and economics": "Business Management & Economics",
-  "science & applied science": "Science & Applied Science",
-  "medicine, health and life science": "Medicine Health & Life Science",
-  "social science & humanities": "Social Science & Humanities",
-  "arts, design & creative studies": "Arts Design & Creative Studies",
-  "law, public policy & governance": "Law Public Policy & Governance",
-  "hospitality, tourism & service industry": "Hospitality Tourism & Service Industry",
-  "education & teaching": "Education & Teaching",
-  "agriculture, sustainability & environmental studies": "Agriculture Sustainability & Environmental Studies"
+  "engineering & technology":                  "Engineering & Technology",
+  "computer science & data technology":        "Computer Science & Data Technology",
+  "natural sciences":                          "Natural Sciences",
+  "life sciences & biotechnology":             "Life Sciences & Biotechnology",
+  "medicine & clinical health":                "Medicine & Clinical Health",
+  "public health & allied health":             "Public Health & Allied Health",
+  "business & management":                     "Business & Management",
+  "economics, finance & accounting":           "Economics Finance & Accounting",
+  "social sciences":                           "Social Sciences",
+  "humanities & languages":                    "Humanities & Languages",
+  "arts, design & creative studies":           "Arts Design & Creative Studies",
+  "law, politics & governance":                "Law Politics & Governance",
+  "education & teaching":                      "Education & Teaching",
+  "environment, sustainability & agriculture": "Environment Sustainability & Agriculture",
+  "hospitality, tourism & service industry":   "Hospitality Tourism & Service Industry",
 };
 
 const GLOBAL_FW_BASE_WEIGHTS = { QS: 5.25, THE: 4.96, ARWU: 4.97, CUG: 4.86, Guardian: 4.81, GUG: 4.81 };
