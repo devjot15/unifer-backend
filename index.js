@@ -253,8 +253,24 @@ function computeSubjectSubScore(fwScores, answers) {
       }
     }
     if (conceptScores.length > 0) {
-      const dimScore = conceptScores.reduce((a, b) => a + b, 0) / conceptScores.length;
-      const w = (dimWeights[dim] || 0.10) * (DIM_DELTA_MULTIPLIER[dim] || 0.5);
+      // Selective geometric mean: if student weights this dimension high AND
+      // 2+ concepts have data, geometric mean penalises extreme weakness in any
+      // one concept (e.g. terrible student satisfaction cannot be compensated by
+      // good staff ratio). Arithmetic mean used for sparse data or low-priority dims.
+      const baseWeight = dimWeights[dim] || 0.10;
+      const isHighPriority = baseWeight >= 0.20;
+      const hasAdequateCoverage = conceptScores.length >= 2;
+
+      let dimScore;
+      if (isHighPriority && hasAdequateCoverage) {
+        const flooredScores = conceptScores.map(s => Math.max(s, 0.05));
+        const product = flooredScores.reduce((a, b) => a * b, 1);
+        dimScore = Math.pow(product, 1 / flooredScores.length);
+      } else {
+        dimScore = conceptScores.reduce((a, b) => a + b, 0) / conceptScores.length;
+      }
+
+      const w = baseWeight * (DIM_DELTA_MULTIPLIER[dim] || 0.5);
       weightedSum += w * dimScore;
       totalWeight += w;
     }
@@ -415,6 +431,18 @@ async function getSubScore(universityId, body) {
     }
   }
 
+  // Step 5: Preference vector — hoisted here so Step 4 geometric mean can reference it
+  const DIM_WEIGHT = { high: 0.25, medium: 0.15, low: 0.05 };
+  const answerMap = {
+    employability: body.career_importance,
+    teaching: body.teaching_importance,
+    research: body.research_importance,
+    student_experience: body.student_experience_importance,
+    international: body.international_importance,
+    selectivity: body.selectivity_importance,
+    prestige: body.prestige_importance,
+  };
+
   // Step 3 & 4: Compute dim_score per dimension
   const dimScore = {}; // { dimension: number }
   for (const [dim, concepts] of Object.entries(dimConceptScore)) {
@@ -440,23 +468,26 @@ async function getSubScore(universityId, body) {
       const weightedSum = conceptNames.reduce((acc, c) => acc + weights[c] * concepts[c], 0);
       dimScore[dim] = totalWeight > 0 ? weightedSum / totalWeight : null;
     } else {
-      // Step 4: Simple average of all concept scores
+      // Step 4: Compute dim_score — geometric mean if student weights this dimension
+      // high AND there are 2+ concepts with data. Geometric mean penalises extreme
+      // weakness in any concept (e.g. terrible student satisfaction cannot be fully
+      // compensated by good staff ratio). Arithmetic mean used for sparse/low-priority dims.
       const scores = Object.values(concepts);
-      dimScore[dim] = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const answer = answerMap[dim] || "low";
+      const isHighPriority = answer === "high";
+      const hasAdequateCoverage = scores.length >= 2;
+
+      if (isHighPriority && hasAdequateCoverage) {
+        // Geometric mean with 0.05 floor to prevent a single zero from nullifying
+        // the dimension (zero may be a data gap, not genuinely zero performance)
+        const flooredScores = scores.map(s => Math.max(s, 0.05));
+        const product = flooredScores.reduce((a, b) => a * b, 1);
+        dimScore[dim] = Math.pow(product, 1 / flooredScores.length);
+      } else {
+        dimScore[dim] = scores.reduce((a, b) => a + b, 0) / scores.length;
+      }
     }
   }
-
-  // Step 5: Preference vector
-  const DIM_WEIGHT = { high: 0.25, medium: 0.15, low: 0.05 };
-  const answerMap = {
-    employability: body.career_importance,
-    teaching: body.teaching_importance,
-    research: body.research_importance,
-    student_experience: body.student_experience_importance,
-    international: body.international_importance,
-    selectivity: body.selectivity_importance,
-    prestige: body.prestige_importance,
-  };
 
   // Step 6: Weighted average across dimensions with non-null dim_score
   let numerator = 0;
