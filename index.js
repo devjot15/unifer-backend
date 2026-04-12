@@ -3138,16 +3138,21 @@ const FIELD_CATEGORY_KEYWORDS = {
 };
 
 const VALID_FIELD_CATEGORIES = [
-  "engineering & tech",
-  "business, management and economics",
-  "science & applied science",
-  "medicine, health and life science",
-  "social science & humanities",
+  "engineering & technology",
+  "computer science & data technology",
+  "natural sciences",
+  "life sciences & biotechnology",
+  "medicine & clinical health",
+  "public health & allied health",
+  "business & management",
+  "economics, finance & accounting",
+  "social sciences",
+  "humanities & languages",
   "arts, design & creative studies",
-  "law, public policy & governance",
-  "hospitality, tourism & service industry",
+  "law, politics & governance",
   "education & teaching",
-  "agriculture, sustainability & environmental studies",
+  "environment, sustainability & agriculture",
+  "hospitality, tourism & service industry",
 ];
 
 function autoAssignFieldCategory(programName) {
