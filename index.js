@@ -235,7 +235,10 @@ function computeSubjectSubScore(fwScores, answers) {
   let weightedSum = 0, totalWeight = 0;
 
   for (const [dim, concepts] of Object.entries(SUBJECT_CONCEPT_GROUPS)) {
-    const conceptScores = [];
+    // conceptEntries: { score, metaWeight } where metaWeight = number of distinct
+    // frameworks defining this concept — reflects methodological breadth.
+    // citation_impact (QS+THE+ARWU=3) outweighs top_journal (ARWU only=1).
+    const conceptEntries = [];
     for (const fwCols of Object.values(concepts)) {
       const vals = [];
       for (const [fw, cols] of Object.entries(fwCols)) {
@@ -249,25 +252,26 @@ function computeSubjectSubScore(fwScores, answers) {
       }
       if (vals.length > 0) {
         const totalW = vals.reduce((s, x) => s + x.weight, 0);
-        conceptScores.push(vals.reduce((s, x) => s + x.value * x.weight, 0) / totalW);
+        const score = vals.reduce((s, x) => s + x.value * x.weight, 0) / totalW;
+        // metaWeight = distinct frameworks defined for this concept (structural breadth)
+        const metaWeight = Object.keys(fwCols).length;
+        conceptEntries.push({ score, metaWeight });
       }
     }
-    if (conceptScores.length > 0) {
-      // Selective geometric mean: if student weights this dimension high AND
-      // 2+ concepts have data, geometric mean penalises extreme weakness in any
-      // one concept (e.g. terrible student satisfaction cannot be compensated by
-      // good staff ratio). Arithmetic mean used for sparse data or low-priority dims.
+    if (conceptEntries.length > 0) {
       const baseWeight = dimWeights[dim] || 0.10;
       const isHighPriority = baseWeight >= 0.20;
-      const hasAdequateCoverage = conceptScores.length >= 2;
+      const hasAdequateCoverage = conceptEntries.length >= 2;
+      const totalMeta = conceptEntries.reduce((s, x) => s + x.metaWeight, 0);
 
       let dimScore;
       if (isHighPriority && hasAdequateCoverage) {
-        const flooredScores = conceptScores.map(s => Math.max(s, 0.05));
-        const product = flooredScores.reduce((a, b) => a * b, 1);
-        dimScore = Math.pow(product, 1 / flooredScores.length);
+        // Weighted geometric mean — penalises extreme weakness, respects methodological breadth
+        const logSum = conceptEntries.reduce((s, x) => s + x.metaWeight * Math.log(Math.max(x.score, 0.05)), 0);
+        dimScore = Math.exp(logSum / totalMeta);
       } else {
-        dimScore = conceptScores.reduce((a, b) => a + b, 0) / conceptScores.length;
+        // Weighted arithmetic mean — safe for sparse data or low-priority dims
+        dimScore = conceptEntries.reduce((s, x) => s + x.score * x.metaWeight, 0) / totalMeta;
       }
 
       const w = baseWeight * (DIM_DELTA_MULTIPLIER[dim] || 0.5);
