@@ -5010,10 +5010,10 @@ app.get("/worker/review/:university_id", async (req, res) => {
     const { data: summary } = await supabase
       .schema("ingestion")
       .from("parsed_programs")
-      .select("program_type, field_category, degree_level")
+      .select("program_type, field_category_id, degree_level")
       .eq("university_id", university_id)
       .eq("validation_status", "pending")
-      .not("field_category", "is", null);
+      .not("field_category_id", "is", null);
 
     if (!summary) return res.json({ message: "No programs ready" });
 
@@ -5028,15 +5028,15 @@ app.get("/worker/review/:university_id", async (req, res) => {
       .select("*", { count: "exact", head: true })
       .eq("university_id", university_id)
       .eq("validation_status", "pending")
-      .is("field_category", null);
+      .is("field_category_id", null);
 
     res.json({
       total_ready: summary.length,
       by_program_type: grouped,
-      null_field_category: nullFields || 0,
+      null_field_category_id: nullFields || 0,
       message:
         nullFields > 0
-          ? `${nullFields} programs still have null field_category — inspect before migrating`
+          ? `${nullFields} programs still have null field_category_id — inspect before migrating`
           : "Ready to migrate",
     });
   } catch (err) {
