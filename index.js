@@ -755,7 +755,7 @@ app.post("/recommend", async (req, res) => {
     const prScoresMap = {};
     if (prScoresData) {
       prScoresData.forEach(r => {
-        const key = r.country_name + '|' + r.field_category;
+        const key = r.country_name + '|' + r.field_category_id;
         if (!prScoresMap[key]) prScoresMap[key] = [];
         prScoresMap[key].push(r);
       });
@@ -790,7 +790,7 @@ app.post("/recommend", async (req, res) => {
       .from("courses")
       .select("*")
       .eq("degree_level", answers.level === "PhD" ? "PG" : answers.level)
-      .eq("field_category", answers.field);
+      .eq("field_category_id", FIELD_CATEGORY_IDS[answers.field]);
 
     // Program type hard filter
     if (answers.level === "PhD") {
@@ -855,7 +855,7 @@ app.post("/recommend", async (req, res) => {
         .from("courses")
         .select("*")
         .eq("degree_level", answers.level === "PhD" ? "PG" : answers.level)
-        .eq("field_category", answers.field);
+        .eq("field_category_id", FIELD_CATEGORY_IDS[answers.field]);
 
       // Apply same program_type filter in fallback
       if (answers.level === "PhD") {
@@ -1146,7 +1146,7 @@ app.post("/recommend", async (req, res) => {
         : null;
       const psw_score = pswYears != null ? clamp(pswYears / 5.0) : (c.post_study_work_years != null ? clamp(c.post_study_work_years / 5.0) : 0.5);
       const prLookup = (typeof prScoresMap !== 'undefined' && prScoresMap)
-        ? getPrScore(c.name, answers.field, answers.sub_field, universityRegionType || 'main', prScoresMap)
+        ? getPrScore(c.name, FIELD_CATEGORY_IDS[answers.field], answers.sub_field, universityRegionType || 'main', prScoresMap)
         : null;
       const pr_score = prLookup != null ? prLookup : (c.pr_pathway_clarity_score != null ? c.pr_pathway_clarity_score : 0.5);
       const english_score = c.english_taught_score != null ? c.english_taught_score : 1.0;
@@ -2281,6 +2281,11 @@ ${trimmedText}
             )
               ? program.field_category
               : null,
+            field_category_id: VALID_FIELD_CATEGORIES.includes(
+              program.field_category,
+            )
+              ? FIELD_CATEGORY_IDS[program.field_category]
+              : null,
             internship_available: program.internship_available || false,
             gre_required: program.gre_required || false,
             gmat_required: program.gmat_required || false,
@@ -2684,7 +2689,7 @@ app.post("/migrate", async (req, res) => {
             degree_level: p.degree_level,
             duration_years: p.duration_years ?? undefined,
             tuition_usd: finalTuitionUSD,
-            field_category: p.field_category,
+            field_category_id: p.field_category_id,
             internship_available: p.internship_available || false,
             gre_required: p.gre_required || false,
             gmat_required: p.gmat_required || false,
@@ -3065,6 +3070,24 @@ const VALID_FIELD_CATEGORIES = [
   "environment, sustainability & agriculture",
   "hospitality, tourism & service industry",
 ];
+
+const FIELD_CATEGORY_IDS = {
+  'arts, design & creative studies': 6,
+  'business & management': 17,
+  'computer science & data technology': 12,
+  'economics, finance & accounting': 18,
+  'education & teaching': 9,
+  'engineering & technology': 11,
+  'environment, sustainability & agriculture': 22,
+  'hospitality, tourism & service industry': 8,
+  'humanities & languages': 20,
+  'law, politics & governance': 21,
+  'life sciences & biotechnology': 14,
+  'medicine & clinical health': 15,
+  'natural sciences': 13,
+  'public health & allied health': 16,
+  'social sciences': 19
+};
 
 function autoAssignFieldCategory(programName) {
   if (!programName) return null;
@@ -5082,7 +5105,7 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
             degree_level: p.degree_level,
             duration_years: p.duration_years,
             tuition_usd: finalTuitionUSD,
-            field_category: p.field_category,
+            field_category_id: p.field_category_id,
             internship_available: p.internship_available || false,
             gre_required: p.gre_required || false,
             gmat_required: p.gmat_required || false,
