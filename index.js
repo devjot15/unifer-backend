@@ -1828,18 +1828,22 @@ For each program return ONLY these fields (omit everything else):
 - degree_level: "PG" for Masters / PhD / Graduate Certificate / Graduate Diploma. "UG" for Bachelor. Default to "PG" for graduate school pages.
 - program_type: "research" (thesis-based), "professional" (coursework/no thesis), "doctoral" (any PhD or EdD), or null if unclear.
 - field_category: exactly one of:
-    "engineering & tech", "business, management and economics", "science & applied science",
-    "medicine, health and life science", "social science & humanities", "arts, design & creative studies",
-    "law, public policy & governance", "hospitality, tourism & service industry",
-    "education & teaching", "agriculture, sustainability & environmental studies"
+    "engineering & technology", "computer science & data technology",
+    "business & management", "economics, finance & accounting",
+    "life sciences & biotechnology", "natural sciences",
+    "medicine & clinical health", "public health & allied health",
+    "social sciences", "humanities & languages",
+    "arts, design & creative studies", "law, politics & governance",
+    "hospitality, tourism & service industry", "education & teaching",
+    "environment, sustainability & agriculture"
 
 Do NOT guess or include tuition, deadlines, IELTS, GRE, duration, or any field not visible on this listing page.
 
 Example output:
 [
-  {"program_name": "Chemical Engineering (MSc)", "degree_level": "PG", "program_type": "research", "field_category": "engineering & tech"},
-  {"program_name": "Business Administration (MBA)", "degree_level": "PG", "program_type": "professional", "field_category": "business, management and economics"},
-  {"program_name": "Philosophy (PhD)", "degree_level": "PG", "program_type": "doctoral", "field_category": "social science & humanities"}
+  {"program_name": "Chemical Engineering (MSc)", "degree_level": "PG", "program_type": "research", "field_category": "engineering & technology"},
+  {"program_name": "Business Administration (MBA)", "degree_level": "PG", "program_type": "professional", "field_category": "business & management"},
+  {"program_name": "Philosophy (PhD)", "degree_level": "PG", "program_type": "doctoral", "field_category": "social sciences"}
 ]
 
 Page content:
@@ -2063,16 +2067,21 @@ TUITION:
 
 FIELD:
 - field_category: must be exactly one of:
-    engineering & tech,
-    business, management and economics,
-    science & applied science,
-    medicine, health and life science,
-    social science & humanities,
+    engineering & technology,
+    computer science & data technology,
+    business & management,
+    economics, finance & accounting,
+    life sciences & biotechnology,
+    natural sciences,
+    medicine & clinical health,
+    public health & allied health,
+    social sciences,
+    humanities & languages,
     arts, design & creative studies,
-    law, public policy & governance,
+    law, politics & governance,
     hospitality, tourism & service industry,
     education & teaching,
-    agriculture, sustainability & environmental studies
+    environment, sustainability & agriculture
 
 INTERNSHIP:
 - internship_available: true or false
