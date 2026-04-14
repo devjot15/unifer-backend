@@ -407,6 +407,11 @@ button:disabled {
       <input type="hidden" id="profile_gmat_score" name="profile_gmat_score">
       <input type="hidden" id="profile_work_experience" name="profile_work_experience">
       <input type="hidden" id="profile_subjects" name="profile_subjects">
+      <input type="hidden" id="profile_grading_system" name="profile_grading_system" value="INDIA_PCT">
+      <input type="hidden" id="profile_institution_id" name="profile_institution_id">
+      <input type="hidden" id="profile_institution_tier" name="profile_institution_tier">
+      <input type="hidden" id="profile_institution_name" name="profile_institution_name">
+      <input type="hidden" id="profile_institution_anabin" name="profile_institution_anabin">
       <div id="formMessage" class="form-message"></div>
 
 <!-- Step 1 — Profile -->
@@ -421,14 +426,34 @@ button:disabled {
       <div class="option-card" data-value="Master's">Master's</div>
     </div>
 
-    <label>What is your academic percentage or grade average?</label>
-    <div class="option-group" data-name="profile_gpa_percentage">
-      <div class="option-card" data-value="55">Less than 60%</div>
-      <div class="option-card" data-value="65">60% - 70%</div>
-      <div class="option-card" data-value="75">70% - 80%</div>
-      <div class="option-card" data-value="85">80% - 90%</div>
-      <div class="option-card" data-value="92">Above 90%</div>
+    <label>Which grading system does your institution use?</label>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
+      <div class="option-card grading-opt" data-value="INDIA_PCT" onclick="selectGradingSystem('INDIA_PCT',this)">Percentage (%)</div>
+      <div class="option-card grading-opt" data-value="INDIA_CGPA_10" onclick="selectGradingSystem('INDIA_CGPA_10',this)">CGPA (out of 10)</div>
+      <div class="option-card grading-opt" data-value="INDIA_CGPA_4" onclick="selectGradingSystem('INDIA_CGPA_4',this)">GPA (out of 4)</div>
     </div>
+
+    <label id="gpa-label" style="margin-top:20px;">What is your academic percentage?</label>
+    <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
+      <input type="number" id="gpa-numeric-input" min="0" max="100" step="0.1" placeholder="e.g. 75"
+        style="width:160px; padding:12px 14px; font-size:16px; border:2px solid #e0e0e0; border-radius:8px; font-family:inherit;"
+        oninput="onGpaInput(this.value)">
+      <span id="gpa-unit" style="font-size:15px; color:#555;">%</span>
+    </div>
+    <div id="gpa-error" style="color:#c0392b; font-size:13px; margin-top:6px; display:none;"></div>
+    <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
+
+    <label style="margin-top:24px;">Which institution are you graduating from?</label>
+    <div style="margin-top:8px; position:relative; max-width:480px;" id="inst-wrapper">
+      <input type="text" id="inst-input" placeholder="Type institution name..." autocomplete="off"
+        style="width:100%; padding:12px 14px; font-size:15px; border:2px solid #e0e0e0; border-radius:8px; font-family:inherit; box-sizing:border-box;"
+        oninput="onInstSearch(this.value)">
+      <div id="inst-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ddd; border-radius:8px; max-height:240px; overflow-y:auto; z-index:999; box-shadow:0 4px 12px rgba(0,0,0,0.1); margin-top:4px;"></div>
+    </div>
+    <label style="display:inline-flex; align-items:center; gap:8px; font-weight:400; font-size:14px; color:#666; margin-top:10px; cursor:pointer;">
+      <input type="checkbox" id="inst-not-listed" onchange="onInstNotListed(this.checked)"> My institution is not listed
+    </label>
+    <div id="inst-selected" style="display:none; margin-top:10px; padding:10px 14px; background:#f0faf9; border:1px solid #0F7C78; border-radius:8px; font-size:14px; color:#0F7C78; max-width:480px;"></div>
 
     <label>How many backlogs or failed courses do you have?</label>
     <div class="option-group" data-name="profile_backlogs">
@@ -795,6 +820,103 @@ button:disabled {
   </footer>
 
   <script>
+var _gpaConfig = {
+  INDIA_PCT:     {label:'What is your academic percentage?',    unit:'%',    max:100},
+  INDIA_CGPA_10: {label:'What is your CGPA?',                  unit:'/ 10', max:10},
+  INDIA_CGPA_4:  {label:'What is your GPA?',                   unit:'/ 4',  max:4}
+};
+
+function selectGradingSystem(sys, el) {
+  document.querySelectorAll('.grading-opt').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('profile_grading_system').value = sys;
+  var cfg = _gpaConfig[sys];
+  document.getElementById('gpa-label').textContent = cfg.label;
+  document.getElementById('gpa-unit').textContent = cfg.unit;
+  document.getElementById('gpa-numeric-input').max = cfg.max;
+  document.getElementById('gpa-numeric-input').placeholder =
+    sys === 'INDIA_PCT' ? 'e.g. 75' : sys === 'INDIA_CGPA_10' ? 'e.g. 7.5' : 'e.g. 3.2';
+  if (document.getElementById('gpa-numeric-input').value) onGpaInput(document.getElementById('gpa-numeric-input').value);
+}
+
+function onGpaInput(val) {
+  var sys = document.getElementById('profile_grading_system').value || 'INDIA_PCT';
+  var cfg = _gpaConfig[sys];
+  var num = parseFloat(val);
+  var errEl = document.getElementById('gpa-error');
+  if (!val || isNaN(num)) { document.getElementById('profile_gpa_percentage').value = ''; errEl.style.display='none'; return; }
+  if (num < 0 || num > cfg.max) { errEl.textContent = 'Enter a value between 0 and ' + cfg.max; errEl.style.display='block'; document.getElementById('profile_gpa_percentage').value=''; return; }
+  errEl.style.display = 'none';
+  var pct = sys === 'INDIA_PCT' ? num : sys === 'INDIA_CGPA_10' ? num * 10 : (num / 4) * 100;
+  document.getElementById('profile_gpa_percentage').value = pct.toFixed(1);
+}
+
+var _instTimer = null;
+function onInstSearch(val) {
+  clearInstitutionSelection();
+  clearTimeout(_instTimer);
+  if (!val || val.length < 2) { document.getElementById('inst-dropdown').style.display='none'; return; }
+  _instTimer = setTimeout(function() {
+    fetch('/search-institutions?q=' + encodeURIComponent(val))
+      .then(r => r.json()).then(renderInstDropdown).catch(() => {});
+  }, 300);
+}
+
+function renderInstDropdown(items) {
+  var dd = document.getElementById('inst-dropdown');
+  if (!items || items.length === 0) { dd.style.display='none'; return; }
+  dd.innerHTML = '';
+  items.forEach(function(item) {
+    var d = document.createElement('div');
+    d.style.cssText = 'padding:10px 14px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:14px;';
+    d.innerHTML = '<strong>' + item.institution_name + '</strong>' +
+      (item.city ? '<br><span style="color:#888;font-size:12px;">' + item.city + (item.state?', '+item.state:'') + (item.institution_type?' · '+item.institution_type:'') + '</span>' : '');
+    d.onmouseenter = function() { this.style.background='#f5f5f5'; };
+    d.onmouseleave = function() { this.style.background='white'; };
+    d.onclick = function() { pickInstitution(item); };
+    dd.appendChild(d);
+  });
+  dd.style.display = 'block';
+}
+
+function pickInstitution(item) {
+  document.getElementById('inst-input').value = item.institution_name;
+  document.getElementById('inst-dropdown').style.display = 'none';
+  document.getElementById('profile_institution_id').value = item.id || '';
+  document.getElementById('profile_institution_tier').value = item.tier || 3;
+  document.getElementById('profile_institution_name').value = item.institution_name;
+  document.getElementById('profile_institution_anabin').value = item.anabin_status || 'H+';
+  var tl = ['','Premier Institute (Tier 1)','National Institute (Tier 2)','Other Institution (Tier 3)'][item.tier] || 'Tier '+item.tier;
+  var disp = document.getElementById('inst-selected');
+  disp.textContent = '✓ ' + item.institution_name + ' · ' + tl;
+  disp.style.display = 'block';
+}
+
+function clearInstitutionSelection() {
+  ['profile_institution_id','profile_institution_tier','profile_institution_name','profile_institution_anabin'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('inst-selected').style.display='none';
+}
+
+function onInstNotListed(checked) {
+  var w = document.getElementById('inst-wrapper');
+  if (checked) {
+    w.style.opacity='0.4'; w.style.pointerEvents='none';
+    document.getElementById('profile_institution_tier').value='3';
+    document.getElementById('profile_institution_name').value='Not listed';
+    document.getElementById('profile_institution_anabin').value='not_checked';
+    var d=document.getElementById('inst-selected'); d.textContent='✓ Not listed · General conversion will be used'; d.style.display='block';
+  } else {
+    w.style.opacity='1'; w.style.pointerEvents='';
+    clearInstitutionSelection();
+    document.getElementById('inst-input').value='';
+  }
+}
+
+document.addEventListener('click', function(e) {
+  var w = document.getElementById('inst-wrapper');
+  if (w && !w.contains(e.target)) document.getElementById('inst-dropdown').style.display='none';
+});
+
 var currentStep = 1;
 // ML Tracking
 var sessionId = null;
@@ -940,7 +1062,7 @@ function validateCurrentStep() {
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
-  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects", "career_type"];
+  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects", "career_type", "profile_gpa_percentage"];
   groupsInStep.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
     var groupName = group.dataset.name;
@@ -1237,7 +1359,7 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-  const optionalFields = ["profile_subjects", "career_type"];
+  const optionalFields = ["profile_subjects", "career_type", "profile_grading_system", "profile_institution_id", "profile_institution_tier", "profile_institution_name", "profile_institution_anabin", "profile_gpa_percentage"];
 
   for (let input of hiddenInputs) {
     if (!input.value && !optionalFields.includes(input.id)) {
@@ -1341,6 +1463,11 @@ form.addEventListener("submit", function(e) {
       profile_gmat_score: document.getElementById("profile_gmat_score").value,
       profile_work_experience: document.getElementById("profile_work_experience").value,
       profile_subjects: document.getElementById("profile_subjects").value,
+      profile_grading_system: document.getElementById("profile_grading_system").value || "INDIA_PCT",
+      profile_institution_id: document.getElementById("profile_institution_id").value,
+      profile_institution_tier: document.getElementById("profile_institution_tier").value,
+      profile_institution_name: document.getElementById("profile_institution_name").value,
+      profile_institution_anabin: document.getElementById("profile_institution_anabin").value,
       selected_country: (function() {
         var decidedCard = document.querySelector('[data-name="country_decided"] .option-card.selected');
         if (decidedCard && decidedCard.getAttribute('data-value') === 'Yes') {
