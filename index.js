@@ -739,9 +739,12 @@ function getMatchLabel(pAdmit, conf) {
 async function computeAdmitProbability(answers, university, destCode) {
   const systemCode = answers.profile_grading_system || 'INDIA_PCT';
   const rawGpa = parseFloat(answers.profile_gpa_percentage);
-  const tier = parseInt(answers.profile_institution_tier) || null;
+  const tier = answers.profile_institution_tier && answers.profile_institution_tier !== ''
+    ? parseInt(answers.profile_institution_tier)
+    : null;
   if (!rawGpa || rawGpa <= 0) return { pAdmit: null, confidence: null };
   if (destCode === 'DE' && answers.profile_institution_anabin === 'H-') return { pAdmit: 0.02, confidence: 1.0 };
+  // tier is optional — RPC falls back to NULL-destination_region rows when tier is null
   const { data: universalGpa, error: convErr } = await supabase.rpc('convert_grade_to_universal', {
     p_system_code: systemCode, p_raw_value: rawGpa, p_institution_tier: tier, p_destination_country: destCode
   });
