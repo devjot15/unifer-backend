@@ -115,21 +115,21 @@ const supabase = createClient(
 // ── Subject sub-indicator constants ──────────────────────────────────────
 
 const SUBJECT_FIELD_MAP = {
-  "engineering & technology":                  "Engineering & Technology",
-  "computer science & data technology":        "Computer Science & Data Technology",
-  "natural sciences":                          "Natural Sciences",
-  "life sciences & biotechnology":             "Life Sciences & Biotechnology",
-  "medicine & clinical health":                "Medicine & Clinical Health",
-  "public health & allied health":             "Public Health & Allied Health",
-  "business & management":                     "Business & Management",
-  "economics, finance & accounting":           "Economics Finance & Accounting",
-  "social sciences":                           "Social Sciences",
-  "humanities & languages":                    "Humanities & Languages",
-  "arts, design & creative studies":           "Arts Design & Creative Studies",
-  "law, politics & governance":                "Law Politics & Governance",
-  "education & teaching":                      "Education & Teaching",
-  "environment, sustainability & agriculture": "Environment Sustainability & Agriculture",
-  "hospitality, tourism & service industry":   "Hospitality Tourism & Service Industry",
+  "engineering & technology":                  "engineering & technology",
+  "computer science & data technology":        "computer science & data technology",
+  "natural sciences":                          "natural sciences",
+  "life sciences & biotechnology":             "life sciences & biotechnology",
+  "medicine & clinical health":                "medicine & clinical health",
+  "public health & allied health":             "public health & allied health",
+  "business & management":                     "business & management",
+  "economics, finance & accounting":           "economics, finance & accounting",
+  "social sciences":                           "social sciences",
+  "humanities & languages":                    "humanities & languages",
+  "arts, design & creative studies":           "arts, design & creative studies",
+  "law, politics & governance":                "law, politics & governance",
+  "education & teaching":                      "education & teaching",
+  "environment, sustainability & agriculture": "environment, sustainability & agriculture",
+  "hospitality, tourism & service industry":   "hospitality, tourism & service industry",
 };
 
 const GLOBAL_FW_BASE_WEIGHTS = { QS: 5.25, THE: 4.96, ARWU: 4.97, CUG: 4.86, Guardian: 4.81, GUG: 4.81 };
