@@ -711,6 +711,82 @@ app.post("/embed-new-courses", async (req, res) => {
   }
 });
 
+const COUNTRY_ISO = {
+  'United Kingdom':'GB','Ireland':'IE','Canada':'CA','Australia':'AU',
+  'Germany':'DE','United States':'US','New Zealand':'NZ','Netherlands':'NL',
+  'Sweden':'SE','France':'FR','Singapore':'SG','Switzerland':'CH',
+  'Denmark':'DK','Finland':'FI','Norway':'NO','Austria':'AT',
+  'Belgium':'BE','Italy':'IT','Spain':'ES','Portugal':'PT',
+  'Japan':'JP','South Korea':'KR','China':'CN','Hong Kong':'HK','UAE':'AE','Malaysia':'MY',
+};
+
+function normalCDF(z) {
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const sign=z<0?-1:1, x=Math.abs(z)/Math.sqrt(2), t=1/(1+p*x);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return 0.5*(1+sign*y);
+}
+
+function getMatchLabel(pAdmit, conf) {
+  if (pAdmit===null||pAdmit===undefined) return null;
+  const pre=(conf!==null&&conf<0.60)?'Likely ':'';
+  if (pAdmit>=0.65) return pre+'Strong match';
+  if (pAdmit>=0.40) return pre+'Good match';
+  if (pAdmit>=0.20) return pre+'Reach';
+  return pre+'Unlikely';
+}
+
+async function computeAdmitProbability(answers, university, destCode) {
+  const systemCode = answers.profile_grading_system || 'INDIA_PCT';
+  const rawGpa = parseFloat(answers.profile_gpa_percentage);
+  const tier = answers.profile_institution_tier && answers.profile_institution_tier !== ''
+    ? parseInt(answers.profile_institution_tier)
+    : null;
+  if (!rawGpa || rawGpa <= 0) return { pAdmit: null, confidence: null };
+  if (destCode === 'DE' && answers.profile_institution_anabin === 'H-') return { pAdmit: 0.02, confidence: 1.0 };
+  // tier is optional — RPC falls back to NULL-destination_region rows when tier is null
+  const { data: universalGpa, error: convErr } = await supabase.rpc('convert_grade_to_universal', {
+    p_system_code: systemCode, p_raw_value: rawGpa, p_institution_tier: tier, p_destination_country: destCode
+  });
+  if (convErr || universalGpa === null) return { pAdmit: null, confidence: null };
+  const { data: reqs, error: reqErr } = await supabase.rpc('get_admission_requirements', {
+    p_university_id: university.id, p_field_category: null, p_ranking_tier: null, p_country_code: destCode
+  });
+  if (reqErr || !reqs || reqs.length === 0) return { pAdmit: null, confidence: null };
+  const req = reqs[0];
+  const conf = req.data_confidence || 0.5;
+  if (req.min_gpa_universal !== null && universalGpa < req.min_gpa_universal) return { pAdmit: 0.02, confidence: conf };
+  if (answers.profile_english_test && answers.profile_english_test !== 'None' && req.min_ielts) {
+    const { data: ieltsEq } = await supabase.rpc('get_ielts_equivalent', {
+      p_test_name: answers.profile_english_test, p_score: parseFloat(answers.profile_english_score)
+    });
+    if (ieltsEq !== null && ieltsEq < req.min_ielts) return { pAdmit: 0.02, confidence: conf };
+  }
+  const backlogs = parseInt(answers.profile_backlogs) || 0;
+  if (req.max_backlogs !== null && backlogs > req.max_backlogs) return { pAdmit: 0.02, confidence: conf };
+  let pComp;
+  if (req.avg_admitted_gpa_universal !== null && req.std_admitted_gpa_universal > 0) {
+    pComp = normalCDF(0.6 * (universalGpa - req.avg_admitted_gpa_universal) / req.std_admitted_gpa_universal);
+  } else if (req.min_gpa_universal !== null) {
+    pComp = Math.min(0.85, 0.25 + Math.max(0, universalGpa - req.min_gpa_universal) * 0.015);
+  } else {
+    pComp = 0.45;
+  }
+  const structural = req.acceptance_rate !== null ? Math.min(1.0, req.acceptance_rate * 2.0) : 0.65;
+  const anabinMod = (destCode === 'DE' && answers.profile_institution_anabin === 'H+/-') ? 0.80 : 1.0;
+  const pAdmit = Math.min(0.95, Math.max(0.02, pComp * structural * anabinMod));
+  console.log(`[admit] ${university.name} universalGpa=${universalGpa?.toFixed(1)} pComp=${pComp?.toFixed(3)} structural=${structural?.toFixed(3)} p=${pAdmit?.toFixed(3)}`);
+  return { pAdmit, confidence: conf };
+}
+
+app.get('/search-institutions', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q || q.length < 2) return res.json([]);
+  const { data, error } = await supabase.rpc('search_indian_institutions', { p_query: q, p_limit: 10 });
+  if (error) { console.error('[search-institutions]', error.message); return res.status(500).json({ error: error.message }); }
+  return res.json(data || []);
+});
+
 app.post("/recommend", async (req, res) => {
   try {
     const answers = req.body;
@@ -1319,11 +1395,17 @@ app.post("/recommend", async (req, res) => {
 
       console.log(`[score] ${university?.canonical_name || course?.university_id} composite=${compositeScore?.toFixed(3)} globalSub=${subScore?.toFixed(3)} subjectSub=${subjectSubScore !== null && subjectSubScore !== undefined ? subjectSubScore.toFixed(3) : 'none'} delta=${delta} final=${universityScore?.toFixed(3)}`);
 
+      const destCode = COUNTRY_ISO[country.name] || null;
+      const { pAdmit, confidence: admitConf } = (destCode && answers.profile_institution_tier)
+        ? await computeAdmitProbability(answers, university, destCode)
+        : { pAdmit: null, confidence: null };
+      const modulatedUniversityScore = pAdmit !== null ? universityScore * (0.25 + 0.75 * pAdmit) : universityScore;
+
       // FINAL ADDITIVE SCORE
       let finalScore = computeFinalScore(weights, {
         country: countryScore,
         course: courseScore,
-        university: universityScore,
+        university: modulatedUniversityScore,
       });
 
       if (!isFinite(finalScore)) {
@@ -1404,6 +1486,8 @@ app.post("/recommend", async (req, res) => {
         duration: course.duration_years ?? null,
         tuition_usd: course.tuition_usd ?? null,
         finalScore,
+        admit_probability: pAdmit !== null ? Math.round(pAdmit * 100) / 100 : null,
+        match_label: getMatchLabel(pAdmit, admitConf),
         scores: {
           country: Math.round(countryScore * 100) / 100,
           course: Math.round(courseScore * 100) / 100,
@@ -1470,7 +1554,13 @@ app.post("/recommend", async (req, res) => {
           const countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
           const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
-          const rawFinalScore = computeFinalScore(weights, { country: countryScore, course: courseScore, university: universityScore });
+          const softDestCode = COUNTRY_ISO[country.name] || null;
+          const { pAdmit: softPAdmit, confidence: softAdmitConf } = (softDestCode && answers.profile_institution_tier)
+            ? await computeAdmitProbability(answers, university, softDestCode)
+            : { pAdmit: null, confidence: null };
+          const softModulatedUniScore = softPAdmit !== null ? universityScore * (0.25 + 0.75 * softPAdmit) : universityScore;
+
+          const rawFinalScore = computeFinalScore(weights, { country: countryScore, course: courseScore, university: softModulatedUniScore });
 
           const durationDistance = Math.max(0,
             course.duration_years < dBand.min
@@ -1492,6 +1582,8 @@ app.post("/recommend", async (req, res) => {
             institutionScore: universityScore,
             finalScore,
             softDuration: true,
+            admit_probability: softPAdmit !== null ? Math.round(softPAdmit * 100) / 100 : null,
+            match_label: getMatchLabel(softPAdmit, softAdmitConf),
             scores: {
               country: Math.round(countryScore * 100) / 100,
               course: Math.round(courseScore * 100) / 100,
