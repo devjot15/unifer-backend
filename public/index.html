@@ -481,24 +481,134 @@ button:disabled {
       <div class="option-card" data-value="IELTS">IELTS</div>
       <div class="option-card" data-value="TOEFL">TOEFL</div>
       <div class="option-card" data-value="PTE">PTE</div>
+      <div class="option-card" data-value="Duolingo">Duolingo</div>
       <div class="option-card" data-value="None">Not yet</div>
     </div>
 
-    <label>What is your English test score?</label>
-    <div class="option-group" id="englishScoreGroup" data-name="profile_english_score">
-      <div class="option-card ielts-score" data-value="6.0">IELTS 6.0</div>
-      <div class="option-card ielts-score" data-value="6.5">IELTS 6.5</div>
-      <div class="option-card ielts-score" data-value="7.0">IELTS 7.0</div>
-      <div class="option-card ielts-score" data-value="7.5">IELTS 7.5+</div>
-      <div class="option-card toefl-score" data-value="80">TOEFL 80</div>
-      <div class="option-card toefl-score" data-value="90">TOEFL 90</div>
-      <div class="option-card toefl-score" data-value="100">TOEFL 100</div>
-      <div class="option-card toefl-score" data-value="110">TOEFL 110+</div>
-      <div class="option-card pte-score" data-value="58">PTE 58</div>
-      <div class="option-card pte-score" data-value="65">PTE 65</div>
-      <div class="option-card pte-score" data-value="72">PTE 72</div>
-      <div class="option-card pte-score" data-value="79">PTE 79+</div>
-      <div class="option-card no-score" data-value="0">N/A — Not taken yet</div>
+    <div id="english-score-section" style="display:none; margin-top:16px;">
+
+      <!-- IELTS -->
+      <div id="ielts-fields" style="display:none;">
+        <p style="font-size:14px; color:#555; margin:0 0 12px 0;">Enter your IELTS band scores:</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:400px;">
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Listening</label>
+            <input type="number" id="ielts_listening" min="0" max="9" step="0.5" placeholder="e.g. 7.5"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeIeltsOverall()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Reading</label>
+            <input type="number" id="ielts_reading" min="0" max="9" step="0.5" placeholder="e.g. 7.0"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeIeltsOverall()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Writing</label>
+            <input type="number" id="ielts_writing" min="0" max="9" step="0.5" placeholder="e.g. 6.5"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeIeltsOverall()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Speaking</label>
+            <input type="number" id="ielts_speaking" min="0" max="9" step="0.5" placeholder="e.g. 7.0"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeIeltsOverall()">
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; align-items:center; gap:10px;">
+          <label style="font-size:13px; font-weight:600; margin-top:0;">Overall Band</label>
+          <input type="number" id="ielts_overall" min="0" max="9" step="0.5" placeholder="e.g. 7.0"
+            style="width:120px; padding:10px; border:2px solid #0F7C78; border-radius:8px; font-size:16px; font-weight:600;"
+            oninput="setEnglishScore(this.value)">
+          <span style="font-size:13px; color:#888;">(auto-calculated or enter manually)</span>
+        </div>
+      </div>
+
+      <!-- TOEFL -->
+      <div id="toefl-fields" style="display:none;">
+        <p style="font-size:14px; color:#555; margin:0 0 12px 0;">Enter your TOEFL iBT scores:</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:400px;">
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Listening (0–30)</label>
+            <input type="number" id="toefl_listening" min="0" max="30" placeholder="e.g. 24"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeToeflTotal()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Reading (0–30)</label>
+            <input type="number" id="toefl_reading" min="0" max="30" placeholder="e.g. 26"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeToeflTotal()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Writing (0–30)</label>
+            <input type="number" id="toefl_writing" min="0" max="30" placeholder="e.g. 22"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeToeflTotal()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Speaking (0–30)</label>
+            <input type="number" id="toefl_speaking" min="0" max="30" placeholder="e.g. 23"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computeToeflTotal()">
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; align-items:center; gap:10px;">
+          <label style="font-size:13px; font-weight:600; margin-top:0;">Total Score (0–120)</label>
+          <input type="number" id="toefl_total" min="0" max="120" placeholder="e.g. 95"
+            style="width:120px; padding:10px; border:2px solid #0F7C78; border-radius:8px; font-size:16px; font-weight:600;"
+            oninput="setEnglishScore(this.value)">
+          <span style="font-size:13px; color:#888;">(auto-calculated or enter manually)</span>
+        </div>
+      </div>
+
+      <!-- PTE -->
+      <div id="pte-fields" style="display:none;">
+        <p style="font-size:14px; color:#555; margin:0 0 12px 0;">Enter your PTE Academic scores:</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:400px;">
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Listening (10–90)</label>
+            <input type="number" id="pte_listening" min="10" max="90" placeholder="e.g. 72"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computePteOverall()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Reading (10–90)</label>
+            <input type="number" id="pte_reading" min="10" max="90" placeholder="e.g. 70"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computePteOverall()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Writing (10–90)</label>
+            <input type="number" id="pte_writing" min="10" max="90" placeholder="e.g. 65"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computePteOverall()">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:500; margin-top:0;">Speaking (10–90)</label>
+            <input type="number" id="pte_speaking" min="10" max="90" placeholder="e.g. 68"
+              style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+              oninput="computePteOverall()">
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; align-items:center; gap:10px;">
+          <label style="font-size:13px; font-weight:600; margin-top:0;">Overall Score</label>
+          <input type="number" id="pte_overall" min="10" max="90" placeholder="e.g. 69"
+            style="width:120px; padding:10px; border:2px solid #0F7C78; border-radius:8px; font-size:16px; font-weight:600;"
+            oninput="setEnglishScore(this.value)">
+          <span style="font-size:13px; color:#888;">(auto-calculated or enter manually)</span>
+        </div>
+      </div>
+
+      <!-- Duolingo -->
+      <div id="duolingo-fields" style="display:none;">
+        <label style="font-size:13px; font-weight:500; margin-top:0;">Duolingo English Test score (10–160)</label>
+        <input type="number" id="duolingo_overall" min="10" max="160" placeholder="e.g. 120"
+          style="width:160px; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; display:block; margin-top:8px;"
+          oninput="setEnglishScore(this.value)">
+      </div>
+
     </div>
 
     <label>Do you have a GRE score?</label>
@@ -820,6 +930,55 @@ button:disabled {
   </footer>
 
   <script>
+function showEnglishFields(test) {
+  document.getElementById('english-score-section').style.display = test && test !== 'None' ? 'block' : 'none';
+  ['ielts','toefl','pte','duolingo'].forEach(function(t) {
+    document.getElementById(t + '-fields').style.display = 'none';
+  });
+  if (test && test !== 'None') {
+    var el = document.getElementById(test.toLowerCase() + '-fields');
+    if (el) el.style.display = 'block';
+  }
+}
+
+function setEnglishScore(val) {
+  document.getElementById('profile_english_score').value = val;
+}
+
+function computeIeltsOverall() {
+  var sections = ['ielts_listening','ielts_reading','ielts_writing','ielts_speaking'];
+  var vals = sections.map(function(id) { return parseFloat(document.getElementById(id).value); });
+  var filled = vals.filter(function(v) { return !isNaN(v); });
+  if (filled.length === 4) {
+    var avg = vals.reduce(function(a,b){return a+b;},0) / 4;
+    var rounded = Math.round(avg * 2) / 2;
+    document.getElementById('ielts_overall').value = rounded;
+    setEnglishScore(rounded);
+  }
+}
+
+function computeToeflTotal() {
+  var sections = ['toefl_listening','toefl_reading','toefl_writing','toefl_speaking'];
+  var vals = sections.map(function(id) { return parseFloat(document.getElementById(id).value); });
+  var filled = vals.filter(function(v) { return !isNaN(v); });
+  if (filled.length === 4) {
+    var total = vals.reduce(function(a,b){return a+b;},0);
+    document.getElementById('toefl_total').value = total;
+    setEnglishScore(total);
+  }
+}
+
+function computePteOverall() {
+  var sections = ['pte_listening','pte_reading','pte_writing','pte_speaking'];
+  var vals = sections.map(function(id) { return parseFloat(document.getElementById(id).value); });
+  var filled = vals.filter(function(v) { return !isNaN(v); });
+  if (filled.length === 4) {
+    var avg = Math.round(vals.reduce(function(a,b){return a+b;},0) / 4);
+    document.getElementById('pte_overall').value = avg;
+    setEnglishScore(avg);
+  }
+}
+
 var _gpaConfig = {
   INDIA_PCT:     {label:'What is your academic percentage?',    unit:'%',    max:100},
   INDIA_CGPA_10: {label:'What is your CGPA?',                  unit:'/ 10', max:10},
@@ -987,16 +1146,6 @@ var submitBtn = document.getElementById("submitBtn");
 var formMessage = document.getElementById("formMessage");
 var allGroups = document.querySelectorAll(".option-group");
 
-var englishScoreGroup = document.getElementById("englishScoreGroup");
-if (englishScoreGroup) {
-  englishScoreGroup.querySelectorAll(".option-card").forEach(function(c) {
-    c.style.display = "none";
-  });
-  englishScoreGroup.querySelectorAll(".no-score").forEach(function(c) {
-    c.style.display = "";
-  });
-}
-
 function updateDurationOptions() {
   var level = getFieldValue("level");
   var durationGroup = document.getElementById("durationGroup");
@@ -1062,15 +1211,11 @@ function validateCurrentStep() {
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
-  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects", "career_type", "profile_gpa_percentage"];
+  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_score"];
   groupsInStep.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
     var groupName = group.dataset.name;
     if (optionalGroupNames.indexOf(groupName) !== -1) return;
-    if (group.id === "englishScoreGroup") {
-      var testVal = document.getElementById("profile_english_test").value;
-      if (testVal === "None") return;
-    }
     var hasSelection = group.querySelector(".option-card.selected");
     if (!hasSelection) {
       group.classList.add("invalid");
@@ -1121,10 +1266,6 @@ function validateAllFields() {
   var allValid = true;
   allGroups.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
-    if (group.id === "englishScoreGroup") {
-      var testVal = document.getElementById("profile_english_test").value;
-      if (!testVal || testVal === "None") return;
-    }
     var visibleCards = Array.from(group.querySelectorAll(".option-card")).filter(
       function(c) { return c.style.display !== "none"; }
     );
@@ -1169,22 +1310,8 @@ document.querySelectorAll(".option-group").forEach(group => {
       }
 
       if (fieldName === "profile_english_test") {
-        const test = card.dataset.value;
-        const scoreGroup = document.getElementById("englishScoreGroup");
-        scoreGroup.querySelectorAll(".option-card").forEach(c => {
-          c.classList.remove("selected");
-          c.style.display = "none";
-        });
         document.getElementById("profile_english_score").value = "";
-        if (test === "IELTS") {
-          scoreGroup.querySelectorAll(".ielts-score").forEach(c => c.style.display = "");
-        } else if (test === "TOEFL") {
-          scoreGroup.querySelectorAll(".toefl-score").forEach(c => c.style.display = "");
-        } else if (test === "PTE") {
-          scoreGroup.querySelectorAll(".pte-score").forEach(c => c.style.display = "");
-        } else {
-          scoreGroup.querySelectorAll(".no-score").forEach(c => c.style.display = "");
-        }
+        showEnglishFields(card.dataset.value);
       }
 
       if (fieldName === "career_importance") {
@@ -1359,7 +1486,7 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-  const optionalFields = ["profile_subjects", "career_type", "profile_grading_system", "profile_institution_id", "profile_institution_tier", "profile_institution_name", "profile_institution_anabin", "profile_gpa_percentage"];
+  const optionalFields = ["profile_subjects", "career_type", "profile_grading_system", "profile_institution_id", "profile_institution_tier", "profile_institution_name", "profile_institution_anabin", "profile_gpa_percentage", "profile_english_score"];
 
   for (let input of hiddenInputs) {
     if (!input.value && !optionalFields.includes(input.id)) {
