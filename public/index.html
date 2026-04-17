@@ -402,9 +402,10 @@ button:disabled {
       <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
       <input type="hidden" id="profile_backlogs" name="profile_backlogs">
       <input type="hidden" id="profile_english_test" name="profile_english_test">
-      <input type="hidden" id="profile_english_score" name="profile_english_score">
-      <input type="hidden" id="profile_gre_score" name="profile_gre_score">
-      <input type="hidden" id="profile_gmat_score" name="profile_gmat_score">
+      <input type="hidden" id="profile_english_scores" name="profile_english_scores">
+      <input type="hidden" id="profile_gre_scores" name="profile_gre_scores">
+      <input type="hidden" id="profile_gmat_scores" name="profile_gmat_scores">
+      <input type="hidden" id="profile_exam_type" name="profile_exam_type">
       <input type="hidden" id="profile_work_experience" name="profile_work_experience">
       <input type="hidden" id="profile_subjects" name="profile_subjects">
       <input type="hidden" id="profile_grading_system" name="profile_grading_system" value="INDIA_PCT">
@@ -419,11 +420,11 @@ button:disabled {
   <div class="section">
     <h2>Step 1 — Your Profile</h2>
 
-    <label>What is the highest level of education you have completed?</label>
+    <label>What is the highest level of education you have completed or are currently pursuing?</label>
     <div class="option-group" data-name="profile_degree_completed">
       <div class="option-card" data-value="High School">High School</div>
-      <div class="option-card" data-value="Bachelor's">Bachelor's</div>
-      <div class="option-card" data-value="Master's">Master's</div>
+      <div class="option-card" data-value="Bachelor's">Bachelor's Degree</div>
+      <div class="option-card" data-value="Master's">Master's Degree</div>
     </div>
 
     <label>Which grading system does your institution use?</label>
@@ -443,7 +444,7 @@ button:disabled {
     <div id="gpa-error" style="color:#c0392b; font-size:13px; margin-top:6px; display:none;"></div>
     <input type="hidden" id="profile_gpa_percentage" name="profile_gpa_percentage">
 
-    <label style="margin-top:24px;">Which institution are you graduating from?</label>
+    <label style="margin-top:24px;">Which institution are you currently attending or have most recently attended?</label>
     <div style="margin-top:8px; position:relative; max-width:480px;" id="inst-wrapper">
       <input type="text" id="inst-input" placeholder="Type institution name..." autocomplete="off"
         style="width:100%; padding:12px 14px; font-size:15px; border:2px solid #e0e0e0; border-radius:8px; font-family:inherit; box-sizing:border-box;"
@@ -455,7 +456,7 @@ button:disabled {
     </label>
     <div id="inst-selected" style="display:none; margin-top:10px; padding:10px 14px; background:#f0faf9; border:1px solid #0F7C78; border-radius:8px; font-size:14px; color:#0F7C78; max-width:480px;"></div>
 
-    <label>How many backlogs or failed courses do you have?</label>
+    <label>How many backlogs do you have?</label>
     <div class="option-group" data-name="profile_backlogs">
       <div class="option-card" data-value="0">None</div>
       <div class="option-card" data-value="2">1 - 2</div>
@@ -463,25 +464,11 @@ button:disabled {
       <div class="option-card" data-value="6">More than 5</div>
     </div>
 
-    <label>Which subjects did you study at senior secondary level? (Select all that apply)</label>
-    <div class="option-group multi-select" data-name="profile_subjects">
-      <div class="option-card" data-value="Mathematics">Mathematics</div>
-      <div class="option-card" data-value="Physics">Physics</div>
-      <div class="option-card" data-value="Chemistry">Chemistry</div>
-      <div class="option-card" data-value="Biology">Biology</div>
-      <div class="option-card" data-value="Economics">Economics</div>
-      <div class="option-card" data-value="Commerce">Commerce</div>
-      <div class="option-card" data-value="Computer Science">Computer Science</div>
-      <div class="option-card" data-value="English">English</div>
-      <div class="option-card" data-value="Arts/Humanities">Arts/Humanities</div>
-    </div>
-
-    <label>Have you taken an English language test?</label>
+    <label>Have you taken any English language test?</label>
     <div class="option-group" data-name="profile_english_test">
       <div class="option-card" data-value="IELTS">IELTS</div>
       <div class="option-card" data-value="TOEFL">TOEFL</div>
       <div class="option-card" data-value="PTE">PTE</div>
-      <div class="option-card" data-value="Duolingo">Duolingo</div>
       <div class="option-card" data-value="None">Not yet</div>
     </div>
 
@@ -495,25 +482,25 @@ button:disabled {
             <label style="font-size:13px; font-weight:500; margin-top:0;">Listening</label>
             <input type="number" id="ielts_listening" min="0" max="9" step="0.5" placeholder="e.g. 7.5"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeIeltsOverall()">
+              oninput="computeIeltsOverall(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Reading</label>
             <input type="number" id="ielts_reading" min="0" max="9" step="0.5" placeholder="e.g. 7.0"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeIeltsOverall()">
+              oninput="computeIeltsOverall(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Writing</label>
             <input type="number" id="ielts_writing" min="0" max="9" step="0.5" placeholder="e.g. 6.5"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeIeltsOverall()">
+              oninput="computeIeltsOverall(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Speaking</label>
             <input type="number" id="ielts_speaking" min="0" max="9" step="0.5" placeholder="e.g. 7.0"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeIeltsOverall()">
+              oninput="computeIeltsOverall(); setEnglishScores();">
           </div>
         </div>
         <div style="margin-top:14px; display:flex; align-items:center; gap:10px;">
@@ -533,25 +520,25 @@ button:disabled {
             <label style="font-size:13px; font-weight:500; margin-top:0;">Listening (0–30)</label>
             <input type="number" id="toefl_listening" min="0" max="30" placeholder="e.g. 24"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeToeflTotal()">
+              oninput="computeToeflTotal(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Reading (0–30)</label>
             <input type="number" id="toefl_reading" min="0" max="30" placeholder="e.g. 26"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeToeflTotal()">
+              oninput="computeToeflTotal(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Writing (0–30)</label>
             <input type="number" id="toefl_writing" min="0" max="30" placeholder="e.g. 22"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeToeflTotal()">
+              oninput="computeToeflTotal(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Speaking (0–30)</label>
             <input type="number" id="toefl_speaking" min="0" max="30" placeholder="e.g. 23"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computeToeflTotal()">
+              oninput="computeToeflTotal(); setEnglishScores();">
           </div>
         </div>
         <div style="margin-top:14px; display:flex; align-items:center; gap:10px;">
@@ -571,25 +558,25 @@ button:disabled {
             <label style="font-size:13px; font-weight:500; margin-top:0;">Listening (10–90)</label>
             <input type="number" id="pte_listening" min="10" max="90" placeholder="e.g. 72"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computePteOverall()">
+              oninput="computePteOverall(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Reading (10–90)</label>
             <input type="number" id="pte_reading" min="10" max="90" placeholder="e.g. 70"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computePteOverall()">
+              oninput="computePteOverall(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Writing (10–90)</label>
             <input type="number" id="pte_writing" min="10" max="90" placeholder="e.g. 65"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computePteOverall()">
+              oninput="computePteOverall(); setEnglishScores();">
           </div>
           <div>
             <label style="font-size:13px; font-weight:500; margin-top:0;">Speaking (10–90)</label>
             <input type="number" id="pte_speaking" min="10" max="90" placeholder="e.g. 68"
               style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
-              oninput="computePteOverall()">
+              oninput="computePteOverall(); setEnglishScores();">
           </div>
         </div>
         <div style="margin-top:14px; display:flex; align-items:center; gap:10px;">
@@ -601,32 +588,75 @@ button:disabled {
         </div>
       </div>
 
-      <!-- Duolingo -->
-      <div id="duolingo-fields" style="display:none;">
-        <label style="font-size:13px; font-weight:500; margin-top:0;">Duolingo English Test score (10–160)</label>
-        <input type="number" id="duolingo_overall" min="10" max="160" placeholder="e.g. 120"
-          style="width:160px; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; display:block; margin-top:8px;"
-          oninput="setEnglishScore(this.value)">
+    </div>
+
+    <label>Do you have a score for any of these exams?</label>
+    <div class="option-group" data-name="profile_exam_type">
+      <div class="option-card" data-value="GRE">GRE</div>
+      <div class="option-card" data-value="GMAT">GMAT</div>
+      <div class="option-card" data-value="None">None</div>
+    </div>
+
+    <div id="gre-score-section" style="display:none; margin-top:16px;">
+      <p style="font-size:14px; color:#555; margin:0 0 12px 0;">Enter your GRE scores:</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:400px;">
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Verbal (130–170)</label>
+          <input type="number" id="gre_verbal" min="130" max="170" placeholder="e.g. 155"
+            style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+            oninput="computeGreTotal()">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Quantitative (130–170)</label>
+          <input type="number" id="gre_quant" min="130" max="170" placeholder="e.g. 160"
+            style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+            oninput="computeGreTotal()">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Writing (0–6)</label>
+          <input type="number" id="gre_writing" min="0" max="6" step="0.5" placeholder="e.g. 4.0"
+            style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+            oninput="computeGreTotal()">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Overall (260–340)</label>
+          <input type="number" id="gre_overall" min="260" max="340" placeholder="e.g. 315"
+            style="width:100%; padding:10px; border:2px solid #0F7C78; border-radius:8px; font-size:16px; font-weight:600; box-sizing:border-box; margin-top:4px;"
+            oninput="setGreScore(this.value)">
+        </div>
       </div>
-
+      <span style="font-size:13px; color:#888; display:block; margin-top:8px;">(Overall auto-calculated or enter manually)</span>
     </div>
 
-    <label>Do you have a GRE score?</label>
-    <div class="option-group" data-name="profile_gre_score">
-      <div class="option-card" data-value="290">GRE Below 300</div>
-      <div class="option-card" data-value="305">GRE 300 - 310</div>
-      <div class="option-card" data-value="315">GRE 310 - 320</div>
-      <div class="option-card" data-value="322">GRE 320+</div>
-      <div class="option-card" data-value="0">No GRE</div>
-    </div>
-
-    <label>Do you have a GMAT score?</label>
-    <div class="option-group" data-name="profile_gmat_score">
-      <div class="option-card" data-value="550">GMAT Below 600</div>
-      <div class="option-card" data-value="625">GMAT 600 - 650</div>
-      <div class="option-card" data-value="675">GMAT 650 - 700</div>
-      <div class="option-card" data-value="720">GMAT 700+</div>
-      <div class="option-card" data-value="0">No GMAT</div>
+    <div id="gmat-score-section" style="display:none; margin-top:16px;">
+      <p style="font-size:14px; color:#555; margin:0 0 12px 0;">Enter your GMAT scores:</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:400px;">
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Verbal (0–60)</label>
+          <input type="number" id="gmat_verbal" min="0" max="60" placeholder="e.g. 38"
+            style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+            oninput="computeGmatTotal()">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Quantitative (0–60)</label>
+          <input type="number" id="gmat_quant" min="0" max="60" placeholder="e.g. 48"
+            style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+            oninput="computeGmatTotal()">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Writing (0–6)</label>
+          <input type="number" id="gmat_writing" min="0" max="6" step="0.5" placeholder="e.g. 5.0"
+            style="width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:4px;"
+            oninput="computeGmatTotal()">
+        </div>
+        <div>
+          <label style="font-size:13px; font-weight:500; margin-top:0;">Overall (205–805)</label>
+          <input type="number" id="gmat_overall" min="205" max="805" placeholder="e.g. 650"
+            style="width:100%; padding:10px; border:2px solid #0F7C78; border-radius:8px; font-size:16px; font-weight:600; box-sizing:border-box; margin-top:4px;"
+            oninput="setGmatScore(this.value)">
+        </div>
+      </div>
+      <span style="font-size:13px; color:#888; display:block; margin-top:8px;">(Overall auto-calculated or enter manually)</span>
     </div>
 
     <label>How many years of work experience do you have?</label>
@@ -942,7 +972,7 @@ function showEnglishFields(test) {
 }
 
 function setEnglishScore(val) {
-  document.getElementById('profile_english_score').value = val;
+  setEnglishScores();
 }
 
 function computeIeltsOverall() {
@@ -1211,7 +1241,7 @@ function validateCurrentStep() {
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
-  var optionalGroupNames = ["profile_gre_score", "profile_gmat_score", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_score"];
+  var optionalGroupNames = ["profile_gre_scores", "profile_gmat_scores", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_score"];
   groupsInStep.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
     var groupName = group.dataset.name;
@@ -1310,8 +1340,12 @@ document.querySelectorAll(".option-group").forEach(group => {
       }
 
       if (fieldName === "profile_english_test") {
-        document.getElementById("profile_english_score").value = "";
+        document.getElementById("profile_english_scores").value = "";
         showEnglishFields(card.dataset.value);
+      }
+
+      if (fieldName === "profile_exam_type") {
+        showExamFields(card.dataset.value);
       }
 
       if (fieldName === "career_importance") {
@@ -1486,7 +1520,7 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-  const optionalFields = ["profile_subjects", "career_type", "profile_grading_system", "profile_institution_id", "profile_institution_tier", "profile_institution_name", "profile_institution_anabin", "profile_gpa_percentage", "profile_english_score"];
+  const optionalFields = ["profile_subjects", "career_type", "profile_grading_system", "profile_institution_id", "profile_institution_tier", "profile_institution_name", "profile_institution_anabin", "profile_gpa_percentage", "profile_english_scores"];
 
   for (let input of hiddenInputs) {
     if (!input.value && !optionalFields.includes(input.id)) {
@@ -1515,9 +1549,9 @@ form.addEventListener("submit", function(e) {
         gpa_percentage: document.getElementById("profile_gpa_percentage").value,
         backlogs: document.getElementById("profile_backlogs").value,
         english_test: document.getElementById("profile_english_test").value,
-        english_score: document.getElementById("profile_english_score").value,
-        gre_score: document.getElementById("profile_gre_score").value,
-        gmat_score: document.getElementById("profile_gmat_score").value,
+        english_scores: document.getElementById("profile_english_scores").value,
+        gre_scores: document.getElementById("profile_gre_scores").value,
+        gmat_scores: document.getElementById("profile_gmat_scores").value,
         work_experience: document.getElementById("profile_work_experience").value,
         priority_1: document.getElementById("priority_1").value,
         priority_2: document.getElementById("priority_2").value,
@@ -1687,6 +1721,90 @@ form.addEventListener("submit", function(e) {
     resultsDiv.innerHTML = '<p class="error">Something went wrong. Please check your connection and try again.</p>';
   });
 });
+
+function showExamFields(exam) {
+  document.getElementById('gre-score-section').style.display = exam === 'GRE' ? 'block' : 'none';
+  document.getElementById('gmat-score-section').style.display = exam === 'GMAT' ? 'block' : 'none';
+  document.getElementById('profile_exam_type').value = exam;
+  document.getElementById('profile_gre_scores').value = '';
+  document.getElementById('profile_gmat_scores').value = '';
+}
+
+function computeGreTotal() {
+  var verbal = parseFloat(document.getElementById('gre_verbal').value);
+  var quant = parseFloat(document.getElementById('gre_quant').value);
+  var writing = parseFloat(document.getElementById('gre_writing').value);
+  if (!isNaN(verbal) && !isNaN(quant)) {
+    var total = verbal + quant;
+    document.getElementById('gre_overall').value = total;
+    setGreScore(total);
+  }
+}
+
+function setGreScore(val) {
+  var verbal = parseFloat(document.getElementById('gre_verbal').value) || null;
+  var quant = parseFloat(document.getElementById('gre_quant').value) || null;
+  var writing = parseFloat(document.getElementById('gre_writing').value) || null;
+  var scores = JSON.stringify({
+    test: 'GRE',
+    overall: parseFloat(val) || null,
+    verbal: verbal,
+    quant: quant,
+    writing: writing
+  });
+  document.getElementById('profile_gre_scores').value = scores;
+}
+
+function computeGmatTotal() {
+  var verbal = parseFloat(document.getElementById('gmat_verbal').value);
+  var quant = parseFloat(document.getElementById('gmat_quant').value);
+  if (!isNaN(verbal) && !isNaN(quant)) {
+    var total = verbal + quant + 200;
+    document.getElementById('gmat_overall').value = total;
+    setGmatScore(total);
+  }
+}
+
+function setGmatScore(val) {
+  var verbal = parseFloat(document.getElementById('gmat_verbal').value) || null;
+  var quant = parseFloat(document.getElementById('gmat_quant').value) || null;
+  var writing = parseFloat(document.getElementById('gmat_writing').value) || null;
+  var scores = JSON.stringify({
+    test: 'GMAT',
+    overall: parseFloat(val) || null,
+    verbal: verbal,
+    quant: quant,
+    writing: writing
+  });
+  document.getElementById('profile_gmat_scores').value = scores;
+}
+
+function setEnglishScores() {
+  var test = document.querySelector('.option-group[data-name="profile_english_test"] .option-card.selected');
+  if (!test) return;
+  var testName = test.getAttribute('data-value');
+  var scores = { test: testName };
+  if (testName === 'IELTS') {
+    scores.listening = parseFloat(document.getElementById('ielts_listening').value) || null;
+    scores.reading = parseFloat(document.getElementById('ielts_reading').value) || null;
+    scores.writing = parseFloat(document.getElementById('ielts_writing').value) || null;
+    scores.speaking = parseFloat(document.getElementById('ielts_speaking').value) || null;
+    scores.overall = parseFloat(document.getElementById('ielts_overall').value) || null;
+  } else if (testName === 'TOEFL') {
+    scores.listening = parseFloat(document.getElementById('toefl_listening').value) || null;
+    scores.reading = parseFloat(document.getElementById('toefl_reading').value) || null;
+    scores.writing = parseFloat(document.getElementById('toefl_writing').value) || null;
+    scores.speaking = parseFloat(document.getElementById('toefl_speaking').value) || null;
+    scores.overall = parseFloat(document.getElementById('toefl_total').value) || null;
+  } else if (testName === 'PTE') {
+    scores.listening = parseFloat(document.getElementById('pte_listening').value) || null;
+    scores.reading = parseFloat(document.getElementById('pte_reading').value) || null;
+    scores.writing = parseFloat(document.getElementById('pte_writing').value) || null;
+    scores.speaking = parseFloat(document.getElementById('pte_speaking').value) || null;
+    scores.overall = parseFloat(document.getElementById('pte_overall').value) || null;
+  }
+  document.getElementById('profile_english_scores').value = JSON.stringify(scores);
+}
 
 </script>
 
