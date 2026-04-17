@@ -962,8 +962,9 @@ button:disabled {
   <script>
 function showEnglishFields(test) {
   document.getElementById('english-score-section').style.display = test && test !== 'None' ? 'block' : 'none';
-  ['ielts','toefl','pte','duolingo'].forEach(function(t) {
-    document.getElementById(t + '-fields').style.display = 'none';
+  ['ielts','toefl','pte'].forEach(function(t) {
+    var el = document.getElementById(t + '-fields');
+    if (el) el.style.display = 'none';
   });
   if (test && test !== 'None') {
     var el = document.getElementById(test.toLowerCase() + '-fields');
