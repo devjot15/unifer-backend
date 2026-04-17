@@ -744,38 +744,83 @@ async function computeAdmitProbability(answers, university, destCode) {
     : null;
   if (!rawGpa || rawGpa <= 0) return { pAdmit: null, confidence: null };
   if (destCode === 'DE' && answers.profile_institution_anabin === 'H-') return { pAdmit: 0.02, confidence: 1.0 };
-  // tier is optional — RPC falls back to NULL-destination_region rows when tier is null
+
   const { data: universalGpa, error: convErr } = await supabase.rpc('convert_grade_to_universal', {
     p_system_code: systemCode, p_raw_value: rawGpa, p_institution_tier: tier, p_destination_country: destCode
   });
   if (convErr || universalGpa === null) return { pAdmit: null, confidence: null };
+
+  const fieldCategory = answers.field || null;
+
   const { data: reqs, error: reqErr } = await supabase.rpc('get_admission_requirements', {
-    p_university_id: university.id, p_field_category: null, p_ranking_tier: null, p_country_code: destCode
+    p_university_id: university.id,
+    p_field_category: fieldCategory,
+    p_ranking_tier: tier,
+    p_country_code: destCode
   });
   if (reqErr || !reqs || reqs.length === 0) return { pAdmit: null, confidence: null };
   const req = reqs[0];
-  const conf = req.data_confidence || 0.5;
+  const conf = req.confidence_score || 0.5;
+
   if (req.min_gpa_universal !== null && universalGpa < req.min_gpa_universal) return { pAdmit: 0.02, confidence: conf };
-  if (answers.profile_english_test && answers.profile_english_test !== 'None' && req.min_ielts) {
+  if (answers.profile_english_test && answers.profile_english_test !== 'None' && req.min_ielts_equiv) {
     const { data: ieltsEq } = await supabase.rpc('get_ielts_equivalent', {
       p_test_name: answers.profile_english_test, p_score: parseFloat(answers.profile_english_score)
     });
-    if (ieltsEq !== null && ieltsEq < req.min_ielts) return { pAdmit: 0.02, confidence: conf };
+    if (ieltsEq !== null && ieltsEq < req.min_ielts_equiv) return { pAdmit: 0.02, confidence: conf };
   }
   const backlogs = parseInt(answers.profile_backlogs) || 0;
   if (req.max_backlogs !== null && backlogs > req.max_backlogs) return { pAdmit: 0.02, confidence: conf };
+
+  let cohortMean = null;
+  let cohortStd = null;
+  const subField = answers.sub_field || null;
+
+  const { data: cohortRows } = await supabase
+    .schema('admissions')
+    .from('admitted_cohort_stats')
+    .select('gpa_pct_mean, gpa_pct_std, sub_field, field_category, is_india_cohort, sample_size')
+    .eq('university_id', university.id)
+    .order('is_india_cohort', { ascending: false })
+    .order('sample_size', { ascending: false });
+
+  if (cohortRows && cohortRows.length > 0) {
+    const pick = (isIndia, sf, fc) => cohortRows.find(r =>
+      r.is_india_cohort === isIndia &&
+      (sf ? r.sub_field === sf : r.sub_field === null) &&
+      (fc ? r.field_category === fc : r.field_category === null)
+    );
+    const row =
+      (subField && pick(true, subField, fieldCategory)) ||
+      (subField && pick(false, subField, fieldCategory)) ||
+      (fieldCategory && pick(true, null, fieldCategory)) ||
+      (fieldCategory && pick(false, null, fieldCategory)) ||
+      pick(true, null, null) ||
+      pick(false, null, null);
+    if (row) {
+      cohortMean = row.gpa_pct_mean;
+      cohortStd  = row.gpa_pct_std;
+    }
+  }
+
   let pComp;
-  if (req.avg_admitted_gpa_universal !== null && req.std_admitted_gpa_universal > 0) {
-    pComp = normalCDF(0.6 * (universalGpa - req.avg_admitted_gpa_universal) / req.std_admitted_gpa_universal);
+  if (cohortMean !== null && cohortStd !== null && cohortStd > 0) {
+    pComp = normalCDF(0.6 * (universalGpa - cohortMean) / cohortStd);
+  } else if (req.typical_gpa_universal !== null && req.gpa_std_dev !== null && req.gpa_std_dev > 0) {
+    pComp = normalCDF(0.6 * (universalGpa - req.typical_gpa_universal) / req.gpa_std_dev);
   } else if (req.min_gpa_universal !== null) {
     pComp = Math.min(0.85, 0.25 + Math.max(0, universalGpa - req.min_gpa_universal) * 0.015);
   } else {
     pComp = 0.45;
   }
-  const structural = req.acceptance_rate !== null ? Math.min(1.0, req.acceptance_rate * 2.0) : 0.65;
+
+  const acceptanceRate = req.overall_acceptance_rate !== null ? req.overall_acceptance_rate : null;
+  const structural = acceptanceRate !== null ? Math.min(1.0, acceptanceRate * 2.0) : 0.65;
   const anabinMod = (destCode === 'DE' && answers.profile_institution_anabin === 'H+/-') ? 0.80 : 1.0;
+
   const pAdmit = Math.min(0.95, Math.max(0.02, pComp * structural * anabinMod));
-  console.log(`[admit] ${university.name} universalGpa=${universalGpa?.toFixed(1)} pComp=${pComp?.toFixed(3)} structural=${structural?.toFixed(3)} p=${pAdmit?.toFixed(3)}`);
+  const cohortSource = cohortMean !== null ? 'cohort' : (req.typical_gpa_universal !== null ? 'requirements' : 'fallback');
+  console.log(`[admit] ${university.name} universalGpa=${universalGpa?.toFixed(1)} cohortMean=${cohortMean?.toFixed(1) ?? 'n/a'} pComp=${pComp?.toFixed(3)} structural=${structural?.toFixed(3)} src=${cohortSource} p=${pAdmit?.toFixed(3)}`);
   return { pAdmit, confidence: conf };
 }
 
@@ -810,6 +855,21 @@ app.post("/recommend", async (req, res) => {
     }
     if (priority_1 === priority_2 || priority_1 === priority_3 || priority_2 === priority_3) {
       return res.status(400).json({ error: 'Priority 1, 2 and 3 must all be different. Please select three distinct priorities.' });
+    }
+
+    // 0️⃣ Resolve institution tier + anabin server-side from student_institutions
+    if (answers.profile_institution_id && !answers.profile_institution_tier) {
+      const { data: inst } = await supabase
+        .schema('admissions')
+        .from('student_institutions')
+        .select('tier, anabin_status')
+        .eq('id', answers.profile_institution_id)
+        .single();
+      if (inst) {
+        answers.profile_institution_tier = inst.tier?.toString() || null;
+        answers.profile_institution_anabin = inst.anabin_status || null;
+        console.log(`[institution] resolved tier=${inst.tier} anabin=${inst.anabin_status} for id=${answers.profile_institution_id}`);
+      }
     }
 
     // 1️⃣ Fetch all data
@@ -1396,7 +1456,7 @@ app.post("/recommend", async (req, res) => {
       console.log(`[score] ${university?.canonical_name || course?.university_id} composite=${compositeScore?.toFixed(3)} globalSub=${subScore?.toFixed(3)} subjectSub=${subjectSubScore !== null && subjectSubScore !== undefined ? subjectSubScore.toFixed(3) : 'none'} delta=${delta} final=${universityScore?.toFixed(3)}`);
 
       const destCode = COUNTRY_ISO[country.name] || null;
-      const { pAdmit, confidence: admitConf } = (destCode && answers.profile_institution_tier)
+      const { pAdmit, confidence: admitConf } = destCode
         ? await computeAdmitProbability(answers, university, destCode)
         : { pAdmit: null, confidence: null };
       const modulatedUniversityScore = pAdmit !== null ? universityScore * (0.25 + 0.75 * pAdmit) : universityScore;
@@ -1555,7 +1615,7 @@ app.post("/recommend", async (req, res) => {
           const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
           const softDestCode = COUNTRY_ISO[country.name] || null;
-          const { pAdmit: softPAdmit, confidence: softAdmitConf } = (softDestCode && answers.profile_institution_tier)
+          const { pAdmit: softPAdmit, confidence: softAdmitConf } = softDestCode
             ? await computeAdmitProbability(answers, university, softDestCode)
             : { pAdmit: null, confidence: null };
           const softModulatedUniScore = softPAdmit !== null ? universityScore * (0.25 + 0.75 * softPAdmit) : universityScore;
