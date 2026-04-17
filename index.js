@@ -2260,12 +2260,14 @@ INTERNSHIP:
   ALSO look in PROGRAM METADATA for entries like "Experiential learning: Co-op, Internship".
 
 GRE / GMAT:
-- gre_required: true or false
-  Set TRUE if GRE is mentioned as required or strongly recommended for admission.
-  Set FALSE if GRE is optional, waived, not mentioned, or only recommended.
-- gmat_required: true or false
-  Set TRUE if GMAT is mentioned as required or strongly recommended for admission.
-  Set FALSE if GMAT is optional, waived, not mentioned, or only recommended.
+- gre_requirements: JSONB object or null.
+  If GRE is mentioned as required or strongly recommended, return an object with any minimum scores stated:
+  { "overall": 310, "verbal": 150, "quant": 160, "writing": 4.0 }
+  Include only the keys explicitly mentioned. Return null if GRE is optional, waived, not mentioned, or only recommended.
+- gmat_requirements: JSONB object or null.
+  If GMAT is mentioned as required or strongly recommended, return an object with any minimum scores stated:
+  { "overall": 650, "verbal": 38, "quant": 48, "writing": 5.0 }
+  Include only the keys explicitly mentioned. Return null if GMAT is optional, waived, not mentioned, or only recommended.
 
 SCHOLARSHIP:
 - scholarship_available: true or false
@@ -2282,9 +2284,14 @@ SCHOLARSHIP:
   Set FALSE if funding is competitive, optional, or not mentioned.
 
 ENGLISH LANGUAGE REQUIREMENTS:
-- ielts_minimum: numeric minimum IELTS overall band score required (e.g. 6.5). Return null if not stated.
-- pte_minimum: numeric minimum PTE Academic score required (e.g. 63). Return null if not stated.
-- toefl_minimum: numeric minimum TOEFL iBT score required (e.g. 90). Return null if not stated.
+- language_requirements: JSONB object or null.
+  Extract minimum score requirements for each test mentioned. Structure:
+  {
+    "ielts": { "overall": 6.5, "reading": 6.0, "writing": 6.0, "listening": 6.0, "speaking": 6.0 },
+    "toefl": { "overall": 90, "reading": 22, "writing": 22, "listening": 22, "speaking": 22 },
+    "pte":   { "overall": 63, "reading": 58, "writing": 58, "listening": 58, "speaking": 58 }
+  }
+  Include only tests explicitly mentioned on the page. Within each test, include only components explicitly stated — if only an overall score is mentioned, return just { "overall": 6.5 }. Return null if no language requirements are stated.
 
 ACADEMIC REQUIREMENTS:
 - min_gpa_percentage: minimum academic average or GPA required for admission as a percentage (0-100).
