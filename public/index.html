@@ -382,7 +382,6 @@ button:disabled {
       <input type="hidden" id="tuition_band" name="tuition_band">
       <input type="hidden" id="field" name="field">
       <input type="hidden" id="sub_field" name="sub_field" value="">
-      <input type="hidden" id="gre_filter" name="gre_filter">
       <input type="hidden" id="internship_importance" name="internship_importance">
       <input type="hidden" id="scholarship_importance" name="scholarship_importance">
 
@@ -761,7 +760,6 @@ button:disabled {
           <h2>Step 4 — Course Selection</h2>
           <label>What level of program do you want to study?</label>
           <div class="option-group" data-name="level">
-            <div class="option-card" data-value="UG">UG</div>
             <div class="option-card" data-value="PG">PG</div>
             <div class="option-card" data-value="PhD">PhD</div>
           </div>
@@ -776,14 +774,6 @@ button:disabled {
 
           <label>What will be ideal course duration for you?</label>
           <div class="option-group" data-name="duration" id="durationGroup">
-
-            <div class="option-card ug-option" data-value="3 years or less">
-              3 years or less
-            </div>
-
-            <div class="option-card ug-option" data-value="More than 3 years">
-              More than 3 years
-            </div>
 
             <div class="option-card pg-option" data-value="1 year or less">
               1 year or less
@@ -800,14 +790,6 @@ button:disabled {
             <div class="option-card" data-value="Very strongly">Very strongly</div>
             <div class="option-card" data-value="Wouldn’t mind">Wouldn’t mind</div>
             <div class="option-card" data-value="Don’t care">Don’t care</div>
-          </div>
-
-          <label>Select a preferred filter for courses with respect to GRE or GMAT requirements?</label>
-          <div class="option-group" data-name="gre_filter">
-            <div class="option-card" data-value="Without GRE or GMAT">Without GRE or GMAT</div>
-            <div class="option-card" data-value="Without GRE">Without GRE</div>
-            <div class="option-card" data-value="Without GMAT">Without GMAT</div>
-            <div class="option-card" data-value="No filter">No filter</div>
           </div>
 
           <label>How strongly scholarships or bursaries affect your decision?</label>
@@ -1185,7 +1167,6 @@ function updateDurationOptions() {
 
   if (!durationGroup) return;
 
-  var ugOptions = durationGroup.querySelectorAll(".ug-option");
   var pgOptions = durationGroup.querySelectorAll(".pg-option");
 
   // Reset selections
@@ -1201,15 +1182,7 @@ function updateDurationOptions() {
     });
   }
 
-  if (level === "UG") {
-    ugOptions.forEach(opt => opt.style.display = "block");
-    pgOptions.forEach(opt => opt.style.display = "none");
-    durationGroup.style.display = "";
-    if (programTypeSection) programTypeSection.style.display = "none";
-  }
-
   if (level === "PG") {
-    ugOptions.forEach(opt => opt.style.display = "none");
     pgOptions.forEach(opt => opt.style.display = "block");
     durationGroup.style.display = "";
     if (programTypeSection) programTypeSection.style.display = "";
