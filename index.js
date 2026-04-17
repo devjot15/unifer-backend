@@ -766,7 +766,7 @@ async function computeAdmitProbability(answers, university, destCode) {
   if (req.min_gpa_universal !== null && universalGpa < req.min_gpa_universal) return { pAdmit: 0.02, confidence: conf };
   if (answers.profile_english_test && answers.profile_english_test !== 'None' && req.min_ielts_equiv) {
     const { data: ieltsEq } = await supabase.rpc('get_ielts_equivalent', {
-      p_test_name: answers.profile_english_test, p_score: parseFloat(answers.profile_english_score)
+      p_test_name: answers.profile_english_test, p_score: (() => { try { const s = typeof answers.profile_english_scores === 'string' ? JSON.parse(answers.profile_english_scores) : answers.profile_english_scores; return s?.overall || null; } catch(e) { return null; } })()
     });
     if (ieltsEq !== null && ieltsEq < req.min_ielts_equiv) return { pAdmit: 0.02, confidence: conf };
   }
@@ -963,15 +963,7 @@ app.post("/recommend", async (req, res) => {
       courseQuery = courseQuery.eq("sub_field", answers.sub_field);
     }
 
-    if (answers.gre_filter === "Without GRE or GMAT") {
-      courseQuery = courseQuery
-        .eq("gre_required", false)
-        .eq("gmat_required", false);
-    } else if (answers.gre_filter === "Without GRE") {
-      courseQuery = courseQuery.eq("gre_required", false);
-    } else if (answers.gre_filter === "Without GMAT") {
-      courseQuery = courseQuery.eq("gmat_required", false);
-    }
+    // GRE/GMAT filter now handled in post-filter using JSONB score comparison
 
     if (answers.profile_gpa_percentage) {
       courseQuery = courseQuery.or(
@@ -1024,13 +1016,7 @@ app.post("/recommend", async (req, res) => {
         }
       }
 
-      if (answers.gre_filter === "Without GRE or GMAT") {
-        fallbackQuery = fallbackQuery.eq("gre_required", false).eq("gmat_required", false);
-      } else if (answers.gre_filter === "Without GRE") {
-        fallbackQuery = fallbackQuery.eq("gre_required", false);
-      } else if (answers.gre_filter === "Without GMAT") {
-        fallbackQuery = fallbackQuery.eq("gmat_required", false);
-      }
+      // GRE/GMAT filter now handled in post-filter using JSONB score comparison
 
       if (answers.profile_gpa_percentage) {
         fallbackQuery = fallbackQuery.or(
@@ -1112,35 +1098,65 @@ app.post("/recommend", async (req, res) => {
           return false;
       }
 
-      // English score check
-      if (
-        answers.profile_english_test &&
-        answers.profile_english_test !== "None"
-      ) {
-        const score = parseFloat(answers.profile_english_score);
-        if (answers.profile_english_test === "IELTS" && course.ielts_minimum) {
-          if (score < course.ielts_minimum) return false;
-        }
-        if (answers.profile_english_test === "TOEFL" && course.toefl_minimum) {
-          if (score < course.toefl_minimum) return false;
-        }
-        if (answers.profile_english_test === "PTE" && course.pte_minimum) {
-          if (score < course.pte_minimum) return false;
+      // English language test filter — JSONB component comparison
+      if (answers.profile_english_scores) {
+        let englishScores;
+        try {
+          englishScores = typeof answers.profile_english_scores === 'string'
+            ? JSON.parse(answers.profile_english_scores)
+            : answers.profile_english_scores;
+        } catch(e) {}
+        if (englishScores && englishScores.test && englishScores.test !== 'None') {
+          const testKey = englishScores.test.toLowerCase();
+          const req = course.language_requirements?.[testKey];
+          if (req) {
+            const components = ['overall', 'reading', 'writing', 'listening', 'speaking'];
+            for (const comp of components) {
+              if (req[comp] != null && (englishScores[comp] == null || englishScores[comp] < req[comp])) {
+                return false;
+              }
+            }
+          }
         }
       }
 
-      // GRE/GMAT — if student has no score, eliminate programs that require it
-      if (
-        !answers.profile_gre_score ||
-        parseFloat(answers.profile_gre_score) === 0
-      ) {
-        if (course.gre_required) return false;
-      }
-      if (
-        !answers.profile_gmat_score ||
-        parseFloat(answers.profile_gmat_score) === 0
-      ) {
-        if (course.gmat_required) return false;
+      // GRE/GMAT filter — JSONB component comparison
+      // If student selected None: no filter applied, show all courses
+      // If student has a score: compare against course minimum requirements
+      const examType = answers.profile_exam_type;
+      if (examType && examType !== 'None') {
+        if (examType === 'GRE' && answers.profile_gre_scores) {
+          let greScores;
+          try {
+            greScores = typeof answers.profile_gre_scores === 'string'
+              ? JSON.parse(answers.profile_gre_scores)
+              : answers.profile_gre_scores;
+          } catch(e) {}
+          if (greScores && course.gre_requirements) {
+            const components = ['overall', 'verbal', 'quant', 'writing'];
+            for (const comp of components) {
+              if (course.gre_requirements[comp] != null && (greScores[comp] == null || greScores[comp] < course.gre_requirements[comp])) {
+                return false;
+              }
+            }
+          }
+        }
+        if (examType === 'GMAT' && answers.profile_gmat_scores) {
+          let gmatScores;
+          try {
+            gmatScores = typeof answers.profile_gmat_scores === 'string'
+              ? JSON.parse(answers.profile_gmat_scores)
+              : answers.profile_gmat_scores;
+          } catch(e) {}
+          if (gmatScores && course.gmat_requirements) {
+            const components = ['overall', 'verbal', 'quant', 'writing'];
+            for (const comp of components) {
+              if (course.gmat_requirements[comp] != null && (gmatScores[comp] == null || gmatScores[comp] < course.gmat_requirements[comp])) {
+                return false;
+              }
+            }
+          }
+        }
       }
 
       return true;
@@ -2059,14 +2075,12 @@ ${listingText.substring(0, 10000)}`;
               completion_time_unit: null,
               tuition_raw_text: null,
               internship_available: false,
-              gre_required: false,
-              gmat_required: false,
+              language_requirements: null,
+              gre_requirements: null,
+              gmat_requirements: null,
               scholarship_available: false,
               scholarship_details: null,
               funding_guaranteed: false,
-              ielts_minimum: null,
-              pte_minimum: null,
-              toefl_minimum: null,
               application_deadline_intl: null,
               application_materials: [],
               min_gpa_percentage: null,
@@ -2440,14 +2454,12 @@ ${trimmedText}
               ? FIELD_CATEGORY_IDS[program.field_category]
               : null,
             internship_available: program.internship_available || false,
-            gre_required: program.gre_required || false,
-            gmat_required: program.gmat_required || false,
+            language_requirements: program.language_requirements || null,
+            gre_requirements: program.gre_requirements || null,
+            gmat_requirements: program.gmat_requirements || null,
             scholarship_available: program.scholarship_available || false,
             scholarship_details: program.scholarship_details || null,
             funding_guaranteed: program.funding_guaranteed || false,
-            ielts_minimum: program.ielts_minimum || null,
-            pte_minimum: program.pte_minimum || null,
-            toefl_minimum: program.toefl_minimum || null,
             application_deadline_intl:
               program.application_deadline_intl || null,
             application_materials: program.application_materials || [],
@@ -2844,15 +2856,13 @@ app.post("/migrate", async (req, res) => {
             tuition_usd: finalTuitionUSD,
             field_category_id: p.field_category_id,
             internship_available: p.internship_available || false,
-            gre_required: p.gre_required || false,
-            gmat_required: p.gmat_required || false,
+            language_requirements: p.language_requirements || null,
+            gre_requirements: p.gre_requirements || null,
+            gmat_requirements: p.gmat_requirements || null,
             scholarship_available: p.scholarship_available || false,
             scholarship_details: p.scholarship_details || null,
             funding_guaranteed: p.funding_guaranteed || false,
             program_type: p.program_type || null,
-            ielts_minimum: p.ielts_minimum || null,
-            pte_minimum: p.pte_minimum || null,
-            toefl_minimum: p.toefl_minimum || null,
             min_gpa_percentage: p.min_gpa_percentage || null,
             accepts_backlogs: p.accepts_backlogs !== false,
             work_experience_required: p.work_experience_required || 0,
@@ -5260,16 +5270,14 @@ app.post("/worker/migrate/:university_id", async (req, res) => {
             tuition_usd: finalTuitionUSD,
             field_category_id: p.field_category_id,
             internship_available: p.internship_available || false,
-            gre_required: p.gre_required || false,
-            gmat_required: p.gmat_required || false,
+            language_requirements: p.language_requirements || null,
+            gre_requirements: p.gre_requirements || null,
+            gmat_requirements: p.gmat_requirements || null,
             scholarship_available: p.scholarship_available || false,
             scholarship_details: p.scholarship_details || null,
             funding_guaranteed: p.funding_guaranteed || false,
             program_type: p.program_type || null,
             duration_confidence: p.duration_confidence || "high",
-            ielts_minimum: p.ielts_minimum || null,
-            pte_minimum: p.pte_minimum || null,
-            toefl_minimum: p.toefl_minimum || null,
             min_gpa_percentage: p.min_gpa_percentage || null,
             accepts_backlogs: p.accepts_backlogs !== false,
             work_experience_required: p.work_experience_required || 0,
