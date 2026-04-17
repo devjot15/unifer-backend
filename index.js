@@ -739,6 +739,7 @@ function getMatchLabel(pAdmit, conf) {
 async function computeAdmitProbability(answers, university, destCode) {
   const systemCode = answers.profile_grading_system || 'INDIA_PCT';
   const rawGpa = parseFloat(answers.profile_gpa_percentage);
+  console.log(`[admit-debug] rawGpa=${rawGpa} tier=${answers.profile_institution_tier} destCode=${destCode} systemCode=${systemCode}`);
   const tier = answers.profile_institution_tier && answers.profile_institution_tier !== ''
     ? parseInt(answers.profile_institution_tier)
     : null;
