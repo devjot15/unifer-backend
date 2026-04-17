@@ -743,7 +743,6 @@ async function computeAdmitProbability(answers, university, destCode) {
   const tier = answers.profile_institution_tier && answers.profile_institution_tier !== ''
     ? parseInt(answers.profile_institution_tier)
     : null;
-  console.log(`[admit-debug] rawGpa=${rawGpa} tier=${tier} destCode=${destCode} systemCode=${systemCode} gpaField=${answers.profile_gpa_percentage}`);
   if (!rawGpa || rawGpa <= 0) return { pAdmit: null, confidence: null };
   if (destCode === 'DE' && answers.profile_institution_anabin === 'H-') return { pAdmit: 0.02, confidence: 1.0 };
 
