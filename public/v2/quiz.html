@@ -1026,13 +1026,23 @@ const FLOW = [
     onlyIf: (a) => a.country_decided === "Yes" },
 
   { id: "priorities", section: 2, kind: "rank",
-    prompt: "Your priorities shape your recommendations. Rank these three from most to least important.",
     skipIf: (a) => a.profile_degree_completed === "High School",
-    items: [
-      { v: "Country",     label: "Country" },
-      { v: "Course",      label: "Course" },
-      { v: "Institution", label: "Institution" }
-    ] },
+    // Dynamic prompt based on country_decided
+    promptFn: (a) => a.country_decided === "Yes"
+      ? "Your priorities shape your recommendations. Rank these two from most to least important."
+      : "Your priorities shape your recommendations. Rank these three from most to least important.",
+    // Dynamic items based on country_decided
+    itemsFn: (a) => a.country_decided === "Yes"
+      ? [
+          { v: "Course",      label: "Course" },
+          { v: "Institution", label: "Institution" }
+        ]
+      : [
+          { v: "Country",     label: "Country" },
+          { v: "Course",      label: "Course" },
+          { v: "Institution", label: "Institution" }
+        ]
+  },
 
   // ─── Section 3: Country preferences ───
   // All skipped if country pre-selected (country_decided === "Yes")
@@ -2007,6 +2017,8 @@ function renderCountry(step) {
 /* ----- RANKING ----- */
 function renderRank(step) {
   let picks = [];
+  const items = typeof step.itemsFn === 'function' ? step.itemsFn(state.answers) : step.items;
+  const targetCount = items.length;  // 2 (country pre-selected) or 3 (3-entity)
   composer.innerHTML = `
     <div class="composer-body">
       <div class="composer-hint" id="rankHint">Tap your #1 first</div>
@@ -2021,7 +2033,7 @@ function renderRank(step) {
 
   function render() {
     list.innerHTML = "";
-    step.items.forEach(item => {
+    items.forEach(item => {
       const rank = picks.indexOf(item.v) + 1;
       const div = document.createElement("div");
       div.className = "rank-item" + (rank > 0 ? " picked" : "");
@@ -2032,13 +2044,13 @@ function renderRank(step) {
       div.addEventListener("click", () => {
         if (picks.includes(item.v)) {
           picks = [];
-        } else if (picks.length < 3) {
+        } else if (picks.length < targetCount) {
           picks.push(item.v);
         }
-        if (picks.length === 3) hint.textContent = "Nice — confirm when ready.";
+        if (picks.length === targetCount) hint.textContent = "Nice — confirm when ready.";
         else if (picks.length === 0) hint.textContent = "Tap your #1 first";
         else hint.textContent = `Now tap your #${picks.length + 1}`;
-        btn.disabled = picks.length !== 3;
+        btn.disabled = picks.length !== targetCount;
         render();
       });
       list.appendChild(div);
@@ -2049,8 +2061,17 @@ function renderRank(step) {
   btn.addEventListener("click", () => {
     state.answers.priorities_1 = picks[0];
     state.answers.priorities_2 = picks[1];
-    state.answers.priorities_3 = picks[2];
-    submitAnswer(step.id, picks.join(" > "), `1. ${picks[0]}  ·  2. ${picks[1]}  ·  3. ${picks[2]}`);
+    if (picks.length >= 3) {
+      state.answers.priorities_3 = picks[2];
+    } else {
+      // 2-entity mode (country pre-selected) — leave priorities_3 explicitly empty
+      state.answers.priorities_3 = "";
+    }
+    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
+    const display = picks.length === 3
+      ? `1. ${picks[0]}  ·  2. ${picks[1]}  ·  3. ${picks[2]}`
+      : `1. ${picks[0]}  ·  2. ${picks[1]}`;
+    submitAnswer(step.id, picks.join(" > "), display);
   });
 }
 
@@ -2140,7 +2161,8 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 
 async function askStep(step) {
   await showTyping(420);
-  addUniferMsg(step.prompt);
+  const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
+  addUniferMsg(prompt);
   renderComposer(step);
 }
 
