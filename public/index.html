@@ -426,6 +426,11 @@ button:disabled {
       <div class="option-card" data-value="Master's">Master's Degree</div>
     </div>
 
+    <div id="ug-blocked-message" style="display:none; margin-top:24px; padding:24px; background:#fdf6e9; border:1px solid #e8c894; border-radius:12px; max-width:600px;">
+      <div style="font-size:16px; font-weight:600; color:#8a5a00; margin-bottom:8px;">We're not quite ready for you yet</div>
+      <div style="font-size:14px; color:#5a4500; line-height:1.55;">UNIFER currently helps students choose Masters and PhD programmes. Undergraduate support is on our roadmap — bookmark us and come back soon.</div>
+    </div>
+
     <label>Which grading system does your institution use?</label>
     <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
       <div class="option-card grading-opt" data-value="INDIA_PCT" onclick="selectGradingSystem('INDIA_PCT',this)">Percentage (%)</div>
@@ -1366,6 +1371,11 @@ document.querySelectorAll(".option-group").forEach(group => {
         updateDurationOptions();
       }
 
+      // Conditional flow based on degree completed
+      if (fieldName === "profile_degree_completed") {
+        applyDegreeFlow(card.dataset.value);
+      }
+
       if (fieldName === "profile_english_test") {
         document.getElementById("profile_english_scores").value = "";
         showEnglishFields(card.dataset.value);
@@ -1523,8 +1533,68 @@ function step3IsSkipped() {
   return step3 && step3.dataset.skip === 'true';
 }
 
+// ─── DEGREE-COMPLETED CONDITIONAL FLOW ───
+// High School: block the entire quiz with a message (UG not yet supported)
+// Bachelor's: auto-set level=PG, hide the level question (next degree is implicitly Masters)
+// Master's: standard flow (could be another Masters or PhD — student decides)
+function applyDegreeFlow(degree) {
+  var ugMsg = document.getElementById('ug-blocked-message');
+  var levelGroup = document.querySelector('.option-group[data-name="level"]');
+  var levelLabel = levelGroup ? levelGroup.previousElementSibling : null;
+  var navButtons = document.querySelectorAll('.nav-buttons');
+  var subsequentSteps = document.querySelectorAll('.form-step[data-step="2"], .form-step[data-step="3"], .form-step[data-step="4"], .form-step[data-step="5"]');
+
+  if (degree === 'High School') {
+    // Show blocking message
+    if (ugMsg) ugMsg.style.display = 'block';
+    // Hide all Next buttons in step 1 + disable submit
+    var step1 = document.querySelector('.form-step[data-step="1"]');
+    if (step1) {
+      step1.querySelectorAll('.next-btn').forEach(function(b) { b.style.display = 'none'; });
+    }
+    // Block forward navigation
+    document.body.dataset.ugBlocked = 'true';
+  } else {
+    // Restore (in case student previously picked High School and is correcting)
+    if (ugMsg) ugMsg.style.display = 'none';
+    var step1 = document.querySelector('.form-step[data-step="1"]');
+    if (step1) {
+      step1.querySelectorAll('.next-btn').forEach(function(b) { b.style.display = ''; });
+    }
+    document.body.dataset.ugBlocked = 'false';
+  }
+
+  if (degree === "Bachelor's") {
+    // Auto-set level=PG and hide the level question (next degree implicitly Masters)
+    var pgCard = levelGroup ? levelGroup.querySelector('.option-card[data-value="PG"]') : null;
+    if (pgCard && !pgCard.classList.contains('selected')) {
+      // Clear other selections, set PG
+      levelGroup.querySelectorAll('.option-card.selected').forEach(function(c) { c.classList.remove('selected'); });
+      pgCard.classList.add('selected');
+      document.getElementById('level').value = 'PG';
+      // Trigger duration options + conditional logic recomputation
+      if (typeof updateDurationOptions === 'function') updateDurationOptions();
+      if (typeof applyConditionalLogic === 'function') applyConditionalLogic();
+    }
+    if (levelGroup) levelGroup.style.display = 'none';
+    if (levelLabel && levelLabel.tagName === 'LABEL') levelLabel.style.display = 'none';
+  } else if (degree === "Master's") {
+    // Standard flow: show the level question, restore it if previously hidden
+    if (levelGroup) levelGroup.style.display = '';
+    if (levelLabel && levelLabel.tagName === 'LABEL') levelLabel.style.display = '';
+  }
+
+  // Re-validate so the submit button reflects new state
+  if (typeof validateAllFields === 'function') validateAllFields();
+}
+
 document.querySelectorAll(".next-btn").forEach(function(btn) {
   btn.addEventListener("click", function() {
+    // Block forward navigation if UG is blocked
+    if (document.body.dataset.ugBlocked === 'true') {
+      formMessage.textContent = "Please change your education level — UNIFER currently supports Masters and PhD only.";
+      return;
+    }
     if (!validateCurrentStep()) return;
     formMessage.textContent = "";
     trackStepComplete(currentStep, {});
