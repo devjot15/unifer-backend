@@ -210,8 +210,8 @@ const DIM_DELTA_MULTIPLIER = {
 
 function getResearchIntent(research_importance) {
   if (!research_importance) return 'balanced';
-  if (research_importance.startsWith('Very important')) return 'research';
-  if (research_importance.startsWith('Not important')) return 'industry';
+  if (research_importance === 'high') return 'research';
+  if (research_importance === 'low') return 'industry';
   return 'balanced';
 }
 
@@ -871,7 +871,7 @@ app.post("/recommend", async (req, res) => {
     // ─── AUTO-DEFAULTS based on conditional question logic ───
     // PhD students: research is implicit, teaching/student experience are skipped
     if (answers.level === 'PhD') {
-      if (!answers.research_importance) answers.research_importance = 'Very important (I want a university known for cutting-edge research)';
+      if (!answers.research_importance) answers.research_importance = 'high';
       if (!answers.teaching_importance) answers.teaching_importance = 'medium';
       if (!answers.student_experience_importance) answers.student_experience_importance = 'medium';
       if (!answers.internship_importance) answers.internship_importance = "Don\u2019t care";
@@ -1406,8 +1406,8 @@ app.post("/recommend", async (req, res) => {
     function computeIntentAlignment(course, answers) {
       const ri = answers.research_importance || '';
       let intent = 'balanced';
-      if (ri.startsWith('Very important')) intent = 'research';
-      else if (ri.startsWith('Not important')) intent = 'industry';
+      if (ri === 'high') intent = 'research';
+      else if (ri === 'low') intent = 'industry';
 
       const pType = course.program_type;
       if (intent === 'research') {
