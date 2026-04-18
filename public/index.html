@@ -1554,7 +1554,26 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-  const optionalFields = ["profile_subjects", "career_type", "profile_grading_system", "profile_institution_id", "profile_institution_tier", "profile_institution_name", "profile_institution_anabin", "profile_gpa_percentage", "profile_english_scores"];
+  const optionalFields = [
+    "profile_subjects", "career_type", "profile_grading_system",
+    "profile_institution_id", "profile_institution_tier",
+    "profile_institution_name", "profile_institution_anabin",
+    "profile_gpa_percentage", "profile_english_scores",
+    // Conditionally hidden — backend auto-defaults these:
+    "student_experience_importance",
+    "program_type_preference",
+    "internship_importance",
+    "scholarship_importance",
+    "teaching_importance",
+    "research_importance",
+    "work_permit_importance",
+    "english_preference",
+    "pr_importance",
+    // Optional test scores (None is a valid answer):
+    "profile_exam_type",
+    "profile_gre_scores",
+    "profile_gmat_scores"
+  ];
 
   for (let input of hiddenInputs) {
     if (!input.value && !optionalFields.includes(input.id)) {
