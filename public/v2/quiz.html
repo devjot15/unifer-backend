@@ -1716,7 +1716,9 @@ function showUndoToast(snap) {
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 4 9l5 5M4 9h9a5 5 0 0 1 0 10h-3"/></svg>
         Undo
       </button>`;
-    document.body.appendChild(toast);
+    // Attach to #app-root (not body) so the view swap clears the toast automatically.
+    const host = document.getElementById("app-root") || document.body;
+    host.appendChild(toast);
     toast.querySelector(".undo-btn").addEventListener("click", () => {
       if (lastSnapshot) undoTo(lastSnapshot);
       hideUndoToast();
@@ -2293,6 +2295,13 @@ $("#startBtn").addEventListener("click", () => {
 
 /* Apply default visual variants once (Tweaks debug panel removed). */
 document.body.classList.add("pill-A", "trans-A", "call-A", "ribbon-soft");
+
+/* Safety: if the quiz view is torn down via hash navigation while an undo
+   toast is visible, make sure the toast doesn't leak onto the next view. */
+window.addEventListener("hashchange", function cleanupToast() {
+  const t = document.getElementById("undoToast");
+  if (t) t.remove();
+}, { once: true });
 
 })();
 </script>
