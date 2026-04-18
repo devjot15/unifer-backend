@@ -1520,9 +1520,6 @@ app.post("/recommend", async (req, res) => {
       let countryScore = hasPreselectedCountry
         ? null
         : computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
-      if (course === durationFilteredCourses[0]) {
-        console.log('[audit-first-course] countryScore:', countryScore, '| courseScore:', courseScore, '| universityScore (pre-soft):', universityScore);
-      }
       let courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
       // Step 7: Blend composite ranking score with sub-indicator score
@@ -1540,6 +1537,9 @@ app.post("/recommend", async (req, res) => {
       const universityScore = compositeScore != null
         ? alpha * compositeScore + beta * blendedSubScore
         : 0.70 * blendedSubScore;
+      if (course === durationFilteredCourses[0]) {
+        console.log('[audit-first-course] countryScore:', countryScore, '| courseScore:', courseScore, '| universityScore:', universityScore);
+      }
 
       console.log(`[score] ${university?.canonical_name || course?.university_id} composite=${compositeScore?.toFixed(3)} globalSub=${subScore?.toFixed(3)} subjectSub=${subjectSubScore !== null && subjectSubScore !== undefined ? subjectSubScore.toFixed(3) : 'none'} delta=${delta} final=${universityScore?.toFixed(3)}`);
 
