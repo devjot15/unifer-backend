@@ -1217,9 +1217,11 @@ function updateStep(step) {
 }
 
 function isGroupHiddenByConditionalLogic(group) {
-  // Walks up the DOM checking if any ancestor is hidden via inline style or computed CSS
+  // Walks up the DOM checking if any ancestor is hidden via inline style or computed CSS,
+  // OR is marked with dataset.skip="true" (conditional skip flag).
   var el = group;
   while (el && el !== document.body) {
+    if (el.dataset && el.dataset.skip === 'true') return true;
     if (el.style && el.style.display === 'none') return true;
     if (window.getComputedStyle && window.getComputedStyle(el).display === 'none') {
       // Ignore the form-step display:none (that's step navigation, not conditional logic)
@@ -1554,7 +1556,26 @@ form.addEventListener("submit", function(e) {
   if (!checkPriorities()) return;
 
   const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
-  const optionalFields = ["profile_subjects", "career_type", "profile_grading_system", "profile_institution_id", "profile_institution_tier", "profile_institution_name", "profile_institution_anabin", "profile_gpa_percentage", "profile_english_scores"];
+  const optionalFields = [
+    "profile_subjects", "career_type", "profile_grading_system",
+    "profile_institution_id", "profile_institution_tier",
+    "profile_institution_name", "profile_institution_anabin",
+    "profile_gpa_percentage", "profile_english_scores",
+    // Conditionally hidden — backend auto-defaults these:
+    "student_experience_importance",
+    "program_type_preference",
+    "internship_importance",
+    "scholarship_importance",
+    "teaching_importance",
+    "research_importance",
+    "work_permit_importance",
+    "english_preference",
+    "pr_importance",
+    // Optional test scores (None is a valid answer):
+    "profile_exam_type",
+    "profile_gre_scores",
+    "profile_gmat_scores"
+  ];
 
   for (let input of hiddenInputs) {
     if (!input.value && !optionalFields.includes(input.id)) {
@@ -1859,9 +1880,23 @@ function setEnglishScores() {
     var tuition = tuitionEl ? tuitionEl.getAttribute('data-value') : null;
 
     // 1. Country pre-selected → skip Step 3 entirely + hide Country from priority ranking
+    // dataset.skip='true' triggers both step navigation skipping AND validation skipping
     var step3 = document.getElementById('step-3-container');
     if (step3) {
       step3.dataset.skip = hasPreselectedCountry ? 'true' : 'false';
+      // Also clear any selections in Section 3 fields so they don't carry stale values
+      if (hasPreselectedCountry) {
+        ['work_permit_importance', 'english_preference', 'pr_importance'].forEach(function(name) {
+          var input = document.getElementById(name);
+          if (input) input.value = '';
+          var grp = document.querySelector('.option-group[data-name="' + name + '"]');
+          if (grp) {
+            grp.querySelectorAll('.option-card.selected').forEach(function(c) {
+              c.classList.remove('selected');
+            });
+          }
+        });
+      }
     }
     // Hide/show Country chips in priority ranking groups
     ['priority_1','priority_2','priority_3'].forEach(function(name) {
