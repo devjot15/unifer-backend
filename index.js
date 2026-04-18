@@ -4,6 +4,7 @@ const cors = require("cors");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const puppeteer = require("puppeteer");
+const path = require("path");
 
 // Currency conversion rates to USD
 const CAD_TO_USD = 0.74;
@@ -105,6 +106,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
+
+// v2 UI — side-by-side with v1 at /, switchover planned
+app.get('/v2', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'v2.html'));
+});
 
 // Connect to Supabase
 const supabase = createClient(

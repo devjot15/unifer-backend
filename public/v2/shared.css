@@ -1,0 +1,108 @@
+/* ===== UNIFER v2 — canonical design tokens =====
+   Shared between quiz and results views.
+   Picks from the quiz file's token set as canonical. */
+:root {
+  /* Canvas */
+  --bg:        oklch(98.8% 0.004 185);
+  --bg-2:      oklch(97.0% 0.006 185);
+  --surface:   #ffffff;
+
+  /* Lines */
+  --line:      oklch(92.0% 0.008 185);
+  --line-2:    oklch(88.0% 0.010 185);
+
+  /* Ink */
+  --ink:       oklch(20.0% 0.012 200);
+  --ink-2:     oklch(38.0% 0.010 195);
+  --ink-3:     oklch(55.0% 0.010 195);
+  --ink-4:     oklch(70.0% 0.010 195);
+  --ink-soft:  var(--ink-2);
+  --ink-mute:  var(--ink-3);
+
+  /* Brand */
+  --teal:       #0F7C78;
+  --teal-ink:   oklch(38.0% 0.070 185);
+  --teal-soft:  oklch(96.0% 0.020 185);
+  --teal-softer: oklch(97.0% 0.014 185);
+  --teal-edge:  oklch(88.0% 0.045 185);
+  --teal-ring:  oklch(70.0% 0.090 185 / 0.35);
+
+  /* Semantic */
+  --amber-soft: oklch(95.5% 0.035 85);
+  --amber-edge: oklch(82.0% 0.080 85);
+  --amber-ink:  oklch(40.0% 0.070 70);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 0 oklch(85.0% 0.010 190 / 0.5), 0 1px 2px oklch(60.0% 0.020 190 / 0.06);
+  --shadow-1:  0 1px 2px rgba(12, 40, 40, 0.04), 0 4px 14px -6px rgba(12, 40, 40, 0.06);
+  --shadow-2:  0 8px 28px -12px rgba(12, 40, 40, 0.18);
+  --shadow-md: 0 1px 0 oklch(85.0% 0.010 190 / 0.5), 0 6px 18px -8px oklch(40.0% 0.050 190 / 0.18);
+  --shadow-lg: 0 2px 0 oklch(85.0% 0.010 190 / 0.4), 0 18px 40px -16px oklch(35.0% 0.060 190 / 0.22);
+
+  /* Motion */
+  --ease:     cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in:  cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur:      320ms;
+
+  /* Radii */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+
+  /* Typography */
+  --font:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --serif: 'Fraunces', Georgia, serif;
+
+  /* Safe areas */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { background: var(--bg); }
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+  font-kerning: normal;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+button, input, select { font: inherit; color: inherit; }
+button { background: none; border: 0; cursor: pointer; padding: 0; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 6px; }
+
+#app-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Boot state (before router takes over) */
+.boot-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  color: var(--ink-3);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+/* View swap transition */
+.view-swap {
+  opacity: 0;
+  animation: viewFadeIn 220ms var(--ease-out) forwards;
+}
+@keyframes viewFadeIn {
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-swap { animation: none; opacity: 1; }
+}
