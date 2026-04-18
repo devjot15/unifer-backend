@@ -1172,10 +1172,15 @@ function updateDurationOptions() {
   // Reset selections
   document.getElementById("duration").value = "";
   if (programTypeInput) programTypeInput.value = "";
-  formMessage.textContent = "Please reselect your preferred duration for the chosen level.";
   durationGroup.querySelectorAll(".option-card").forEach(function(card) {
     card.classList.remove("selected");
   });
+  // Only show the reselect message when PG is chosen and duration needs answering
+  if (level === "PG") {
+    formMessage.textContent = "Please reselect your preferred duration for the chosen level.";
+  } else {
+    formMessage.textContent = "";
+  }
   if (programTypeSection) {
     programTypeSection.querySelectorAll(".option-card").forEach(function(card) {
       card.classList.remove("selected");
@@ -1215,7 +1220,7 @@ function validateCurrentStep() {
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
-  var optionalGroupNames = ["profile_gre_scores", "profile_gmat_scores", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_score"];
+  var optionalGroupNames = ["profile_gre_scores", "profile_gmat_scores", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_scores"];
   groupsInStep.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
     var groupName = group.dataset.name;
