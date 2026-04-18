@@ -603,37 +603,6 @@
 .ribbon-soft .rib-row .new { font-size: 15px; font-weight: 600; }
 .ribbon-soft .rib-sub { display: none; }
 
-/* Tweaks panel */
-#tweaksPanel {
-  position: fixed; right: 20px; bottom: 20px; width: 320px;
-  background: #fff; border: 1px solid var(--line-2); border-radius: var(--r-lg);
-  box-shadow: 0 12px 32px -8px rgba(0,0,0,.18);
-  padding: 16px; font-size: 13px; color: var(--ink-2);
-  display: none; z-index: 10000;
-}
-body.tweaks-on #tweaksPanel { display: block; }
-.tw-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
-.tw-head strong { font-size: 13.5px; color: var(--ink-1); letter-spacing: -0.01em; }
-.tw-head .tw-sub { color: var(--ink-4); font-size: 11.5px; }
-.tw-row { margin-bottom: 12px; }
-.tw-row label { display: block; font-size: 11.5px; color: var(--ink-3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
-.tw-seg { display: flex; gap: 6px; flex-wrap: wrap; }
-.tw-seg-btn {
-  flex: 1; min-width: 90px; padding: 8px 10px; border-radius: 8px;
-  border: 1px solid var(--line-2); background: #fff; color: var(--ink-2);
-  font-size: 12.5px; cursor: pointer; transition: all 120ms var(--ease);
-}
-.tw-seg-btn:hover { border-color: var(--teal-edge); }
-.tw-seg-btn.on { background: var(--teal-ink); color: #fff; border-color: var(--teal-ink); }
-.tw-row input[type=range] { width: calc(100% - 38px); vertical-align: middle; accent-color: var(--teal-ink); }
-.tw-val { display: inline-block; width: 32px; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 12px; margin-left: 4px; }
-.tw-demo { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line-1); }
-.tw-demo button {
-  width: 100%; padding: 9px 10px; border-radius: 8px;
-  border: 1px dashed var(--teal-edge); background: var(--teal-soft);
-  color: var(--teal-ink); font-size: 12.5px; cursor: pointer;
-}
-.tw-demo button:hover { background: #eaf1ef; }
 .track {
   height: 2px; background: var(--line); position: relative; margin-top: 10px;
   border-radius: 2px; overflow: hidden;
@@ -1892,31 +1861,63 @@ function renderSearch(step) {
     </div>`;
   const input = composer.querySelector("#searchInput");
   const list = composer.querySelector("#searchList");
-  setTimeout(()=>input.focus({preventScroll:true}), 60);
+  setTimeout(() => input.focus({ preventScroll: true }), 60);
 
-  input.addEventListener("input", () => {
-    const q = input.value.trim().toLowerCase();
-    if (q.length < 2) { list.style.display="none"; return; }
-    const results = INSTITUTIONS.filter(i => i.name.toLowerCase().includes(q)).slice(0, 6);
-    list.innerHTML = results.map(r =>
-      `<div class="search-item" data-name="${esc(r.name)}">
-         <div>${esc(r.name)}</div>
-         <div class="meta">${esc(r.city)} &middot; Tier ${r.tier}</div>
+  function pickInstitution(item) {
+    state.answers.profile_institution_id      = item.id || "";
+    state.answers.profile_institution_tier    = item.tier || 3;
+    state.answers.profile_institution_name    = item.institution_name;
+    state.answers.profile_institution_anabin  = item.anabin_status || "H+";
+    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
+    submitAnswer(step.id, item.institution_name, item.institution_name);
+  }
+
+  function pickNotListed() {
+    state.answers.profile_institution_id      = "";
+    state.answers.profile_institution_tier    = "3";
+    state.answers.profile_institution_name    = "Not listed";
+    state.answers.profile_institution_anabin  = "not_checked";
+    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
+    submitAnswer(step.id, "Not listed", "My institution isn&rsquo;t listed");
+  }
+
+  function renderInstDropdown(items) {
+    if (!items || items.length === 0) {
+      list.innerHTML = `<div class="search-footer" id="notListed">My institution isn&rsquo;t listed &rarr;</div>`;
+      list.style.display = "block";
+      list.querySelector("#notListed").addEventListener("click", pickNotListed);
+      return;
+    }
+    list.innerHTML = items.map((item, i) =>
+      `<div class="search-item" data-i="${i}">
+         <div><strong>${esc(item.institution_name)}</strong></div>
+         <div class="meta">${esc(item.city || "")}${item.state ? ", " + esc(item.state) : ""}${item.institution_type ? " · " + esc(item.institution_type) : ""}</div>
        </div>`
     ).join("") + `<div class="search-footer" id="notListed">My institution isn&rsquo;t listed &rarr;</div>`;
     list.style.display = "block";
     list.querySelectorAll(".search-item").forEach(el => {
       el.addEventListener("click", () => {
-        submitAnswer(step.id, el.dataset.name, el.dataset.name);
+        const item = items[parseInt(el.dataset.i, 10)];
+        pickInstitution(item);
       });
     });
-    list.querySelector("#notListed").addEventListener("click", () => {
-      submitAnswer(step.id, "Not listed", "My institution isn&rsquo;t listed");
-    });
+    list.querySelector("#notListed").addEventListener("click", pickNotListed);
+  }
+
+  let timer = null;
+  input.addEventListener("input", () => {
+    const q = input.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) { list.style.display = "none"; return; }
+    timer = setTimeout(() => {
+      fetch("/search-institutions?q=" + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(renderInstDropdown)
+        .catch(() => {});
+    }, 300);
   });
-  composer.querySelector("#sendNotListed").addEventListener("click", () => {
-    submitAnswer(step.id, "Not listed", "My institution isn&rsquo;t listed");
-  });
+
+  composer.querySelector("#sendNotListed").addEventListener("click", pickNotListed);
 }
 
 /* ----- GRID (multi-component scores) ----- */
@@ -2117,7 +2118,7 @@ async function advance() {
 async function microTick(prevStep) {
   if (!prevStep || state.count <= 0) return;
   const hash = [...(prevStep.id || "")].reduce((a,c)=>a + c.charCodeAt(0), 0);
-  const range = (typeof tweaks !== "undefined" ? tweaks.microTickRange : 50);
+  const range = 50;
   // magnitude: roughly half the range on the low end, up to full range
   const magnitude = Math.max(8, Math.round(range * 0.4) + (hash % Math.max(6, Math.round(range * 0.7))));
   const target = Math.max(0, state.count - magnitude);
@@ -2290,122 +2291,8 @@ $("#startBtn").addEventListener("click", () => {
   setTimeout(startChat, reduce ? 20 : 120);
 });
 
-/* =====================================================
-   Tweaks — callout variant toggle + a couple small knobs
-   ===================================================== */
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "pillStyle": "A",
-  "transStyle": "A",
-  "calloutStyle": "A",
-  "microTickRange": 50,
-  "ribbonEmphasis": false
-}/*EDITMODE-END*/;
-const tweaks = { ...TWEAK_DEFAULTS };
-
-function applyTweaks() {
-  const b = document.body;
-  b.classList.toggle("pill-A", tweaks.pillStyle === "A");
-  b.classList.toggle("pill-B", tweaks.pillStyle === "B");
-  b.classList.toggle("trans-A", tweaks.transStyle === "A");
-  b.classList.toggle("trans-B", tweaks.transStyle === "B");
-  b.classList.toggle("call-A", tweaks.calloutStyle === "A");
-  b.classList.toggle("call-B", tweaks.calloutStyle === "B");
-  b.classList.toggle("callout-B", tweaks.calloutStyle === "B"); // legacy
-  b.classList.toggle("ribbon-soft", !tweaks.ribbonEmphasis);
-}
-applyTweaks();
-
-// Tweaks panel (hidden until host toggles on)
-const tweaksPanel = document.createElement("div");
-tweaksPanel.id = "tweaksPanel";
-tweaksPanel.innerHTML = `
-  <div class="tw-head">
-    <strong>Tweaks</strong>
-    <span class="tw-sub">Preview variants in place</span>
-  </div>
-  <div class="tw-row">
-    <label>Count pill</label>
-    <div class="tw-seg" role="radiogroup">
-      <button data-k="pillStyle" data-v="A" class="tw-seg-btn">A · Full (dot+bar)</button>
-      <button data-k="pillStyle" data-v="B" class="tw-seg-btn">B · Minimal (dot)</button>
-    </div>
-  </div>
-  <div class="tw-row">
-    <label>Section transition</label>
-    <div class="tw-seg" role="radiogroup">
-      <button data-k="transStyle" data-v="A" class="tw-seg-btn">A · Odometer + sweep</button>
-      <button data-k="transStyle" data-v="B" class="tw-seg-btn">B · Big morph</button>
-    </div>
-  </div>
-  <div class="tw-row">
-    <label>Callout style</label>
-    <div class="tw-seg" role="radiogroup">
-      <button data-k="calloutStyle" data-v="A" class="tw-seg-btn">A · Italic quote</button>
-      <button data-k="calloutStyle" data-v="B" class="tw-seg-btn">B · Gradient fade</button>
-    </div>
-  </div>
-  <div class="tw-row">
-    <label>Ribbon emphasis</label>
-    <div class="tw-seg" role="radiogroup">
-      <button data-k="ribbonEmphasis" data-v="true" class="tw-seg-btn">Full</button>
-      <button data-k="ribbonEmphasis" data-v="false" class="tw-seg-btn">Subtle</button>
-    </div>
-  </div>
-  <div class="tw-row">
-    <label>Micro-tick magnitude</label>
-    <input type="range" min="10" max="120" step="5" id="tw-micro" value="${tweaks.microTickRange}" />
-    <span class="tw-val" id="tw-micro-val">${tweaks.microTickRange}</span>
-  </div>
-  <div class="tw-demo">
-    <button id="tw-replay">Replay callout + transition demo</button>
-  </div>
-`;
-document.body.appendChild(tweaksPanel);
-
-function refreshSeg() {
-  tweaksPanel.querySelectorAll(".tw-seg-btn").forEach(b => {
-    const v = b.dataset.v, k = b.dataset.k;
-    const cur = String(tweaks[k]);
-    b.classList.toggle("on", cur === v);
-  });
-}
-refreshSeg();
-
-tweaksPanel.addEventListener("click", (e) => {
-  const btn = e.target.closest(".tw-seg-btn");
-  if (!btn) return;
-  const k = btn.dataset.k;
-  let v = btn.dataset.v;
-  if (v === "true" || v === "false") v = (v === "true");
-  tweaks[k] = v;
-  applyTweaks();
-  refreshSeg();
-  window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { [k]: v } }, "*");
-});
-tweaksPanel.querySelector("#tw-micro").addEventListener("input", (e) => {
-  const v = parseInt(e.target.value, 10);
-  tweaks.microTickRange = v;
-  tweaksPanel.querySelector("#tw-micro-val").textContent = v;
-  window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { microTickRange: v } }, "*");
-});
-tweaksPanel.querySelector("#tw-replay").addEventListener("click", () => {
-  // Drop a sample callout and ribbon at the bottom of the stream so the user
-  // can A/B visual treatments without restarting the flow.
-  if (!document.getElementById("stream")) return;
-  addCalloutMsg("If you want to keep options open, I can weight towards broader programs.");
-  const from = Math.max(500, state.count || 5000);
-  const to = Math.max(12, Math.round(from * 0.55));
-  setTimeout(() => addRibbon(from, to), 600);
-});
-
-// Host integration
-window.addEventListener("message", (e) => {
-  const d = e.data;
-  if (!d || typeof d !== "object") return;
-  if (d.type === "__activate_edit_mode") document.body.classList.add("tweaks-on");
-  if (d.type === "__deactivate_edit_mode") document.body.classList.remove("tweaks-on");
-});
-try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: "__edit_mode_available" }, "*"); } catch (e) {}
+/* Apply default visual variants once (Tweaks debug panel removed). */
+document.body.classList.add("pill-A", "trans-A", "call-A", "ribbon-soft");
 
 })();
 </script>
