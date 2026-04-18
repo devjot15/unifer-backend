@@ -1,51 +1,1617 @@
 <style>
-.stage-placeholder-results {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 24px;
-  gap: 20px;
-  text-align: center;
-}
-.stage-placeholder-results h1 {
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-.stage-placeholder-results p {
-  color: var(--ink-3);
-  font-size: 15px;
-  max-width: 480px;
-  line-height: 1.5;
-  margin: 0;
-}
-.stage-placeholder-results .btn {
-  background: var(--teal);
-  color: white;
-  padding: 14px 28px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  margin-top: 12px;
-}
-.stage-placeholder-results code {
-  background: var(--bg-2);
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--teal-ink);
-  border: 1px solid var(--line);
-}
-</style>
 
-<div class="stage-placeholder-results">
-  <h1>Results view</h1>
-  <p>Stage 1A skeleton placeholder. The actual results UI is ported in Stage 1B.</p>
-  <p>This view will eventually show the ranked top 5 + compare + scenarios from <code>UNIFER_Results.html</code>.</p>
-  <button class="btn" onclick="window.UNIFER.navigate('quiz')">Back to quiz</button>
+  .fr{ font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; }
+
+/* ─────────── App shell ─────────── */
+  .app{
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 20px 80px;
+  }
+
+  .header{
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in oklab, var(--bg) 88%, transparent);
+    backdrop-filter: saturate(140%) blur(10px);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--hair);
+    padding: 14px 20px;
+    margin: 0 -20px 0;
+  }
+  .header-inner{
+    display: flex; align-items: center; gap: 14px;
+    max-width: 940px; margin: 0 auto;
+  }
+  .logo{
+    display:inline-flex; align-items: center; gap: 8px;
+    font-weight: 600; letter-spacing: -0.01em; font-size: 15px;
+  }
+  .logo-mark{
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--teal);
+    position: relative;
+    display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 11px;
+    box-shadow: inset 0 -2px 0 oklch(0.35 0.06 185 / 0.35);
+  }
+  .logo-mark::after{
+    content:''; position: absolute; inset: 3px;
+    border-radius: 4px;
+    border: 1.5px solid oklch(1 0 0 / 0.6);
+    border-bottom-color: transparent; border-right-color: transparent;
+  }
+  .header-spacer{ flex: 1; }
+
+  /* View toggle */
+  .toggle{
+    display: inline-flex; padding: 3px; gap: 2px;
+    background: var(--teal-softer);
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+  }
+  .toggle button{
+    padding: 6px 14px;
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-soft);
+    border-radius: 999px;
+    transition: color 200ms var(--ease), background 200ms var(--ease);
+  }
+  .toggle button[aria-pressed="true"]{
+    background: #fff; color: var(--ink);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .tweak-counter{
+    display: inline-flex; align-items: baseline; gap: 5px;
+    padding: 6px 11px;
+    background: var(--teal-softer);
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+    font-size: 12.5px; color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .tweak-counter .n{ color: var(--teal-ink); font-weight: 600; }
+  .tweak-counter.pulse{ animation: pulse 600ms var(--ease); }
+  @keyframes pulse{
+    0%{ transform: scale(1); background: var(--teal-soft); }
+    40%{ transform: scale(1.08); background: color-mix(in oklab, var(--teal) 18%, var(--teal-softer)); }
+    100%{ transform: scale(1); background: var(--teal-softer); }
+  }
+
+  /* Tabs */
+  .tabs{
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--hair);
+    margin-top: 18px; margin-bottom: 22px;
+    position: sticky; top: 63px; z-index: 30;
+    background: color-mix(in oklab, var(--bg) 92%, transparent);
+    backdrop-filter: blur(8px);
+  }
+  .tab{
+    padding: 12px 2px;
+    margin-right: 26px;
+    font-size: 14px; font-weight: 500;
+    color: var(--ink-mute);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 200ms var(--ease), border-color 200ms var(--ease);
+  }
+  .tab[aria-selected="true"]{ color: var(--ink); border-bottom-color: var(--teal); }
+
+  /* ─────────── Hero card (Ranked view) ─────────── */
+  .stack{ display: flex; flex-direction: column; gap: 14px; }
+  .card{
+    background: var(--card);
+    border: 1px solid var(--hair);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    will-change: transform;
+  }
+  .card-body{ padding: 22px 24px 20px; }
+
+  .card-head{
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: start;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .rank{
+    display: grid; place-items: center;
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: var(--teal-softer);
+    color: var(--teal-ink);
+    font-weight: 600; font-size: 14px;
+    border: 1px solid var(--hair);
+    font-variant-numeric: tabular-nums;
+  }
+  .card[data-rank="1"] .rank{ background: var(--teal); color: #fff; border-color: transparent; }
+
+  .uni-name{
+    font-size: 20px; font-weight: 600; letter-spacing: -0.015em;
+    line-height: 1.25;
+    display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .conf{
+    width: 16px; height: 16px; display: inline-grid; place-items: center;
+    color: var(--teal); flex: none;
+    position: relative;
+  }
+  .conf svg{ width: 14px; height: 14px; }
+.course{
+    color: var(--ink-soft); font-size: 14px; margin-top: 3px;
+  }
+  .meta{
+    display: flex; flex-wrap: wrap; gap: 4px 14px;
+    font-size: 12.5px; color: var(--ink-mute); margin-top: 6px;
+  }
+  .meta span{ display: inline-flex; align-items: center; gap: 5px; }
+  .meta span + span::before{
+    content:''; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--hair-strong);
+    margin-right: 8px;
+  }
+
+  .bookmark{
+    width: 32px; height: 32px; border-radius: 10px;
+    display: grid; place-items: center;
+    color: var(--ink-mute);
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .bookmark svg{ width: 16px; height: 16px; }
+
+  /* Score bars */
+  .scores{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 9px;
+    margin: 14px 0 16px;
+  }
+  .score{
+    display: grid;
+    grid-template-columns: 130px 1fr 44px;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .score-label{ color: var(--ink-soft); }
+  .score-track{
+    height: 6px; background: var(--teal-softer);
+    border-radius: 999px; overflow: hidden; position: relative;
+  }
+  .score-fill{
+    height: 100%;
+    background: var(--teal);
+    border-radius: 999px;
+    width: 0%;
+    transform-origin: left center;
+    transition: width 600ms var(--ease-out);
+  }
+  .score-val{
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .why-label{
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-mute);
+    margin: 4px 0 6px;
+  }
+  .why{
+    font-size: 14.5px; color: var(--ink-soft); line-height: 1.55;
+    max-width: 62ch;
+    text-wrap: pretty;
+  }
+  .why em{ color: var(--ink); font-style: italic; }
+
+  /* Chips */
+  .chips{
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px;
+  }
+  .chip{
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 32px;
+    padding: 6px 11px;
+    border: 1px solid var(--hair);
+    background: #fff;
+    border-radius: 999px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    transition: transform 160ms var(--ease), border-color 160ms var(--ease), background 160ms var(--ease), color 160ms var(--ease);
+  }
+  .chip:hover{ border-color: var(--teal); color: var(--teal-ink); background: var(--teal-softer); }
+  .chip:active{ transform: scale(0.97); }
+  .chip .k{ color: var(--ink-mute); }
+  .chip .v{ color: var(--ink); font-weight: 500; }
+  @media (pointer: coarse){
+    .chip{ min-height: 44px; padding: 10px 14px; font-size: 13.5px; }
+  }
+
+  /* More data */
+  .more{
+    margin-top: 16px;
+    border-top: 1px solid var(--hair);
+    padding-top: 14px;
+  }
+  .more-toggle{
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--ink-soft);
+    padding: 4px 0;
+  }
+  .more-toggle svg{ width: 12px; height: 12px; transition: transform 240ms var(--ease); }
+  .more[data-open="true"] .more-toggle svg{ transform: rotate(90deg); }
+  .more-body{
+    display: grid; grid-template-rows: 0fr;
+    transition: grid-template-rows 320ms var(--ease);
+  }
+  .more-body > div{ overflow: hidden; }
+  .more[data-open="true"] .more-body{ grid-template-rows: 1fr; }
+  .data-grid{
+    padding: 14px 0 2px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 24px;
+    font-size: 13px;
+  }
+  @media (max-width: 560px){ .data-grid{ grid-template-columns: 1fr; } }
+  .data-row{ display: flex; justify-content: space-between; gap: 10px; align-items: baseline; border-bottom: 1px dashed var(--hair); padding-bottom: 8px; }
+  .data-row .lab{ color: var(--ink-mute); }
+  .data-row .val{ color: var(--ink); font-weight: 500; text-align: right; }
+  .src{ color: var(--ink-mute); font-size: 11.5px; margin-left: 6px; }
+
+  /* What if cards */
+  .whatif-title{
+    margin: 36px 2px 12px;
+    font-size: 13px; color: var(--ink-mute);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .whatif-row{
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+  }
+  @media (max-width: 720px){ .whatif-row{ grid-template-columns: 1fr; } }
+  .whatif{
+    text-align: left;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid var(--hair);
+    border-radius: var(--r-md);
+    transition: all 220ms var(--ease);
+    box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .whatif:hover{ border-color: var(--teal); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .whatif .hint{ font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-mute); }
+  .whatif .q{ font-size: 14.5px; color: var(--ink); line-height: 1.35; }
+  .whatif .q em{ color: var(--teal-ink); font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; }
+
+  /* Preview banner when a what-if is active */
+  .preview-banner{
+    display: none;
+    position: sticky; top: 108px; z-index: 25;
+    margin: 12px 0 14px;
+    padding: 10px 14px;
+    background: color-mix(in oklab, var(--teal) 10%, #fff);
+    border: 1px solid color-mix(in oklab, var(--teal) 25%, var(--hair));
+    border-radius: 14px;
+    font-size: 13px; color: var(--teal-ink);
+    align-items: center; justify-content: space-between;
+    gap: 10px;
+  }
+  body[data-preview="true"] .preview-banner{ display: flex; }
+  body[data-preview="true"] .stack-ranked{ opacity: 1; }
+  body[data-preview="true"] .stack-ranked .card:not([data-preview-active]){ opacity: 0.28; filter: saturate(0.7); }
+  .preview-banner button{
+    padding: 6px 12px; border-radius: 999px;
+    background: #fff; color: var(--teal-ink);
+    border: 1px solid color-mix(in oklab, var(--teal) 20%, var(--hair));
+    font-size: 12.5px; font-weight: 500;
+  }
+
+  /* ─────────── Modal ─────────── */
+  .modal-scrim{
+    position: fixed; inset: 0; z-index: 60;
+    background: oklch(0.2 0.02 200 / 0.35);
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms var(--ease);
+    display: grid;
+    place-items: end center;
+  }
+  @media (min-width: 640px){ .modal-scrim{ place-items: center; } }
+  .modal-scrim[data-open="true"]{ opacity: 1; pointer-events: auto; }
+  .modal{
+    background: #fff;
+    border-radius: 24px 24px 0 0;
+    padding: 22px 22px 26px;
+    width: min(560px, 100%);
+    transform: translateY(20px);
+    transition: transform 280ms var(--ease);
+    box-shadow: var(--shadow-lg);
+  }
+  @media (min-width: 640px){ .modal{ border-radius: 24px; transform: translateY(8px) scale(0.98); } }
+  .modal-scrim[data-open="true"] .modal{ transform: translateY(0) scale(1); }
+  .modal h3{ margin: 0 0 4px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .modal p{ margin: 0 0 14px; font-size: 13.5px; color: var(--ink-soft); }
+  .opts{ display: flex; flex-wrap: wrap; gap: 8px; }
+  .opt{
+    padding: 9px 13px;
+    border: 1px solid var(--hair);
+    background: var(--bg-2);
+    border-radius: 999px;
+    font-size: 13.5px;
+    color: var(--ink);
+    transition: all 180ms var(--ease);
+    min-height: 44px;
+  }
+  .opt:hover{ border-color: var(--teal); background: var(--teal-softer); }
+  .opt[data-selected="true"]{
+    background: var(--teal); color: #fff; border-color: transparent;
+  }
+  .opt[data-selected="true"]::after{ content:' ✓'; }
+
+  /* ─────────── Compare view ─────────── */
+  .compare-wrap{ display: none; }
+  body[data-view="compare"] .compare-wrap{ display: block; }
+  body[data-view="compare"] .ranked-wrap{ display: none; }
+
+  .cols-scroll{
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -20px; padding: 2px 20px 10px;
+  }
+  .cols{
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(180px, 1fr);
+    gap: 10px;
+    min-width: 100%;
+  }
+  @media (min-width: 720px){
+    .cols-scroll{ overflow: visible; }
+    .cols{ grid-auto-columns: 1fr; }
+  }
+  .col{
+    background: #fff; border: 1px solid var(--hair);
+    border-top: 3px solid var(--col, var(--teal));
+    border-radius: 14px;
+    padding: 12px;
+    scroll-snap-align: start;
+    transition: transform 280ms var(--ease), opacity 220ms var(--ease);
+    position: relative;
+  }
+  .col[data-deselected="true"]{ display: none; }
+  .col-x{
+    position: absolute; top: 8px; right: 8px;
+    width: 24px; height: 24px; border-radius: 999px;
+    background: var(--bg-2); color: var(--ink-mute);
+    display: grid; place-items: center; font-size: 13px;
+    border: 1px solid var(--hair);
+    transition: all 160ms var(--ease);
+  }
+  .col-x:hover{ background: var(--ink); color: #fff; border-color: transparent; }
+  .col-name{ font-weight: 600; font-size: 14px; line-height: 1.3; padding-right: 24px; }
+  .col-course{ font-size: 12px; color: var(--ink-mute); margin-top: 2px; }
+  .col-dot{
+    width: 8px; height: 8px; border-radius: 999px;
+    background: var(--col, var(--teal));
+    display: inline-block; margin-right: 6px; vertical-align: middle;
+  }
+
+  /* Section headers in compare */
+  .section{ margin-top: 32px; }
+  .section-h{
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-mute); margin: 0 2px 10px;
+  }
+  .section-sub{
+    font-size: 14px; color: var(--ink-soft); margin: -4px 2px 14px;
+    max-width: 62ch;
+  }
+
+  /* Table */
+  .compare-table{
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: #fff; border: 1px solid var(--hair); border-radius: var(--r-md);
+    overflow: hidden;
+    font-size: 13px;
+  }
+  .compare-table th, .compare-table td{
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--hair);
+    vertical-align: top;
+  }
+  .compare-table th{
+    font-size: 12px; font-weight: 500; color: var(--ink-mute);
+    background: var(--teal-softer);
+    position: sticky; left: 0;
+  }
+  .compare-table td:first-of-type{ font-weight: 500; color: var(--ink); }
+  .compare-table thead th{
+    background: #fff;
+    color: var(--ink); font-weight: 600; font-size: 13px;
+    border-bottom: 1px solid var(--hair-strong);
+  }
+  .compare-table thead th .dot{ width: 6px; height: 6px; border-radius: 999px; background: var(--col); display: inline-block; margin-right: 6px; vertical-align: middle; }
+  .compare-table tbody tr:last-child td{ border-bottom: 0; }
+  .winner{ position: relative; font-weight: 600; }
+  .winner::after{
+    content:''; display: inline-block;
+    width: 5px; height: 5px; border-radius: 999px; background: var(--teal);
+    margin-left: 6px; vertical-align: middle;
+  }
+  .table-scroll{ overflow-x: auto; }
+
+  /* Score breakdown bars */
+  .breakdown{
+    background: #fff; border: 1px solid var(--hair); border-radius: var(--r-md);
+    padding: 16px 18px;
+  }
+  .bd-group{ padding: 6px 0; }
+  .bd-group + .bd-group{ border-top: 1px solid var(--hair); margin-top: 10px; padding-top: 14px; }
+  .bd-title{ font-size: 12.5px; font-weight: 500; color: var(--ink-soft); margin-bottom: 8px; }
+  .bd-row{
+    display: grid;
+    grid-template-columns: 110px 1fr 40px;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 12.5px;
+  }
+  .bd-row .n{ color: var(--ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bd-row .t{ height: 6px; background: var(--bg-2); border-radius: 999px; overflow: hidden; }
+  .bd-row .t > i{ display: block; height: 100%; background: var(--col, var(--teal)); border-radius: 999px; width: var(--w, 0%); transition: width 500ms var(--ease-out); }
+  .bd-row .v{ text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+  /* Dimensional strips */
+  .strips{
+    background: #fff; border: 1px solid var(--hair); border-radius: var(--r-md);
+    padding: 18px 18px 10px;
+  }
+  .strip{
+    padding: 14px 2px 22px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .strip:last-child{ border-bottom: 0; }
+  .strip-h{
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 13px; margin-bottom: 14px;
+  }
+  .strip-h .name{ font-weight: 500; color: var(--ink); }
+  .strip-h .scale{ color: var(--ink-mute); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .strip-line{
+    position: relative;
+    height: 40px;
+    margin: 0 6px;
+  }
+  .strip-axis{
+    position: absolute; left: 0; right: 0; top: 50%;
+    height: 2px; transform: translateY(-50%);
+    background: linear-gradient(to right,
+      oklch(0.9 0.01 190),
+      oklch(0.82 0.05 185));
+    border-radius: 999px;
+  }
+  .strip-tick{
+    position: absolute; top: 0; bottom: 0; width: 1px;
+    background: var(--hair);
+  }
+  .dot{
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px; height: 12px;
+    border-radius: 999px;
+    background: var(--col, var(--teal));
+    box-shadow: 0 0 0 2px #fff, 0 2px 6px oklch(0.3 0.03 190 / 0.2);
+    transition: left 520ms var(--ease), transform 180ms var(--ease);
+    cursor: pointer;
+  }
+  .dot:hover{ transform: translate(-50%, -50%) scale(1.25); z-index: 2; }
+  .dot-label{
+    position: absolute; top: calc(50% + 12px);
+    transform: translateX(-50%);
+    font-size: 10.5px; color: var(--ink-mute);
+    white-space: nowrap;
+    padding-top: 6px;
+    pointer-events: none;
+  }
+  .dot-label::before{
+    content:''; position: absolute; top: 0; left: 50%;
+    width: 1px; height: 5px; background: var(--col, var(--teal));
+    transform: translateX(-50%);
+    opacity: 0.5;
+  }
+
+  .share-btn{
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    background: #fff; border: 1px solid var(--hair);
+    border-radius: 999px;
+    font-size: 13px; color: var(--ink);
+    transition: all 180ms var(--ease);
+  }
+  .share-btn:hover{ border-color: var(--teal); color: var(--teal-ink); }
+  .share-btn svg{ width: 13px; height: 13px; }
+
+  .compare-top{
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .compare-hint{ font-size: 13px; color: var(--ink-mute); }
+
+  /* Toast */
+  .toast{
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(12px);
+    background: var(--ink); color: #fff;
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 220ms var(--ease), transform 220ms var(--ease);
+    z-index: 80;
+    box-shadow: var(--shadow-lg);
+  }
+  .toast[data-show="true"]{ opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─────────── Scenarios tab ─────────── */
+  .scenarios-wrap{ display: none; }
+  body[data-tab="scenarios"] .scenarios-wrap{ display: block; }
+  body[data-tab="scenarios"] .matches-wrap{ display: none; }
+  body[data-tab="matches"] .scenarios-wrap{ display: none; }
+
+  .scenarios{
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 820px){
+    .scenarios{ grid-template-columns: 1fr; }
+  }
+  .panel{
+    background: #fff; border: 1px solid var(--hair);
+    border-radius: var(--r-lg);
+    padding: 18px;
+  }
+  .panel.controls{ position: sticky; top: 140px; }
+  @media (max-width: 820px){ .panel.controls{ position: static; } }
+  .ctrl{ padding: 12px 0; border-bottom: 1px dashed var(--hair); }
+  .ctrl:last-child{ border-bottom: 0; }
+  .ctrl-h{ display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 8px; }
+  .ctrl-h .lab{ color: var(--ink-soft); font-weight: 500; }
+  .ctrl-h .val{ color: var(--teal-ink); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 13px; }
+  .slider{
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+    outline: none;
+  }
+  .slider::-webkit-slider-thumb{
+    -webkit-appearance: none; appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--teal);
+    cursor: grab;
+    box-shadow: var(--shadow-sm);
+    transition: transform 140ms var(--ease);
+  }
+  .slider::-webkit-slider-thumb:active{ transform: scale(1.15); cursor: grabbing; }
+  .slider::-moz-range-thumb{
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; border: 2px solid var(--teal); cursor: grab;
+  }
+
+  .toggles{ display: flex; flex-wrap: wrap; gap: 6px; }
+  .tog{
+    font-size: 12px; padding: 6px 11px;
+    border: 1px solid var(--hair);
+    border-radius: 999px;
+    background: var(--bg-2);
+    color: var(--ink-soft);
+    transition: all 160ms var(--ease);
+  }
+  .tog[data-on="true"]{ background: var(--teal); color: #fff; border-color: transparent; }
+  .tog:hover{ border-color: var(--teal); }
+
+  .seg{ display: inline-flex; border: 1px solid var(--hair); border-radius: 999px; overflow: hidden; background: var(--bg-2); }
+  .seg button{ padding: 6px 12px; font-size: 12.5px; color: var(--ink-soft); }
+  .seg button[data-on="true"]{ background: var(--teal); color: #fff; }
+
+  select.dd{
+    appearance: none; -webkit-appearance: none;
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--hair);
+    background: #fff;
+    border-radius: 10px;
+    font: inherit; font-size: 13px;
+    color: var(--ink);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2366837f' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+
+  .reset-btn{
+    padding: 7px 12px; font-size: 12.5px;
+    border: 1px solid var(--hair); border-radius: 999px;
+    background: #fff; color: var(--ink-soft);
+    transition: all 160ms var(--ease);
+  }
+  .reset-btn:hover{ border-color: var(--teal); color: var(--teal-ink); }
+
+  .live{
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; color: var(--ink-mute);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .live .pulse-dot{
+    width: 6px; height: 6px; border-radius: 999px; background: var(--teal);
+    animation: livepulse 1600ms ease-in-out infinite;
+  }
+  @keyframes livepulse{
+    0%,100%{ opacity: 0.6; transform: scale(1); }
+    50%{ opacity: 1; transform: scale(1.25); }
+  }
+
+  .scen-list{ display: flex; flex-direction: column; gap: 8px; }
+  .mini-card{
+    background: #fff; border: 1px solid var(--hair);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 32px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    transition: all 320ms var(--ease);
+  }
+  .mini-card .r{
+    width: 28px; height: 28px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: var(--teal-softer); color: var(--teal-ink);
+    font-size: 12px; font-weight: 600;
+  }
+  .mini-card[data-rank="1"] .r{ background: var(--teal); color: #fff; }
+  .mini-card .nm{ font-weight: 500; color: var(--ink); }
+  .mini-card .sc{ font-size: 12px; color: var(--ink-mute); }
+  .mini-card .mt{ font-variant-numeric: tabular-nums; font-weight: 500; color: var(--teal-ink); font-size: 13px; }
+  .mini-card .tr{ height: 4px; width: 60px; background: var(--bg-2); border-radius: 999px; overflow: hidden; margin-top: 3px; }
+  .mini-card .tr > i{ display: block; height: 100%; background: var(--teal); border-radius: 999px; transition: width 320ms var(--ease); }
+
+  /* Loading overlay */
+  .loading{
+    position: fixed; inset: 0; z-index: 100;
+    background: var(--bg);
+    display: grid; place-items: center;
+    transition: opacity 500ms var(--ease);
+  }
+  .loading[data-done="true"]{ opacity: 0; pointer-events: none; }
+  .loading-inner{ text-align: center; max-width: 340px; padding: 0 20px; }
+  .loading h2{ font-size: 22px; font-weight: 500; margin: 14px 0 6px; letter-spacing: -0.015em; }
+  .loading p{ font-size: 13.5px; color: var(--ink-mute); margin: 0; }
+  .loading .ring{
+    width: 44px; height: 44px; margin: 0 auto;
+    border-radius: 50%;
+    border: 2.5px solid var(--teal-soft);
+    border-top-color: var(--teal);
+    animation: spin 900ms linear infinite;
+  }
+  .loading .dot-anim{ display: inline-block; width: 1ch; text-align: left; color: var(--teal); }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+  .loading .fr{ color: var(--teal-ink); }
+
+  /* FLIP helpers */
+  .flip-enter{ animation: flipIn 380ms var(--ease) both; }
+  .flip-exit{ animation: flipOut 280ms var(--ease) both; pointer-events: none; }
+  @keyframes flipIn{
+    0%{ opacity: 0; transform: translateY(14px) scale(0.985); }
+    100%{ opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes flipOut{
+    0%{ opacity: 1; transform: translateY(0) scale(1); max-height: 600px; margin-bottom: 14px; }
+    100%{ opacity: 0; transform: translateY(-8px) scale(0.985); max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Mobile tweaks */
+  @media (max-width: 560px){
+    .header{ padding: 12px 16px; }
+    .app{ padding: 0 14px 80px; }
+    .tabs{ top: 60px; }
+    .score{ grid-template-columns: 110px 1fr 40px; font-size: 12.5px; }
+    .uni-name{ font-size: 18px; }
+    .card-body{ padding: 18px 18px 16px; }
+    .tweak-counter{ padding: 5px 9px; font-size: 12px; }
+    .toggle button{ padding: 6px 11px; font-size: 12.5px; }
+  }
+</style>
+</head>
+<body data-tab="matches" data-view="ranked">
+
+<!-- ─────── Loading ─────── -->
+<div class="loading" id="loading" role="status" aria-live="polite">
+  <div class="loading-inner">
+    <div class="ring" aria-hidden="true"></div>
+    <h2>Running your profile through <span class="fr">1,068</span> universities<span class="dot-anim" id="dotAnim">…</span></h2>
+    <p>Cross-referencing rankings, acceptance data, and your stated priorities.</p>
+  </div>
 </div>
+
+<!-- ─────── Header ─────── -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-mark" aria-hidden="true">U</div>
+      <span>unifer</span>
+    </div>
+
+    <div class="header-spacer"></div>
+
+    <div class="toggle" role="group" aria-label="View mode">
+      <button id="tgRanked" aria-pressed="true">Ranked</button>
+      <button id="tgCompare" aria-pressed="false">Compare</button>
+    </div>
+
+    <div class="tweak-counter" id="tweakCounter" title="Profile changes this session">
+      <span class="n" id="tweakNum">0</span>
+      <span>tweaks</span>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- Tabs -->
+  <nav class="tabs" role="tablist" aria-label="Results sections">
+    <button class="tab" role="tab" aria-selected="true" data-tab="matches">Matches</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="scenarios">Scenarios</button>
+  </nav>
+
+  <!-- ═══════════════════════  MATCHES TAB  ═══════════════════════ -->
+  <div class="matches-wrap">
+
+    <!-- Preview banner (what-if) -->
+    <div class="preview-banner" id="previewBanner" role="status">
+      <span id="previewLabel"></span>
+      <button id="returnOriginal">Return to original</button>
+    </div>
+
+    <!-- Ranked view -->
+    <section class="ranked-wrap">
+      <div class="stack stack-ranked" id="rankedStack" aria-label="Top 5 matched universities"></div>
+
+      <div class="whatif-title">What would change if you…</div>
+      <div class="whatif-row" id="whatifRow"></div>
+    </section>
+
+    <!-- Compare view -->
+    <section class="compare-wrap">
+      <div class="compare-top">
+        <div class="compare-hint">Tap <span style="font-weight:500;color:var(--ink)">×</span> on any column to drop it. All three visualisations update together.</div>
+        <button class="share-btn" id="shareBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v14"/></svg>
+          Share
+        </button>
+      </div>
+
+      <div class="cols-scroll">
+        <div class="cols" id="compareCols"></div>
+      </div>
+
+      <!-- Section A: table -->
+      <div class="section">
+        <h3 class="section-h">A · Side-by-side facts</h3>
+        <div class="table-scroll">
+          <table class="compare-table" id="compareTable"></table>
+        </div>
+      </div>
+
+      <!-- Section B: breakdown bars -->
+      <div class="section">
+        <h3 class="section-h">B · Score breakdown</h3>
+        <p class="section-sub">Three score dimensions, same colour per university across all groups — so your eye can track a single school down the page.</p>
+        <div class="breakdown" id="breakdown"></div>
+      </div>
+
+      <!-- Section C: dimensional strips -->
+      <div class="section">
+        <h3 class="section-h">C · Dimensional strips</h3>
+        <p class="section-sub">Each strip plots all universities on one axis from <span class="fr">weak</span> to <span class="fr">strong</span>. Useful for spotting clusters and outliers at a glance.</p>
+        <div class="strips" id="strips"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ═══════════════════════  SCENARIOS TAB  ═══════════════════════ -->
+  <div class="scenarios-wrap">
+    <div class="scenarios">
+      <aside class="panel controls" id="scenControls">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:600">Control room</div>
+          <button class="reset-btn" id="resetScen">Reset to my answers</button>
+        </div>
+        <p style="font-size:12.5px;color:var(--ink-mute);margin:0 0 8px">Move a knob. The matches respond.</p>
+
+        <div class="ctrl">
+          <div class="ctrl-h"><span class="lab">GPA</span><span class="val" id="valGpa">3.7 / 4.0</span></div>
+          <input type="range" class="slider" id="sGpa" min="50" max="100" step="1" value="88">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-h"><span class="lab">Budget / year</span><span class="val" id="valBudget">up to $50k</span></div>
+          <input type="range" class="slider" id="sBudget" min="5" max="101" step="1" value="50">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-h"><span class="lab">IELTS band</span><span class="val" id="valIelts">7.5</span></div>
+          <input type="range" class="slider" id="sIelts" min="40" max="90" step="1" value="75">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-h"><span class="lab">Open to</span></div>
+          <div class="toggles" id="cToggles"></div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-h"><span class="lab">Field of study</span></div>
+          <select class="dd" id="sField"></select>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-h"><span class="lab">Level</span></div>
+          <div class="seg" id="sLevel">
+            <button data-v="Masters" data-on="true">Masters</button>
+            <button data-v="PhD">PhD</button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="panel" id="scenPreview">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600">Live preview</div>
+          <span class="live"><span class="pulse-dot"></span> updating live</span>
+        </div>
+        <div class="scen-list" id="scenList"></div>
+      </section>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal -->
+<div class="modal-scrim" id="modalScrim" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <h3 id="modalTitle">Change your answer</h3>
+    <p id="modalPrompt">Pick a new value. Your matches will reshuffle.</p>
+    <div class="opts" id="modalOpts"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+
+/* ================================================================
+   UNIFER — Results page (single-file build)
+================================================================= */
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const prefersReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- Seed data (illustrative; placeholder figures) ---------- */
+const _MOCK_UNIS = [
+  {
+    id: 'u1', name: 'Northlake Institute', country: 'United Kingdom', city: 'London',
+    course: 'MSc Computer Science', duration: '1 year', tuition: 42500,
+    scores: { country: 89, course: 92, institution: 94 },
+    confidence: true,
+    rankings: { QS: 6, THE: 12, ARWU: 15, CUG: 9, Guardian: 11, GUG: 8 },
+    subject: { name: 'Computer Science', QS: 9 },
+    stats: { medianGPA: 3.7, gre: '159–165 Q', acceptance: 14 },
+    employ: { rate: 93, salary: 68000 },
+    cost: { living: 18500 },
+    why: "You said <em>course</em> matters more than country — so I've weighted programmes strongest in your field first. Its subject rank (9th worldwide) beats its overall rank, which matches what you asked for.",
+    chips: [
+      { k:'field', v:'Computer Science', q:'Change your field?', opts:['Computer Science','Data Science','Electrical Eng','Mechanical Eng','Business Analytics'] },
+      { k:'focus', v:'Research-focused', q:'Change your focus?', opts:['Research-focused','Industry-focused','Balanced','Undecided'] },
+      { k:'budget', v:'up to $50k', q:'Change your budget?', opts:['Up to $5k','Up to $15k','Up to $30k','Up to $50k','No upper limit'] },
+      { k:'tier', v:'Top institutions only', q:'How picky on institution tier?', opts:['Top 20 only','Top 50 only','Top 100 only','Top institutions only','Open to anywhere'] }
+    ],
+    dims: { research: 0.94, teaching: 0.88, employability: 0.92, diversity: 0.86, prestige: 0.96, selectivity: 0.92 }
+  },
+  {
+    id: 'u2', name: 'Harbour University', country: 'Canada', city: 'Vancouver',
+    course: 'MSc Computing Science', duration: '2 years', tuition: 21800,
+    scores: { country: 84, course: 90, institution: 87 },
+    confidence: true,
+    rankings: { QS: 34, THE: 37, ARWU: 38, CUG: null, Guardian: null, GUG: null },
+    subject: { name: 'Computer Science', QS: 47 },
+    stats: { medianGPA: 3.6, gre: '156–162 Q', acceptance: 22 },
+    employ: { rate: 89, salary: 74000 },
+    cost: { living: 16200 },
+    why: "Ranks 47th worldwide in Computer Science — notably better than its overall rank, which fits the pattern you asked for. Post-study work rights in Canada were a soft priority for you.",
+    chips: [
+      { k:'field', v:'Computer Science', q:'Change your field?', opts:['Computer Science','Data Science','Electrical Eng','Mechanical Eng','Business Analytics'] },
+      { k:'country', v:'Canada welcome', q:'Which countries are you open to?', opts:['UK','USA','Canada','Australia','Germany','Netherlands','Anywhere'] },
+      { k:'budget', v:'up to $50k', q:'Change your budget?', opts:['Up to $5k','Up to $15k','Up to $30k','Up to $50k','No upper limit'] }
+    ],
+    dims: { research: 0.82, teaching: 0.8, employability: 0.86, diversity: 0.88, prestige: 0.78, selectivity: 0.7 }
+  },
+  {
+    id: 'u3', name: 'Mirefield College', country: 'United Kingdom', city: 'Coventry',
+    course: 'MSc Computer Science', duration: '1 year', tuition: 31200,
+    scores: { country: 86, course: 85, institution: 82 },
+    confidence: false,
+    rankings: { QS: 67, THE: 104, ARWU: null, CUG: 8, Guardian: 7, GUG: null },
+    subject: { name: 'Computer Science', QS: 59 },
+    stats: { medianGPA: 3.5, gre: '153–159 Q', acceptance: 31 },
+    employ: { rate: 88, salary: 54000 },
+    cost: { living: 11200 },
+    why: "Your grades sit comfortably above the typical admitted student here. Domestic UK rankings rate it higher than international ones — worth knowing if you weight UK reputation.",
+    chips: [
+      { k:'field', v:'Computer Science', q:'Change your field?', opts:['Computer Science','Data Science','Electrical Eng','Mechanical Eng','Business Analytics'] },
+      { k:'country', v:'UK preferred', q:'Which countries are you open to?', opts:['UK','USA','Canada','Australia','Germany','Netherlands','Anywhere'] },
+      { k:'duration', v:'1-year preferred', q:'Programme length?', opts:['1 year','1–2 years','2 years','No preference'] }
+    ],
+    dims: { research: 0.74, teaching: 0.82, employability: 0.78, diversity: 0.72, prestige: 0.7, selectivity: 0.64 }
+  },
+  {
+    id: 'u4', name: 'Ferncliff University', country: 'Australia', city: 'Melbourne',
+    course: 'MSc Computer Science', duration: '2 years', tuition: 34900,
+    scores: { country: 80, course: 83, institution: 85 },
+    confidence: true,
+    rankings: { QS: 14, THE: 37, ARWU: 32, CUG: null, Guardian: null, GUG: null },
+    subject: { name: 'Computer Science', QS: 28 },
+    stats: { medianGPA: 3.55, gre: '155–161 Q', acceptance: 27 },
+    employ: { rate: 87, salary: 62000 },
+    cost: { living: 17800 },
+    why: "Two-year programmes suit you if you value post-study work rights, and Australia's post-study visa is generous. Subject strength is solid though not top-tier globally.",
+    chips: [
+      { k:'country', v:'Australia welcome', q:'Which countries are you open to?', opts:['UK','USA','Canada','Australia','Germany','Netherlands','Anywhere'] },
+      { k:'work', v:'Post-study work matters', q:'How much do work rights matter?', opts:['Critical','Matters','Somewhat','Not a factor'] },
+      { k:'budget', v:'up to $50k', q:'Change your budget?', opts:['Up to $5k','Up to $15k','Up to $30k','Up to $50k','No upper limit'] }
+    ],
+    dims: { research: 0.8, teaching: 0.78, employability: 0.8, diversity: 0.84, prestige: 0.82, selectivity: 0.74 }
+  },
+  {
+    id: 'u5', name: 'Ravenshaw Polytechnic', country: 'Netherlands', city: 'Delft',
+    course: 'MSc Computer Science', duration: '2 years', tuition: 18900,
+    scores: { country: 75, course: 81, institution: 80 },
+    confidence: false,
+    rankings: { QS: 48, THE: 70, ARWU: 64, CUG: null, Guardian: null, GUG: null },
+    subject: { name: 'Computer Science', QS: 38 },
+    stats: { medianGPA: 3.5, gre: null, acceptance: 34 },
+    employ: { rate: 91, salary: 58000 },
+    cost: { living: 13200 },
+    why: "Lower tuition than the others on this list and strong engineering reputation. English-taught, with a healthy industry pipeline in Europe.",
+    chips: [
+      { k:'budget', v:'up to $50k', q:'Change your budget?', opts:['Up to $5k','Up to $15k','Up to $30k','Up to $50k','No upper limit'] },
+      { k:'country', v:'Europe welcome', q:'Which countries are you open to?', opts:['UK','USA','Canada','Australia','Germany','Netherlands','Anywhere'] },
+      { k:'english', v:'English-taught', q:'Language of instruction?', opts:['English only','Open to English + local','Open to any'] }
+    ],
+    dims: { research: 0.86, teaching: 0.76, employability: 0.82, diversity: 0.82, prestige: 0.72, selectivity: 0.68 }
+  },
+  // Extra unis that can enter via reshuffle
+  {
+    id: 'u6', name: 'Thornbury University', country: 'Germany', city: 'Munich',
+    course: 'MSc Informatics', duration: '2 years', tuition: 2500,
+    scores: { country: 78, course: 88, institution: 90 },
+    confidence: true,
+    rankings: { QS: 37, THE: 26, ARWU: 54 },
+    subject: { name: 'Computer Science', QS: 29 },
+    stats: { medianGPA: 3.6, gre: null, acceptance: 11 },
+    employ: { rate: 90, salary: 65000 },
+    cost: { living: 14400 },
+    why: "Almost-free tuition at a research powerhouse. Enters the top when budget is a hard constraint or when research strength carries more weight.",
+    chips: [
+      { k:'budget', v:'up to $15k', q:'Change your budget?', opts:['Up to $5k','Up to $15k','Up to $30k','Up to $50k','No upper limit'] },
+      { k:'field', v:'Computer Science', q:'Change your field?', opts:['Computer Science','Data Science','Electrical Eng','Mechanical Eng','Business Analytics'] }
+    ],
+    dims: { research: 0.92, teaching: 0.82, employability: 0.84, diversity: 0.8, prestige: 0.86, selectivity: 0.88 }
+  },
+  {
+    id: 'u7', name: 'Southport Institute of Tech', country: 'Singapore', city: 'Singapore',
+    course: 'MSc Computer Science (Research)', duration: '2 years', tuition: 26400,
+    scores: { country: 82, course: 87, institution: 89 },
+    confidence: true,
+    rankings: { QS: 11, THE: 19, ARWU: 22 },
+    subject: { name: 'Computer Science', QS: 15 },
+    stats: { medianGPA: 3.65, gre: '161–166 Q', acceptance: 9 },
+    employ: { rate: 95, salary: 78000 },
+    cost: { living: 19800 },
+    why: "A strong alternative when you weight employability heavily. Compact ecosystem, tight industry links, selective admits.",
+    chips: [
+      { k:'work', v:'Work rights matter', q:'How much do work rights matter?', opts:['Critical','Matters','Somewhat','Not a factor'] },
+      { k:'field', v:'Computer Science', q:'Change your field?', opts:['Computer Science','Data Science','Electrical Eng','Mechanical Eng','Business Analytics'] }
+    ],
+    dims: { research: 0.9, teaching: 0.88, employability: 0.96, diversity: 0.9, prestige: 0.88, selectivity: 0.94 }
+  }
+];
+
+const UNIS = (window.UNIFER && window.UNIFER.results && window.UNIFER.results.length)
+  ? window.UNIFER.results
+  : _MOCK_UNIS;
+
+
+// Starting top-5 ids
+const ORIGINAL_TOP = ['u1','u2','u3','u4','u5'];
+let currentTop = [...ORIGINAL_TOP];
+let compareSelected = new Set(currentTop);
+let tweakCount = 0;
+let previewMode = null; // 'lessranking' | 'raisedbudget' | 'phd' | null
+let originalBeforePreview = null;
+
+const COL_VARS = ['--u1','--u2','--u3','--u4','--u5'];
+function colorFor(uniId){
+  const idx = currentTop.indexOf(uniId);
+  return idx >= 0 ? `var(${COL_VARS[idx]})` : 'var(--teal)';
+}
+
+const byId = id => UNIS.find(u => u.id === id);
+
+/* ---------- Loading ---------- */
+(function loading(){
+  const el = $('#loading');
+  const dots = $('#dotAnim');
+  let i = 0;
+  const tick = setInterval(()=> { i=(i+1)%4; dots.textContent = '.'.repeat(i || 0).padEnd(3,' '); }, 220);
+  setTimeout(()=> {
+    el.setAttribute('data-done','true');
+    clearInterval(tick);
+    setTimeout(()=> el.remove(), 600);
+  }, 1800);
+})();
+
+/* ---------- Tabs & view toggle ---------- */
+$$('.tab').forEach(t => t.addEventListener('click', ()=>{
+  const v = t.dataset.tab;
+  document.body.dataset.tab = v;
+  $$('.tab').forEach(x => x.setAttribute('aria-selected', String(x === t)));
+}));
+
+$('#tgRanked').addEventListener('click', ()=> setView('ranked'));
+$('#tgCompare').addEventListener('click', ()=> setView('compare'));
+function setView(v){
+  document.body.dataset.view = v;
+  $('#tgRanked').setAttribute('aria-pressed', String(v==='ranked'));
+  $('#tgCompare').setAttribute('aria-pressed', String(v==='compare'));
+  if (v === 'compare'){ renderCompare(); }
+}
+
+/* ---------- Helpers ---------- */
+const fmt$ = n => n == null ? '—' : '$' + n.toLocaleString();
+function bump(){
+  tweakCount += 1;
+  const n = $('#tweakNum'); n.textContent = tweakCount;
+  const w = $('#tweakCounter');
+  w.classList.remove('pulse'); void w.offsetWidth; w.classList.add('pulse');
+}
+function toast(msg, ms=1800){
+  const t = $('#toast'); t.textContent = msg; t.setAttribute('data-show','true');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=> t.setAttribute('data-show','false'), ms);
+}
+
+/* ---------- Render ranked stack ---------- */
+function renderRanked(animateFromFirstRects){
+  const wrap = $('#rankedStack');
+
+  // FLIP: capture FIRST rects
+  const firstRects = animateFromFirstRects || new Map();
+  if (!animateFromFirstRects){
+    $$('.card', wrap).forEach(el => firstRects.set(el.dataset.uid, el.getBoundingClientRect()));
+  }
+
+  const prevIds = $$('.card', wrap).map(el => el.dataset.uid);
+  const nextIds = currentTop;
+  const leaving = prevIds.filter(id => !nextIds.includes(id));
+
+  // Animate exits, then rebuild
+  const exitPromises = leaving.map(id => {
+    const el = wrap.querySelector(`.card[data-uid="${id}"]`);
+    if (!el) return Promise.resolve();
+    el.classList.add('flip-exit');
+    return new Promise(res => el.addEventListener('animationend', ()=>{ el.remove(); res(); }, {once:true}));
+  });
+
+  Promise.all(exitPromises).then(()=>{
+    // Rebuild DOM in new order (reuse existing nodes where possible)
+    const keep = new Map();
+    $$('.card', wrap).forEach(el => keep.set(el.dataset.uid, el));
+    wrap.innerHTML = '';
+    nextIds.forEach((id, i) => {
+      let el = keep.get(id);
+      if (!el){
+        el = buildCard(byId(id), i+1);
+      } else {
+        // Update ranking badge
+        el.querySelector('.rank').textContent = '#' + (i+1);
+        el.setAttribute('data-rank', i+1);
+        el.dataset.rank = i+1;
+      }
+      wrap.appendChild(el);
+    });
+
+    // FLIP: LAST - INVERT - PLAY
+    if (!prefersReduce){
+      $$('.card', wrap).forEach((el, i) => {
+        const first = firstRects.get(el.dataset.uid);
+        if (!first) {
+          el.classList.add('flip-enter');
+          el.style.animationDelay = (i * 40) + 'ms';
+          el.addEventListener('animationend', ()=> { el.classList.remove('flip-enter'); el.style.animationDelay=''; }, {once:true});
+          return;
+        }
+        const last = el.getBoundingClientRect();
+        const dy = first.top - last.top;
+        if (Math.abs(dy) < 2) return;
+        el.animate(
+          [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+          { duration: 380, easing: 'cubic-bezier(0.2, 0.9, 0.25, 1)', delay: i * 40 }
+        );
+      });
+    }
+
+    // Trigger score bar animations
+    requestAnimationFrame(()=> {
+      $$('.score-fill', wrap).forEach(f => f.style.width = f.dataset.w + '%');
+    });
+  });
+}
+
+function buildCard(u, rank){
+  const card = document.createElement('article');
+  card.className = 'card';
+  card.dataset.uid = u.id;
+  card.dataset.rank = rank;
+  card.setAttribute('data-rank', rank);
+
+  card.innerHTML = `
+    <div class="card-body">
+      <div class="card-head">
+        <div class="rank">#${rank}</div>
+        <div>
+          <div class="uni-name">
+            ${u.name}
+            ${u.confidence ? `<span class="conf" tabindex="0" role="button" aria-label="Confidence" data-tooltip="Appears in all 6 major ranking frameworks.">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/></svg>
+            </span>` : ''}
+          </div>
+          <div class="course">${u.course}</div>
+          <div class="meta">
+            <span>${u.country}</span>
+            <span>${u.duration}</span>
+            <span>${fmt$(u.tuition)}/yr tuition</span>
+          </div>
+        </div>
+        <button class="bookmark" aria-label="Save (coming soon)" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 4h12v17l-6-4-6 4z"/></svg>
+        </button>
+      </div>
+
+      <div class="scores">
+        ${['country','course','institution'].map(k => `
+          <div class="score">
+            <div class="score-label">${k[0].toUpperCase()+k.slice(1)} match</div>
+            <div class="score-track"><div class="score-fill" data-w="${u.scores[k]}" style="width:0"></div></div>
+            <div class="score-val">${u.scores[k]}%</div>
+          </div>`).join('')}
+      </div>
+
+      <div class="why-label">Why this aligns</div>
+      <div class="why">${u.why}</div>
+
+      <div class="chips">
+        ${u.chips.map(c => `<button class="chip" data-chip='${JSON.stringify(c).replace(/'/g,"&#39;")}'>
+          <span class="k">${c.k}:</span><span class="v">${c.v}</span>
+        </button>`).join('')}
+      </div>
+
+      <div class="more">
+        <button class="more-toggle" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+          More data
+        </button>
+        <div class="more-body"><div>
+          <div class="data-grid">
+            <div class="data-row"><span class="lab">University rankings</span><span class="val">${fmtRanks(u.rankings)}</span></div>
+            <div class="data-row"><span class="lab">Subject (${u.subject.name})</span><span class="val">QS #${u.subject.QS}<span class="src">QS 2025</span></span></div>
+            <div class="data-row"><span class="lab">Median admitted GPA</span><span class="val">${u.stats.medianGPA || '—'}<span class="src">university site</span></span></div>
+            <div class="data-row"><span class="lab">GRE (Q) typical</span><span class="val">${u.stats.gre || '—'}<span class="src">university site</span></span></div>
+            <div class="data-row"><span class="lab">Acceptance rate</span><span class="val">${u.stats.acceptance ? u.stats.acceptance + '%' : '—'}<span class="src">university site</span></span></div>
+            <div class="data-row"><span class="lab">Employment rate</span><span class="val">${u.employ.rate}%<span class="src">university site</span></span></div>
+            <div class="data-row"><span class="lab">Median starting salary</span><span class="val">${fmt$(u.employ.salary)}<span class="src">university site</span></span></div>
+            <div class="data-row"><span class="lab">Estimated living (${u.city})</span><span class="val">${fmt$(u.cost.living)}/yr<span class="src">gov. immigration data</span></span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>`;
+
+  // Chip taps
+  $$('.chip', card).forEach(c => c.addEventListener('click', ()=> openChipModal(c, u.id)));
+  // More toggle
+  const more = $('.more', card);
+  $('.more-toggle', card).addEventListener('click', ()=>{
+    const open = more.getAttribute('data-open') === 'true';
+    more.setAttribute('data-open', String(!open));
+    $('.more-toggle', card).setAttribute('aria-expanded', String(!open));
+  });
+  return card;
+}
+
+function fmtRanks(r){
+  const parts = [];
+  ['QS','THE','ARWU','CUG','Guardian','GUG'].forEach(k => {
+    if (r[k] != null) parts.push(`${k} #${r[k]}`);
+  });
+  return parts.slice(0,3).map(p => `${p}`).join(' · ') + `<span class="src">primary sources</span>`;
+}
+
+/* ---------- What-if cards ---------- */
+const WHATIFS = [
+  { id:'lessranking', hint:'Less ranking-weighted', q:'…cared <em>less</em> about rankings?', top:['u2','u5','u4','u3','u6'] },
+  { id:'raisedbudget', hint:'Budget → no limit', q:'…raised your budget to <em>no limit</em>?', top:['u1','u7','u4','u2','u5'] },
+  { id:'phd', hint:'Masters → PhD', q:'…were open to <em>PhD instead</em> of Masters?', top:['u1','u6','u7','u2','u3'] }
+];
+function renderWhatifs(){
+  $('#whatifRow').innerHTML = WHATIFS.map(w => `
+    <button class="whatif" data-wi="${w.id}">
+      <span class="hint">${w.hint}</span>
+      <span class="q">${w.q}</span>
+    </button>`).join('');
+  $$('#whatifRow .whatif').forEach(b => b.addEventListener('click', ()=> applyWhatif(b.dataset.wi)));
+}
+function applyWhatif(id){
+  const w = WHATIFS.find(x => x.id === id);
+  if (!w) return;
+  if (!originalBeforePreview) originalBeforePreview = [...currentTop];
+  previewMode = id;
+  document.body.setAttribute('data-preview','true');
+  $('#previewLabel').innerHTML = `Preview: <span class="fr">${w.hint}</span>`;
+  const firstRects = new Map();
+  $$('#rankedStack .card').forEach(el => firstRects.set(el.dataset.uid, el.getBoundingClientRect()));
+  currentTop = [...w.top];
+  renderRanked(firstRects);
+}
+$('#returnOriginal').addEventListener('click', ()=>{
+  if (!originalBeforePreview) return;
+  previewMode = null;
+  document.body.setAttribute('data-preview','false');
+  const firstRects = new Map();
+  $$('#rankedStack .card').forEach(el => firstRects.set(el.dataset.uid, el.getBoundingClientRect()));
+  currentTop = [...originalBeforePreview];
+  originalBeforePreview = null;
+  renderRanked(firstRects);
+});
+
+/* ---------- Chip modal ---------- */
+const scrim = $('#modalScrim');
+let modalContext = null;
+function openChipModal(chipEl, uniId){
+  const chip = JSON.parse(chipEl.dataset.chip.replace(/&#39;/g,"'"));
+  modalContext = { chip, uniId };
+  $('#modalTitle').textContent = chip.q;
+  $('#modalPrompt').textContent = 'Pick a new value — your matches will reshuffle.';
+  $('#modalOpts').innerHTML = chip.opts.map(o => {
+    const sel = o.toLowerCase() === String(chip.v).toLowerCase() || o.toLowerCase().includes(chip.v.toLowerCase());
+    return `<button class="opt" data-v="${o}" ${sel?'data-selected="true"':''}>${o}</button>`;
+  }).join('');
+  $$('#modalOpts .opt').forEach(b => b.addEventListener('click', ()=> pickOption(b.dataset.v)));
+  scrim.setAttribute('data-open','true');
+}
+scrim.addEventListener('click', (e)=>{ if (e.target === scrim) closeModal(); });
+function closeModal(){ scrim.setAttribute('data-open','false'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function pickOption(v){
+  closeModal();
+  bump();
+  // Capture FIRST before mutation
+  const firstRects = new Map();
+  $$('#rankedStack .card').forEach(el => firstRects.set(el.dataset.uid, el.getBoundingClientRect()));
+
+  // Deterministic "reshuffle": cycle through some plausible orderings based on v's length
+  const seed = (v || '').length;
+  const pools = [
+    ['u1','u2','u3','u4','u5'],
+    ['u2','u1','u5','u3','u4'],
+    ['u6','u1','u2','u5','u4'], // budget-tight → Thornbury
+    ['u7','u1','u4','u2','u3'], // workrights
+    ['u1','u3','u5','u6','u2'],
+    ['u4','u2','u1','u7','u5'],
+    ['u1','u7','u2','u4','u6']
+  ];
+  let next = pools[seed % pools.length];
+  // Guarantee change: if same as current, rotate
+  if (next.join() === currentTop.join()) next = pools[(seed+1) % pools.length];
+  currentTop = [...next];
+  renderRanked(firstRects);
+}
+
+/* ---------- Compare view ---------- */
+function renderCompare(){
+  // Columns
+  const cols = $('#compareCols');
+  cols.innerHTML = currentTop.map((id, i) => {
+    const u = byId(id);
+    return `<div class="col" data-uid="${id}" style="--col: var(${COL_VARS[i]})">
+      <button class="col-x" aria-label="Remove ${u.name}">×</button>
+      <div class="col-name"><span class="col-dot"></span>${u.name}</div>
+      <div class="col-course">${u.course}</div>
+    </div>`;
+  }).join('');
+  $$('.col-x', cols).forEach(b => b.addEventListener('click', ()=>{
+    const col = b.closest('.col');
+    compareSelected.delete(col.dataset.uid);
+    col.style.transition = 'transform 240ms var(--ease), opacity 220ms var(--ease)';
+    col.style.transform = 'translateY(-6px) scale(0.96)';
+    col.style.opacity = '0';
+    setTimeout(()=>{ col.setAttribute('data-deselected','true'); renderCompare(); }, 260);
+  }));
+
+  renderCompareTable();
+  renderBreakdown();
+  renderStrips();
+}
+
+function renderCompareTable(){
+  const actives = currentTop.filter(id => compareSelected.has(id));
+  const rows = [
+    ['Tuition / yr',   id => fmt$(byId(id).tuition),      id => byId(id).tuition, 'min'],
+    ['Duration',       id => byId(id).duration,           id => parseFloat(byId(id).duration), 'min'],
+    ['Country',        id => byId(id).country,            null, null],
+    ['Overall ranking (avg QS·THE·ARWU)', id => avgRank(byId(id).rankings), id => avgRank(byId(id).rankings,true), 'min'],
+    ['Subject rank (QS)', id => '#' + byId(id).subject.QS, id => byId(id).subject.QS, 'min'],
+    ['Median admitted GPA', id => byId(id).stats.medianGPA || '—', id => byId(id).stats.medianGPA || 0, 'max'],
+    ['Employment rate',    id => byId(id).employ.rate + '%', id => byId(id).employ.rate, 'max'],
+    ['Post-study work',    id => workRights(byId(id).country), null, null],
+    ['Acceptance rate',    id => byId(id).stats.acceptance ? byId(id).stats.acceptance + '%' : '—', id => byId(id).stats.acceptance ?? 999, 'min']
+  ];
+  const t = $('#compareTable');
+  const thead = `<thead><tr><th></th>${actives.map((id,i) => {
+    const u = byId(id); const cv = COL_VARS[currentTop.indexOf(id)];
+    return `<th><span class="dot" style="--col: var(${cv})"></span>${u.name.split(' ')[0]}</th>`;
+  }).join('')}</tr></thead>`;
+  const tbody = `<tbody>${rows.map(([lab, fmt, num, dir]) => {
+    let bestIdx = -1;
+    if (num && dir){
+      const vals = actives.map(id => num(id));
+      bestIdx = dir === 'min' ? vals.indexOf(Math.min(...vals)) : vals.indexOf(Math.max(...vals));
+    }
+    return `<tr><td>${lab}</td>${actives.map((id,i) => `<td class="${i===bestIdx?'winner':''}">${fmt(id)}</td>`).join('')}</tr>`;
+  }).join('')}</tbody>`;
+  t.innerHTML = thead + tbody;
+}
+function avgRank(r, asNum){
+  const vs = ['QS','THE','ARWU'].map(k => r[k]).filter(v => v != null);
+  if (!vs.length) return asNum ? 999 : '—';
+  const avg = Math.round(vs.reduce((a,b)=>a+b,0)/vs.length);
+  return asNum ? avg : '#' + avg;
+}
+function workRights(c){
+  return ({'United Kingdom':'2 yrs (Graduate route)','Canada':'Up to 3 yrs (PGWP)','Australia':'2–4 yrs (485 visa)','Germany':'18 months','Netherlands':'1 yr (Orientation)','Singapore':'Work pass-dependent'})[c] || '—';
+}
+
+function renderBreakdown(){
+  const actives = currentTop.filter(id => compareSelected.has(id));
+  const groups = [
+    ['Country match', 'country'],
+    ['Course match',  'course'],
+    ['Institution match', 'institution']
+  ];
+  $('#breakdown').innerHTML = groups.map(([label, key]) => `
+    <div class="bd-group">
+      <div class="bd-title">${label}</div>
+      ${actives.map(id => {
+        const u = byId(id); const idx = currentTop.indexOf(id);
+        return `<div class="bd-row" style="--col: var(${COL_VARS[idx]});">
+          <div class="n">${u.name}</div>
+          <div class="t"><i style="--w: ${u.scores[key]}%"></i></div>
+          <div class="v">${u.scores[key]}</div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+  requestAnimationFrame(()=> {
+    $$('.bd-row i').forEach(i => i.style.width = getComputedStyle(i).getPropertyValue('--w'));
+  });
+}
+
+function renderStrips(){
+  const actives = currentTop.filter(id => compareSelected.has(id));
+  const dims = [
+    ['Research strength','research'],
+    ['Teaching quality','teaching'],
+    ['Employability','employability'],
+    ['International diversity','diversity'],
+    ['Prestige','prestige'],
+    ['Selectivity','selectivity']
+  ];
+  $('#strips').innerHTML = dims.map(([name, k]) => {
+    // Compute horizontal positions (as %), then cluster-shift labels if overlapping
+    const points = actives.map(id => ({ id, x: byId(id).dims[k] * 100 }))
+                         .sort((a,b)=> a.x - b.x);
+    // Spread labels: assign vertical offset row (0 or 1) to avoid overlap
+    let lastX = -Infinity, row = 0;
+    points.forEach(p => { if (p.x - lastX < 14) { row = 1 - row; } else { row = 0; } p.row = row; lastX = p.x; });
+    return `<div class="strip">
+      <div class="strip-h"><span class="name">${name}</span><span class="scale">Weak → Strong</span></div>
+      <div class="strip-line">
+        <div class="strip-axis"></div>
+        ${[0,25,50,75,100].map(t => `<div class="strip-tick" style="left:${t}%"></div>`).join('')}
+        ${points.map(p => {
+          const cv = COL_VARS[currentTop.indexOf(p.id)];
+          const u = byId(p.id);
+          return `<span class="dot" style="left:${p.x}%; --col: var(${cv})" aria-label="${u.name}: ${Math.round(p.x)}"></span>
+                  <span class="dot-label" style="left:${p.x}%; --col: var(${cv}); top: calc(50% + ${p.row? 16:12}px)">${u.name.split(' ')[0]}</span>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- Share ---------- */
+$('#shareBtn').addEventListener('click', async ()=>{
+  const state = [...compareSelected].join(',');
+  const url = new URL(location.href);
+  url.hash = 'c=' + encodeURIComponent(state);
+  try { await navigator.clipboard.writeText(url.toString()); } catch(e){}
+  toast('Link copied. Paste anywhere.');
+});
+
+/* ---------- Scenarios tab ---------- */
+const COUNTRIES = ['UK','USA','Canada','Australia','Germany','Netherlands','Singapore'];
+const FIELDS = ['Computer Science','Data Science','Electrical Engineering','Mechanical Engineering','Civil Engineering','Business Analytics','Finance','Economics','Architecture','Design','Law','Public Policy','Biology','Chemistry','Physics'];
+let scen = { gpa:88, budget:50, ielts:75, countries:new Set(['UK','Canada','Australia','Netherlands']), field:'Computer Science', level:'Masters' };
+
+function renderTogglesAndFields(){
+  $('#cToggles').innerHTML = COUNTRIES.map(c => `<button class="tog" data-c="${c}" ${scen.countries.has(c)?'data-on="true"':''}>${c}</button>`).join('');
+  $$('#cToggles .tog').forEach(b => b.addEventListener('click', ()=>{
+    const c = b.dataset.c;
+    if (scen.countries.has(c)) scen.countries.delete(c); else scen.countries.add(c);
+    b.dataset.on = scen.countries.has(c);
+    scheduleScenUpdate();
+  }));
+  $('#sField').innerHTML = FIELDS.map(f => `<option ${f===scen.field?'selected':''}>${f}</option>`).join('');
+}
+
+function bindSliders(){
+  const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); }; };
+  const upd = debounce(()=> updateScenPreview(true), 150);
+
+  $('#sGpa').addEventListener('input', e => {
+    scen.gpa = +e.target.value;
+    $('#valGpa').textContent = (scen.gpa/100*4).toFixed(2) + ' / 4.0';
+    upd();
+  });
+  $('#sBudget').addEventListener('input', e => {
+    scen.budget = +e.target.value;
+    $('#valBudget').textContent = scen.budget >= 101 ? 'No upper limit' : 'up to $' + scen.budget + 'k';
+    upd();
+  });
+  $('#sIelts').addEventListener('input', e => {
+    scen.ielts = +e.target.value;
+    $('#valIelts').textContent = (scen.ielts/10).toFixed(1);
+    upd();
+  });
+  $('#sField').addEventListener('change', e => { scen.field = e.target.value; upd(); });
+  $$('#sLevel button').forEach(b => b.addEventListener('click', ()=>{
+    $$('#sLevel button').forEach(x => x.dataset.on = 'false');
+    b.dataset.on = 'true';
+    scen.level = b.dataset.v;
+    upd();
+  }));
+  $('#resetScen').addEventListener('click', ()=>{
+    scen = { gpa:88, budget:50, ielts:75, countries:new Set(['UK','Canada','Australia','Netherlands']), field:'Computer Science', level:'Masters' };
+    $('#sGpa').value = 88; $('#sBudget').value = 50; $('#sIelts').value = 75;
+    $('#valGpa').textContent = '3.52 / 4.0';  // will be overwritten
+    $('#sGpa').dispatchEvent(new Event('input'));
+    $('#sBudget').dispatchEvent(new Event('input'));
+    $('#sIelts').dispatchEvent(new Event('input'));
+    renderTogglesAndFields();
+    bindToggles();
+    $$('#sLevel button').forEach(b => b.dataset.on = String(b.dataset.v === 'Masters'));
+    updateScenPreview(true);
+  });
+}
+function bindToggles(){
+  $$('#cToggles .tog').forEach(b => b.addEventListener('click', ()=>{
+    const c = b.dataset.c;
+    if (scen.countries.has(c)) scen.countries.delete(c); else scen.countries.add(c);
+    b.dataset.on = scen.countries.has(c);
+    updateScenPreview(true);
+  }));
+}
+
+function scoreUni(u){
+  let s = (u.scores.country*0.3 + u.scores.course*0.4 + u.scores.institution*0.3);
+  // GPA: penalty if GPA below admitted median
+  const gpa4 = scen.gpa/100 * 4;
+  if (u.stats.medianGPA && gpa4 < u.stats.medianGPA) s -= (u.stats.medianGPA - gpa4) * 14;
+  else if (u.stats.medianGPA) s += Math.min(3, (gpa4 - u.stats.medianGPA) * 4);
+  // Budget: penalty if tuition exceeds budget (k)
+  const budgetCeiling = scen.budget >= 101 ? Infinity : scen.budget*1000;
+  if (u.tuition > budgetCeiling) s -= Math.min(40, (u.tuition - budgetCeiling)/1000);
+  else s += 2;
+  // IELTS: above 7 boosts competitive unis
+  if (scen.ielts/10 >= 7) s += Math.min(3, (scen.ielts/10 - 7)*2);
+  // Country filter
+  const ctryMap = {'United Kingdom':'UK','Canada':'Canada','Australia':'Australia','Germany':'Germany','Netherlands':'Netherlands','Singapore':'Singapore','USA':'USA'};
+  if (!scen.countries.has(ctryMap[u.country]||'?')) s -= 25;
+  // Level
+  if (scen.level === 'PhD') s += (u.dims.research - 0.75) * 10;
+  return Math.max(0, Math.min(100, s));
+}
+function updateScenPreview(animate){
+  const scored = UNIS.map(u => ({u, s: scoreUni(u)})).sort((a,b)=> b.s - a.s).slice(0,5);
+  const list = $('#scenList');
+  const existing = new Map();
+  $$('.mini-card', list).forEach(el => existing.set(el.dataset.uid, el));
+  const firstRects = new Map();
+  existing.forEach((el, id) => firstRects.set(id, el.getBoundingClientRect()));
+
+  list.innerHTML = scored.map((x, i) => `
+    <div class="mini-card" data-uid="${x.u.id}" data-rank="${i+1}">
+      <div class="r">${i+1}</div>
+      <div>
+        <div class="nm">${x.u.name}</div>
+        <div class="sc">${x.u.country} · ${x.u.course}</div>
+        <div class="tr"><i style="width:${Math.round(x.s)}%"></i></div>
+      </div>
+      <div class="mt">${Math.round(x.s)}</div>
+    </div>`).join('');
+
+  if (animate && !prefersReduce){
+    $$('.mini-card', list).forEach((el, i) => {
+      const first = firstRects.get(el.dataset.uid);
+      const last = el.getBoundingClientRect();
+      if (!first){
+        el.animate(
+          [{opacity:0, transform:'translateY(10px)'},{opacity:1, transform:'translateY(0)'}],
+          { duration: 320, easing: 'cubic-bezier(0.2,0.9,0.25,1)', delay: i*30 }
+        );
+      } else {
+        const dy = first.top - last.top;
+        if (Math.abs(dy) > 1){
+          el.animate(
+            [{transform:`translateY(${dy}px)`},{transform:'translateY(0)'}],
+            { duration: 320, easing: 'cubic-bezier(0.2,0.9,0.25,1)', delay: i*30 }
+          );
+        }
+      }
+    });
+  }
+}
+
+/* ---------- Boot ---------- */
+renderTogglesAndFields();
+bindSliders();
+renderRanked();
+renderWhatifs();
+updateScenPreview(false);
+
+// Label sync on first load
+$('#sGpa').dispatchEvent(new Event('input'));
+$('#sBudget').dispatchEvent(new Event('input'));
+$('#sIelts').dispatchEvent(new Event('input'));
+
+})();
+</script>
