@@ -1,0 +1,51 @@
+<style>
+.stage-placeholder-results {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  gap: 20px;
+  text-align: center;
+}
+.stage-placeholder-results h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.stage-placeholder-results p {
+  color: var(--ink-3);
+  font-size: 15px;
+  max-width: 480px;
+  line-height: 1.5;
+  margin: 0;
+}
+.stage-placeholder-results .btn {
+  background: var(--teal);
+  color: white;
+  padding: 14px 28px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  margin-top: 12px;
+}
+.stage-placeholder-results code {
+  background: var(--bg-2);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--teal-ink);
+  border: 1px solid var(--line);
+}
+</style>
+
+<div class="stage-placeholder-results">
+  <h1>Results view</h1>
+  <p>Stage 1A skeleton placeholder. The actual results UI is ported in Stage 1B.</p>
+  <p>This view will eventually show the ranked top 5 + compare + scenarios from <code>UNIFER_Results.html</code>.</p>
+  <button class="btn" onclick="window.UNIFER.navigate('quiz')">Back to quiz</button>
+</div>
