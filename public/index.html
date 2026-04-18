@@ -850,36 +850,33 @@ button:disabled {
       <div class="form-step" data-step="5">
         <div class="section" style="border-bottom: none; margin-bottom: 0;">
           <h2>Step 5 — University Selection</h2>
-          <label>How strongly ranking affects your decision?</label>
+
+          <label>How much do you want global rankings to drive your recommendations?</label>
           <div class="option-group" data-name="ranking_importance">
             <div class="option-card" data-value="0.75">Top institutions only</div>
             <div class="option-card" data-value="0.50">Top and middle are fine</div>
             <div class="option-card" data-value="0.25">All institutions</div>
           </div>
 
-          <label>How much does a university's graduate employment record influence your decision?</label>
-          <div class="option-group" data-name="career_importance">
-            <div class="option-card" data-value="high">A great deal</div>
-            <div class="option-card" data-value="medium">Somewhat</div>
-            <div class="option-card" data-value="low">Not much</div>
+          <label>When choosing your university, should we focus on its strength in your specific field or its overall reputation?</label>
+          <div class="option-group" data-name="subject_ranking_importance">
+            <div class="option-card" data-value="high">Strength in my field matters more</div>
+            <div class="option-card" data-value="medium">A balance of both</div>
+            <div class="option-card" data-value="low">Overall reputation matters more</div>
           </div>
 
-          <div id="career_type_section" style="display:none;">
-            <label>What matters most about those outcomes?</label>
-            <div class="option-group" data-name="career_type">
-              <div class="option-card" data-value="employment_rate">Getting a job quickly after graduation</div>
-              <div class="option-card" data-value="graduate_salary">Earning a strong salary in my field</div>
-              <div class="option-card" data-value="employer_reputation">Working with globally recognised employers</div>
-            </div>
+          <label>Should we prioritise universities with strong global name recognition?</label>
+          <div class="option-group" data-name="prestige_importance">
+            <div class="option-card" data-value="high">Yes, strongly</div>
+            <div class="option-card" data-value="medium">A nice bonus</div>
+            <div class="option-card" data-value="low">Not really</div>
           </div>
 
-          <div id="teaching-block">
-          <label>What kind of learning environment do you prefer?</label>
-          <div class="option-group" data-name="teaching_importance">
-            <div class="option-card" data-value="high">Small classes with high faculty contact</div>
-            <div class="option-card" data-value="medium">Balanced — mix of lectures and smaller sessions</div>
-            <div class="option-card" data-value="low">I'm self-directed, class size doesn't matter much to me</div>
-          </div>
+          <label>Should we prioritise universities that are very competitive to get into?</label>
+          <div class="option-group" data-name="selectivity_importance">
+            <div class="option-card" data-value="high">Yes, strongly</div>
+            <div class="option-card" data-value="medium">A nice bonus</div>
+            <div class="option-card" data-value="low">Not really</div>
           </div>
 
           <div id="research-block">
@@ -891,35 +888,37 @@ button:disabled {
           </div>
           </div>
 
-          <label>Would you prefer a university with a strong international student and faculty presence?</label>
+          <div id="teaching-block">
+          <label>What kind of learning environment do you prefer?</label>
+          <div class="option-group" data-name="teaching_importance">
+            <div class="option-card" data-value="high">Small classes with high faculty contact</div>
+            <div class="option-card" data-value="medium">Balanced — mix of lectures and smaller sessions</div>
+            <div class="option-card" data-value="low">I'm self-directed, class size doesn't matter much to me</div>
+          </div>
+          </div>
+
+          <label>Should we prioritise universities with a globally diverse campus?</label>
           <div class="option-group" data-name="international_importance">
-            <div class="option-card" data-value="high">Yes, strongly — a globally diverse campus is important to me</div>
-            <div class="option-card" data-value="medium">Somewhat — I'd appreciate it but it's not essential</div>
-            <div class="option-card" data-value="low">Not really — this doesn't factor into my decision much</div>
+            <div class="option-card" data-value="high">Yes, strongly</div>
+            <div class="option-card" data-value="medium">A nice bonus</div>
+            <div class="option-card" data-value="low">Not really</div>
           </div>
 
-          <label>How selective do you want your university to be in terms of student intake?</label>
-          <div class="option-group" data-name="selectivity_importance">
-            <div class="option-card" data-value="high">Very selective — I want to be among the highest-achieving students</div>
-            <div class="option-card" data-value="medium">Moderately selective — a competitive but accessible environment suits me</div>
-            <div class="option-card" data-value="low">Not a concern — selectivity doesn't factor into my decision</div>
+          <label>Should we prioritise universities with strong graduate job placement?</label>
+          <div class="option-group" data-name="career_importance">
+            <div class="option-card" data-value="high">Critical to my decision</div>
+            <div class="option-card" data-value="medium">A factor, but not the main one</div>
+            <div class="option-card" data-value="low">Doesn't really matter</div>
           </div>
 
-          <label>How important is global name recognition and institutional prestige beyond rankings?</label>
-          <div class="option-group" data-name="prestige_importance">
-            <div class="option-card" data-value="high">Very important</div>
-            <div class="option-card" data-value="medium">Somewhat important</div>
-            <div class="option-card" data-value="low">Not a priority</div>
+          <div id="career_type_section" style="display:none;">
+            <label>What's the main outcome you're hoping for after graduation?</label>
+            <div class="option-group" data-name="career_type">
+              <div class="option-card" data-value="employment_rate">Getting a job quickly after graduation</div>
+              <div class="option-card" data-value="graduate_salary">Earning a strong salary in my field</div>
+              <div class="option-card" data-value="employer_reputation">Working with globally recognised employers</div>
+            </div>
           </div>
-
-<div class="question-block">
-  <label>How important is your university's subject-specific ranking in your field?</label>
-  <div class="option-group" data-name="subject_ranking_importance">
-    <div class="option-card" data-value="high">Very important — I want the best-ranked university specifically in my subject</div>
-    <div class="option-card" data-value="medium">Somewhat important — factor it in alongside overall reputation</div>
-    <div class="option-card" data-value="low">Not important — overall university quality matters more than subject rank</div>
-  </div>
-</div>
 
           </div>
         <div class="nav-buttons">
