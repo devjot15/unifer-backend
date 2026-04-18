@@ -287,6 +287,16 @@
     display: flex; flex-direction: column; gap: 4px;
   }
   .whatif:hover{ border-color: var(--teal); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .start-over-row{
+    display: flex; justify-content: center;
+    margin-top: 32px; margin-bottom: 8px;
+  }
+  .start-over-link{
+    background: none; border: 0; padding: 6px 10px;
+    font-size: 14px; color: var(--ink-mute);
+    cursor: pointer;
+  }
+  .start-over-link:hover{ color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; }
   .whatif .hint{ font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-mute); }
   .whatif .q{ font-size: 14.5px; color: var(--ink); line-height: 1.35; }
   .whatif .q em{ color: var(--teal-ink); font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 400; }
@@ -803,6 +813,10 @@
 
       <div class="whatif-title">What would change if you…</div>
       <div class="whatif-row" id="whatifRow"></div>
+
+      <div class="start-over-row">
+        <button type="button" class="start-over-link" id="startOverLink">Start over</button>
+      </div>
     </section>
 
     <!-- Compare view -->
@@ -1612,6 +1626,23 @@ updateScenPreview(false);
 $('#sGpa').dispatchEvent(new Event('input'));
 $('#sBudget').dispatchEvent(new Event('input'));
 $('#sIelts').dispatchEvent(new Event('input'));
+
+// Start over — reset shell state and bounce to the quiz.
+const startOverBtn = $('#startOverLink');
+if (startOverBtn) {
+  startOverBtn.addEventListener('click', () => {
+    if (window.UNIFER) {
+      window.UNIFER.answers = {};
+      window.UNIFER.session_id = null;
+      window.UNIFER.results = [];
+      window.UNIFER.tweakCount = 0;
+      window.UNIFER.eligiblePool = null;
+      window.UNIFER.navigate('quiz');
+    } else {
+      location.hash = '#/quiz';
+    }
+  });
+}
 
 })();
 </script>
