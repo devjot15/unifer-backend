@@ -772,7 +772,7 @@ button:disabled {
             </div>
           </div>
 
-          <label>What's your preferred programme duration?</label>
+          <label id="durationLabel">What's your preferred programme duration?</label>
           <div class="option-group" data-name="duration" id="durationGroup">
 
             <div class="option-card pg-option" data-value="1 year or less">
@@ -1191,11 +1191,15 @@ function updateDurationOptions() {
   if (level === "PG") {
     pgOptions.forEach(opt => opt.style.display = "block");
     durationGroup.style.display = "";
+    var durationLabel = document.getElementById("durationLabel");
+    if (durationLabel) durationLabel.style.display = "";
     if (programTypeSection) programTypeSection.style.display = "";
   }
 
   if (level === "PhD") {
     durationGroup.style.display = "none";
+    var durationLabel = document.getElementById("durationLabel");
+    if (durationLabel) durationLabel.style.display = "none";
     if (programTypeSection) programTypeSection.style.display = "none";
     document.getElementById("duration").value = "More than 1 year";
   }
@@ -1571,6 +1575,8 @@ form.addEventListener("submit", function(e) {
     "work_permit_importance",
     "english_preference",
     "pr_importance",
+    // 2-entity mode (country pre-selected) — priority_3 is intentionally empty:
+    "priority_3",
     // Optional test scores (None is a valid answer):
     "profile_exam_type",
     "profile_gre_scores",
