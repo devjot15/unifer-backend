@@ -878,17 +878,6 @@ app.post("/recommend", async (req, res) => {
       if (!answers.scholarship_importance) answers.scholarship_importance = "Don\u2019t care";
     }
 
-    // ─── AUDIT LOGGING (temporary) ───
-    console.log('[audit] hasPreselectedCountry:', hasPreselectedCountry);
-    console.log('[audit] level:', answers.level);
-    console.log('[audit] tuition_band:', answers.tuition_band);
-    console.log('[audit] research_importance:', answers.research_importance);
-    console.log('[audit] teaching_importance:', answers.teaching_importance);
-    console.log('[audit] student_experience_importance (post-derive):', answers.student_experience_importance);
-    console.log('[audit] internship_importance:', answers.internship_importance);
-    console.log('[audit] scholarship_importance:', answers.scholarship_importance);
-    console.log('[audit] priority weights will use:', !answers.priority_3 ? '2-entity (0.61/0.39)' : '3-entity (0.50/0.32/0.18)');
-
     // Q5 in S5 deleted: student_experience_importance is always derived from teaching_importance
     if (answers.teaching_importance) {
       answers.student_experience_importance = answers.teaching_importance;
@@ -1260,7 +1249,6 @@ app.post("/recommend", async (req, res) => {
       answers.priority_2,
       answers.priority_3,
     );
-    console.log('[audit] computed macro weights:', weights);
 
     function clamp(value) {
       if (value == null || isNaN(value)) return 0;
@@ -1537,9 +1525,6 @@ app.post("/recommend", async (req, res) => {
       const universityScore = compositeScore != null
         ? alpha * compositeScore + beta * blendedSubScore
         : 0.70 * blendedSubScore;
-      if (course === durationFilteredCourses[0]) {
-        console.log('[audit-first-course] countryScore:', countryScore, '| courseScore:', courseScore, '| universityScore:', universityScore);
-      }
 
       console.log(`[score] ${university?.canonical_name || course?.university_id} composite=${compositeScore?.toFixed(3)} globalSub=${subScore?.toFixed(3)} subjectSub=${subjectSubScore !== null && subjectSubScore !== undefined ? subjectSubScore.toFixed(3) : 'none'} delta=${delta} final=${universityScore?.toFixed(3)}`);
 
