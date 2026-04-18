@@ -725,7 +725,7 @@ button:disabled {
       </div>
 
       <!-- Step 3 -->
-      <div class="form-step" data-step="3">
+      <div class="form-step" data-step="3" id="step-3-container">
         <div class="section">
           <h2>Step 3 — Country Selection</h2>
           <label>When choosing a country, how important is the duration of work rights after you graduate?</label>
@@ -785,18 +785,13 @@ button:disabled {
 
           </div>
 
+          <div id="internship-block">
           <label>How important is it for you, that your course includes an internship?</label>
           <div class="option-group" data-name="internship_importance">
             <div class="option-card" data-value="Very strongly">Very important</div>
             <div class="option-card" data-value="Wouldn’t mind">Somewhat important</div>
             <div class="option-card" data-value="Don’t care">Not important</div>
           </div>
-
-          <label>How important is it that your course offers scholarships or funding?</label>
-          <div class="option-group" data-name="scholarship_importance">
-            <div class="option-card" data-value="Very strongly (more than 20% of tuition)">Very important</div>
-            <div class="option-card" data-value="Wouldn’t mind getting one (less than 20% of tuition or none)">Somewhat important</div>
-            <div class="option-card" data-value="Don’t care">Not important</div>
           </div>
 
           <label>What's your maximum annual tuition budget?</label>
@@ -806,6 +801,15 @@ button:disabled {
             <div class="option-card" data-value="Up to $30k">Up to $30,000 / year</div>
             <div class="option-card" data-value="Up to $50k">Up to $50,000 / year</div>
             <div class="option-card" data-value="No limit">No upper limit</div>
+          </div>
+
+          <div id="scholarship-block">
+          <label>How important is it that your course offers scholarships or funding?</label>
+          <div class="option-group" data-name="scholarship_importance">
+            <div class="option-card" data-value="Very strongly (more than 20% of tuition)">Very important</div>
+            <div class="option-card" data-value="Wouldn’t mind getting one (less than 20% of tuition or none)">Somewhat important</div>
+            <div class="option-card" data-value="Don’t care">Not important</div>
+          </div>
           </div>
 
           <label>Pick the field that best matches what you want to study.</label>
@@ -864,25 +868,22 @@ button:disabled {
             </div>
           </div>
 
+          <div id="teaching-block">
           <label>What kind of learning environment do you prefer?</label>
           <div class="option-group" data-name="teaching_importance">
             <div class="option-card" data-value="high">Small classes with high faculty contact</div>
             <div class="option-card" data-value="medium">Balanced — mix of lectures and smaller sessions</div>
             <div class="option-card" data-value="low">I'm self-directed, class size doesn't matter much to me</div>
           </div>
+          </div>
 
+          <div id="research-block">
           <label>How research-intensive do you want your university to be?</label>
           <div class="option-group" data-name="research_importance">
             <div class="option-card" data-value="high">Very important (I want a university known for cutting-edge research)</div>
             <div class="option-card" data-value="medium">Somewhat important (A good balance of research and quality teaching works for me)</div>
             <div class="option-card" data-value="low">Not important (I prefer a teaching-focused university, research output doesn't matter)</div>
           </div>
-
-          <label>Outside of academics and career outcomes, how much does campus life and student support factor into your university choice?</label>
-          <div class="option-group" data-name="student_experience_importance">
-            <div class="option-card" data-value="high">A lot — facilities, community, and support services matter greatly to me</div>
-            <div class="option-card" data-value="medium">Somewhat — I'd like a decent campus experience but it's not a dealbreaker</div>
-            <div class="option-card" data-value="low">Not much — I'm focused on academics and career, everything else is secondary</div>
           </div>
 
           <label>Would you prefer a university with a strong international student and faculty presence?</label>
@@ -1220,11 +1221,15 @@ function validateCurrentStep() {
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
   var allFilled = true;
 
-  var optionalGroupNames = ["profile_gre_scores", "profile_gmat_scores", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_scores"];
+  var optionalGroupNames = ["profile_gre_scores", "profile_gmat_scores", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_scores", "student_experience_importance"];
   groupsInStep.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
     var groupName = group.dataset.name;
     if (optionalGroupNames.indexOf(groupName) !== -1) return;
+    // Skip validation if this group's container is hidden (conditional logic)
+    var visibleParent = group.closest('[id$="-block"]');
+    if (visibleParent && visibleParent.style.display === 'none') return;
+    if (group.dataset.name === 'priority_3' && group.style.display === 'none') return;
     var hasSelection = group.querySelector(".option-card.selected");
     if (!hasSelection) {
       group.classList.add("invalid");
@@ -1261,11 +1266,21 @@ function checkPriorities() {
   var p1 = document.getElementById("priority_1").value;
   var p2 = document.getElementById("priority_2").value;
   var p3 = document.getElementById("priority_3").value;
+  var step3 = document.getElementById('step-3-container');
+  var twoEntityMode = step3 && step3.dataset.skip === 'true';
 
-  if (p1 && p2 && p3) {
-    if (p1 === p2 || p1 === p3 || p2 === p3) {
+  if (twoEntityMode) {
+    // Only p1 and p2 required
+    if (p1 && p2 && p1 === p2) {
       formMessage.textContent = "Please select unique priorities in decreasing order.";
       return false;
+    }
+  } else {
+    if (p1 && p2 && p3) {
+      if (p1 === p2 || p1 === p3 || p2 === p3) {
+        formMessage.textContent = "Please select unique priorities in decreasing order.";
+        return false;
+      }
     }
   }
   return true;
@@ -1273,8 +1288,14 @@ function checkPriorities() {
 
 function validateAllFields() {
   var allValid = true;
+  var optionalForValidation = ["student_experience_importance"];
   allGroups.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
+    if (optionalForValidation.indexOf(group.dataset.name) !== -1) return;
+    // Skip if conditional block is hidden
+    var visibleParent = group.closest('[id$="-block"]');
+    if (visibleParent && visibleParent.style.display === 'none') return;
+    if (group.dataset.name === 'priority_3' && group.style.display === 'none') return;
     var visibleCards = Array.from(group.querySelectorAll(".option-card")).filter(
       function(c) { return c.style.display !== "none"; }
     );
@@ -1470,6 +1491,11 @@ function updatePriorityOptions() {
   });
 }
 
+function step3IsSkipped() {
+  var step3 = document.getElementById('step-3-container');
+  return step3 && step3.dataset.skip === 'true';
+}
+
 document.querySelectorAll(".next-btn").forEach(function(btn) {
   btn.addEventListener("click", function() {
     if (!validateCurrentStep()) return;
@@ -1477,6 +1503,10 @@ document.querySelectorAll(".next-btn").forEach(function(btn) {
     trackStepComplete(currentStep, {});
     if (currentStep < 5) {
       currentStep++;
+      // Skip step 3 if country is pre-selected
+      if (currentStep === 3 && step3IsSkipped()) {
+        currentStep = 4;
+      }
       updateStep(currentStep);
     }
   });
@@ -1487,6 +1517,10 @@ document.querySelectorAll(".prev-btn").forEach(function(btn) {
     formMessage.textContent = "";
     if (currentStep > 1) {
       currentStep--;
+      // Skip step 3 going backwards too
+      if (currentStep === 3 && step3IsSkipped()) {
+        currentStep = 2;
+      }
       updateStep(currentStep);
     }
   });
@@ -1787,6 +1821,105 @@ function setEnglishScores() {
 </script>
 
 <script>
+  // ─── CONDITIONAL QUESTION LOGIC ───
+  // Centralised state-based show/hide. Reactive to: country_decided, selected_country, level, tuition_band.
+  // When a trigger reverts (e.g. PhD→PG, Yes→No), hidden questions are restored cleanly.
+
+  function applyConditionalLogic() {
+    var countryDecidedEl = document.querySelector('[data-name="country_decided"] .option-card.selected');
+    var countryDecided = countryDecidedEl ? countryDecidedEl.getAttribute('data-value') : null;
+    var selectedCountry = document.getElementById('selected_country').value;
+    var hasPreselectedCountry = (countryDecided === 'Yes' && selectedCountry);
+
+    var levelEl = document.querySelector('[data-name="level"] .option-card.selected');
+    var level = levelEl ? levelEl.getAttribute('data-value') : null;
+
+    var tuitionEl = document.querySelector('[data-name="tuition_band"] .option-card.selected');
+    var tuition = tuitionEl ? tuitionEl.getAttribute('data-value') : null;
+
+    // 1. Country pre-selected → skip Step 3 entirely + hide Country from priority ranking
+    var step3 = document.getElementById('step-3-container');
+    if (step3) {
+      step3.dataset.skip = hasPreselectedCountry ? 'true' : 'false';
+    }
+    // Hide/show Country chips in priority ranking groups
+    ['priority_1','priority_2','priority_3'].forEach(function(name) {
+      var group = document.querySelector('.option-group[data-name="' + name + '"]');
+      if (!group) return;
+      var countryCard = group.querySelector('.option-card[data-value="Country"]');
+      if (countryCard) {
+        if (hasPreselectedCountry) {
+          countryCard.style.display = 'none';
+          if (countryCard.classList.contains('selected')) {
+            countryCard.classList.remove('selected');
+            document.getElementById(name).value = '';
+          }
+        } else {
+          countryCard.style.display = '';
+        }
+      }
+    });
+    // Hide priority_3 group entirely when 2-entity mode
+    var p3Group = document.querySelector('.option-group[data-name="priority_3"]');
+    var p3Label = p3Group ? p3Group.previousElementSibling : null;
+    if (p3Group) p3Group.style.display = hasPreselectedCountry ? 'none' : '';
+    if (p3Label && p3Label.tagName === 'LABEL' && p3Label.textContent.indexOf('Priority 3') !== -1) {
+      p3Label.style.display = hasPreselectedCountry ? 'none' : '';
+    }
+    if (hasPreselectedCountry) {
+      document.getElementById('priority_3').value = '';
+      var p3Selected = document.querySelector('.option-group[data-name="priority_3"] .option-card.selected');
+      if (p3Selected) p3Selected.classList.remove('selected');
+    }
+
+    // 2. PhD → hide internship + scholarship in S4
+    var internshipBlock = document.getElementById('internship-block');
+    if (internshipBlock) {
+      internshipBlock.style.display = (level === 'PhD') ? 'none' : '';
+      if (level === 'PhD') {
+        document.getElementById('internship_importance').value = '';
+        var iSel = internshipBlock.querySelector('.option-card.selected');
+        if (iSel) iSel.classList.remove('selected');
+      }
+    }
+
+    // 3. PhD OR No-limit budget → hide scholarship in S4
+    var scholarshipBlock = document.getElementById('scholarship-block');
+    if (scholarshipBlock) {
+      var hideScholarship = (level === 'PhD' || tuition === 'No limit');
+      scholarshipBlock.style.display = hideScholarship ? 'none' : '';
+      if (hideScholarship) {
+        document.getElementById('scholarship_importance').value = '';
+        var sSel = scholarshipBlock.querySelector('.option-card.selected');
+        if (sSel) sSel.classList.remove('selected');
+      }
+    }
+
+    // 4. PhD → hide teaching + research in S5 (student_experience already deleted from UI)
+    var teachingBlock = document.getElementById('teaching-block');
+    if (teachingBlock) {
+      teachingBlock.style.display = (level === 'PhD') ? 'none' : '';
+      if (level === 'PhD') {
+        document.getElementById('teaching_importance').value = '';
+        var tSel = teachingBlock.querySelector('.option-card.selected');
+        if (tSel) tSel.classList.remove('selected');
+      }
+    }
+    var researchBlock = document.getElementById('research-block');
+    if (researchBlock) {
+      researchBlock.style.display = (level === 'PhD') ? 'none' : '';
+      if (level === 'PhD') {
+        document.getElementById('research_importance').value = '';
+        var rSel = researchBlock.querySelector('.option-card.selected');
+        if (rSel) rSel.classList.remove('selected');
+      }
+    }
+
+    // Re-run validation to reflect newly hidden questions
+    if (typeof validateAllFields === 'function') validateAllFields();
+  }
+
+  // Country decided handler — show/hide country dropdown + trigger conditional logic
   document.querySelectorAll('[data-name="country_decided"] .option-card').forEach(function(card) {
     card.addEventListener('click', function() {
       var val = this.getAttribute('data-value');
@@ -1797,8 +1930,26 @@ function setEnglishScores() {
         wrapper.style.display = 'none';
         document.getElementById('selected_country').value = '';
       }
+      applyConditionalLogic();
     });
   });
+
+  // Country dropdown — trigger conditional logic when a country is picked or cleared
+  var countrySelect = document.getElementById('selected_country');
+  if (countrySelect) countrySelect.addEventListener('change', applyConditionalLogic);
+
+  // Level + tuition selections trigger conditional logic too
+  ['level','tuition_band'].forEach(function(name) {
+    document.querySelectorAll('.option-group[data-name="' + name + '"] .option-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        // Run after the existing handler has updated the .selected class
+        setTimeout(applyConditionalLogic, 0);
+      });
+    });
+  });
+
+  // Initial run on load
+  applyConditionalLogic();
 </script>
 
 </body>
