@@ -917,143 +917,480 @@ const INSTITUTIONS = [
    kinds: chip, chipMulti, numeric, search, grid, country, rank
 */
 const SECTIONS = [
-  { id: 1, name: "Academic profile",      intro: "Starting with the basics — your academic profile. This is what I check eligibility against.",          drop: 2105 },
-  { id: 2, name: "Priorities",            intro: "Quick one — your priorities. This shapes how I weight everything else.",                                  drop: 890 },
-  { id: 3, name: "Country preferences",   intro: "Now the country piece. If a place feels right, the numbers often follow.",                                drop: 1640 },
-  { id: 4, name: "Course & field",        intro: "On to course fit. This is where the recommendations really start narrowing.",                             drop: 2310 },
-  { id: 5, name: "University selection",  intro: "Last stretch. A few questions on what kind of university will suit you.",                                  drop: 1118 },
+  { id: 1, name: "Academic profile",     intro: "Starting with the basics — your academic profile. This is what I'll check eligibility against.", drop: 2105 },
+  { id: 2, name: "Priorities",           intro: "Quick one — your priorities. This shapes how I weight everything else.",                             drop: 890 },
+  { id: 3, name: "Country preferences",  intro: "Let's narrow by country. What factors matter most?",                                                  drop: 1640 },
+  { id: 4, name: "Course & field",       intro: "Onto the programme details — level, field, budget.",                                                 drop: 2310 },
+  { id: 5, name: "University selection", intro: "Almost there. Now let's figure out what kind of university suits you.",                              drop: 1118 }
 ];
 
 const FLOW = [
-  // — Section 1: Academic profile (10)
-  { id: "level",    section: 1, kind: "chip", prompt: "What&rsquo;s your highest completed (or in-progress) degree?",
-    options: [ {label: "Bachelor&rsquo;s",v:"Bachelor's"}, {label: "Master&rsquo;s",v:"Master's"} ] },
-  { id: "grading",  section: 1, kind: "chip", prompt: "Which grading system does your institution use?",
-    options: [ {label: "Percentage (%)",v:"pct"}, {label: "CGPA / 10",v:"cgpa10"}, {label: "GPA / 4",v:"gpa4"} ] },
-  { id: "gpa",      section: 1, kind: "numeric", prompt: "What&rsquo;s your academic score?",
-    depends: "grading",
-    placeholderMap: { pct: "e.g. 75", cgpa10: "e.g. 7.8", gpa4: "e.g. 3.4" },
-    unitMap:        { pct: "%",       cgpa10: "/ 10",     gpa4: "/ 4"       },
-    rangeMap:       { pct: [0,100],   cgpa10: [0,10],     gpa4: [0,4]       } },
-  { id: "inst",     section: 1, kind: "search", prompt: "Which institution did you study at? (Type to search)" },
-  { id: "backlogs", section: 1, kind: "chip", prompt: "How many backlogs (failed papers) do you currently have?",
-    options: [ {label: "None",v:0}, {label: "1 – 2",v:2}, {label: "3 – 5",v:4}, {label: "More than 5",v:6} ] },
-  { id: "english",  section: 1, kind: "chip", prompt: "Have you taken an English language test yet?",
-    options: [ {label: "IELTS",v:"IELTS"}, {label: "TOEFL",v:"TOEFL"}, {label: "PTE",v:"PTE"}, {label: "Not yet",v:"None"} ] },
-  { id: "englishScores", section: 1, kind: "grid", prompt: "Enter your scores. I&rsquo;ll compute the overall.",
-    skipIf: (a) => a.english === "None",
-    gridMap: {
-      IELTS: { fields: [["Listening", 0, 9, 0.5], ["Reading", 0, 9, 0.5], ["Writing", 0, 9, 0.5], ["Speaking", 0, 9, 0.5]], overall: "Overall band", overallRange: [0,9,0.5] },
-      TOEFL: { fields: [["Listening", 0, 30, 1],  ["Reading", 0, 30, 1],  ["Writing", 0, 30, 1],  ["Speaking", 0, 30, 1]],  overall: "Total (0–120)",  overallRange: [0,120,1] },
-      PTE:   { fields: [["Listening", 10, 90, 1], ["Reading", 10, 90, 1], ["Writing", 10, 90, 1], ["Speaking", 10, 90, 1]], overall: "Overall",         overallRange: [10,90,1] },
-    } },
-  { id: "exam",     section: 1, kind: "chip", prompt: "Any GRE or GMAT score?",
-    options: [ {label: "GRE",v:"GRE"}, {label: "GMAT",v:"GMAT"}, {label: "None",v:"None"} ] },
-  { id: "examScores", section: 1, kind: "grid", prompt: "Your exam scores:",
-    skipIf: (a) => a.exam === "None" || !a.exam,
-    gridMap: {
-      GRE:  { fields: [["Verbal", 130,170,1], ["Quant",130,170,1], ["AWA",0,6,0.5]], overall: "Overall (260–340)", overallRange: [260,340,1] },
-      GMAT: { fields: [["Verbal", 0,60,1],    ["Quant",0,60,1],    ["AWA",0,6,0.5]], overall: "Overall (205–805)", overallRange: [205,805,1] },
-    } },
-  { id: "workex",   section: 1, kind: "chip", prompt: "How many years of work experience do you have?",
-    options: [ {label: "None",v:0}, {label: "< 1 year",v:1}, {label: "1 – 2 years",v:2}, {label: "3 – 5 years",v:4}, {label: "5+ years",v:6} ] },
+  // ─── Section 1: Academic profile ───
+  { id: "profile_degree_completed", section: 1, kind: "chip",
+    prompt: "What is the highest level of education you have completed or are currently pursuing?",
+    options: [
+      { label: "High School",       v: "High School" },
+      { label: "Bachelor's Degree", v: "Bachelor's" },
+      { label: "Master's Degree",   v: "Master's" }
+    ] },
 
-  // — Section 2: Priorities (2)
-  { id: "country_decided", section: 2, kind: "chip", prompt: "Have you already decided on a country?",
-    options: [ {label: "Yes",v:"Yes"}, {label: "Not yet",v:"No"} ] },
-  { id: "priorities", section: 2, kind: "rank", prompt: "Rank these three, most important first. It shapes how I weight everything else.",
-    items: [ {v: "Country", label: "Country"}, {v: "Course", label: "Course"}, {v: "Institution", label: "Institution"} ] },
+  { id: "profile_grading_system", section: 1, kind: "chip",
+    prompt: "Which grading system does your institution use?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Percentage (%)",     v: "INDIA_PCT" },
+      { label: "CGPA (out of 10)",   v: "INDIA_CGPA_10" },
+      { label: "GPA (out of 4)",     v: "INDIA_CGPA_4" }
+    ] },
 
-  // — Section 3: Country preferences (3)  (skipped if country_decided === "Yes")
-  { id: "selected_country", section: 3, kind: "country", prompt: "Which country?",
+  { id: "profile_gpa_numeric", section: 1, kind: "numeric",
+    prompt: "What is your academic score?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    depends: "profile_grading_system",
+    placeholderMap: { INDIA_PCT: "e.g. 75", INDIA_CGPA_10: "e.g. 7.8", INDIA_CGPA_4: "e.g. 3.4" },
+    unitMap:        { INDIA_PCT: "%",       INDIA_CGPA_10: "/ 10",     INDIA_CGPA_4: "/ 4"      },
+    rangeMap:       { INDIA_PCT: [0,100],   INDIA_CGPA_10: [0,10],     INDIA_CGPA_4: [0,4]      } },
+
+  { id: "profile_institution_name", section: 1, kind: "search",
+    prompt: "Which institution are you currently attending or have most recently attended?",
+    skipIf: (a) => a.profile_degree_completed === "High School" },
+
+  { id: "profile_backlogs", section: 1, kind: "chip",
+    prompt: "How many backlogs do you have?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "None",        v: "0" },
+      { label: "1 - 2",       v: "2" },
+      { label: "3 - 5",       v: "4" },
+      { label: "More than 5", v: "6" }
+    ] },
+
+  { id: "profile_english_test", section: 1, kind: "chip",
+    prompt: "Have you taken any English language test?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "IELTS",   v: "IELTS" },
+      { label: "TOEFL",   v: "TOEFL" },
+      { label: "PTE",     v: "PTE" },
+      { label: "Not yet", v: "None" }
+    ] },
+
+  { id: "profile_english_scores", section: 1, kind: "grid",
+    prompt: "Enter your scores. I'll compute the overall.",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.profile_english_test === "None" || !a.profile_english_test,
+    gridMap: {
+      IELTS: { fields: [["Listening", 0, 9, 0.5], ["Reading", 0, 9, 0.5], ["Writing", 0, 9, 0.5], ["Speaking", 0, 9, 0.5]], overall: "Overall Band",   overallRange: [0, 9, 0.5] },
+      TOEFL: { fields: [["Listening (0–30)", 0, 30, 1], ["Reading (0–30)", 0, 30, 1], ["Writing (0–30)", 0, 30, 1], ["Speaking (0–30)", 0, 30, 1]], overall: "Total Score (0–120)", overallRange: [0, 120, 1] },
+      PTE:   { fields: [["Listening (10–90)", 10, 90, 1], ["Reading (10–90)", 10, 90, 1], ["Writing (10–90)", 10, 90, 1], ["Speaking (10–90)", 10, 90, 1]], overall: "Overall Score", overallRange: [10, 90, 1] }
+    } },
+
+  { id: "profile_exam_type", section: 1, kind: "chip",
+    prompt: "Do you have a score for any of these exams?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "GRE",  v: "GRE" },
+      { label: "GMAT", v: "GMAT" },
+      { label: "None", v: "None" }
+    ] },
+
+  { id: "profile_exam_scores", section: 1, kind: "grid",
+    prompt: "Your exam scores:",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.profile_exam_type === "None" || !a.profile_exam_type,
+    gridMap: {
+      GRE:  { fields: [["Verbal (130–170)", 130, 170, 1], ["Quantitative (130–170)", 130, 170, 1], ["Writing (0–6)", 0, 6, 0.5]], overall: "Overall (260–340)", overallRange: [260, 340, 1] },
+      GMAT: { fields: [["Verbal (0–60)", 0, 60, 1], ["Quantitative (0–60)", 0, 60, 1], ["Writing (0–6)", 0, 6, 0.5]], overall: "Overall (205–805)", overallRange: [205, 805, 1] }
+    } },
+
+  { id: "profile_work_experience", section: 1, kind: "chip",
+    prompt: "How many years of work experience do you have?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "None",             v: "0" },
+      { label: "Less than 1 year", v: "1" },
+      { label: "1 - 2 years",      v: "2" },
+      { label: "3 - 5 years",      v: "4" },
+      { label: "5+ years",         v: "6" }
+    ] },
+
+  // ─── Section 2: Priorities ───
+  { id: "country_decided", section: 2, kind: "chip",
+    prompt: "Is there a specific country you want to study in?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Yes", v: "Yes" },
+      { label: "No",  v: "No" }
+    ] },
+
+  { id: "selected_country", section: 2, kind: "country",
+    prompt: "Select your country",
     onlyIf: (a) => a.country_decided === "Yes" },
-  { id: "work_permit", section: 3, kind: "chip", prompt: "How much does post-study work duration matter?",
-    skipIf: (a) => a.country_decided === "Yes",
-    options: [
-      {label: "A lot — 3+ years",v:"high"},
-      {label: "Some — 1 – 3 years",v:"med"},
-      {label: "Not really",v:"low"} ] },
-  { id: "english_pref", section: 3, kind: "chip", prompt: "Do you prefer English-speaking countries?",
-    skipIf: (a) => a.country_decided === "Yes",
-    options: [ {label: "Yes",v:"yes"}, {label: "Prefer, but flexible",v:"flex"}, {label: "No preference",v:"no"} ] },
-  { id: "pr",   section: 3, kind: "chip", prompt: "How much does permanent-residence opportunity factor in?",
-    skipIf: (a) => a.country_decided === "Yes",
-    options: [ {label: "Very",v:"high"}, {label: "Somewhat",v:"med"}, {label: "Not a factor",v:"low"} ] },
 
-  // — Section 4: Course & field (8)
-  { id: "programLevel", section: 4, kind: "chip", prompt: "What level are you applying for?",
-    options: [ {label: "Masters",v:"PG"}, {label: "PhD",v:"PhD"} ] },
-  { id: "programType", section: 4, kind: "chip", prompt: "Taught or research-focused?",
-    options: [ {label: "Taught — coursework",v:"taught"}, {label: "Research",v:"research"} ],
-    skipIf: (a) => a.programLevel === "PhD" },
-  { id: "duration", section: 4, kind: "chip", prompt: "Preferred programme duration?",
-    options: [ {label: "1 year or less",v:"short"}, {label: "More than 1 year",v:"long"} ] },
-  { id: "internship", section: 4, kind: "chip", prompt: "How important is a built-in internship?",
-    options: [ {label: "Important",v:"high"}, {label: "Nice to have",v:"med"}, {label: "Not a factor",v:"low"} ] },
-  { id: "tuition", section: 4, kind: "chip", prompt: "Maximum annual tuition budget?",
-    options: [
-      {label: "Up to $5k",v:"5"}, {label: "Up to $15k",v:"15"},
-      {label: "Up to $30k",v:"30"}, {label: "Up to $50k",v:"50"},
-      {label: "No upper limit",v:"none"}
+  { id: "priorities", section: 2, kind: "rank",
+    prompt: "Your priorities shape your recommendations. Rank these three from most to least important.",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    items: [
+      { v: "Country",     label: "Country" },
+      { v: "Course",      label: "Course" },
+      { v: "Institution", label: "Institution" }
     ] },
-  { id: "scholarship", section: 4, kind: "chip", prompt: "How important is a scholarship or funding?",
-    options: [ {label: "Very",v:"high"}, {label: "Somewhat",v:"med"}, {label: "Not a factor",v:"low"} ] },
-  { id: "field", section: 4, kind: "chip", prompt: "Pick the field closest to what you want to study.",
+
+  // ─── Section 3: Country preferences ───
+  // All skipped if country pre-selected (country_decided === "Yes")
+  { id: "work_permit_importance", section: 3, kind: "chip",
+    prompt: "When choosing a country, how important is the duration of work rights after you graduate?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.country_decided === "Yes",
     options: [
-      {label: "Engineering & Tech",v:"engineering"}, {label: "Computer Science & Data",v:"cs"},
-      {label: "Natural Sciences",v:"science"},       {label: "Business & Management",v:"business"},
-      {label: "Economics & Finance",v:"finance"},    {label: "Life Sciences",v:"life"},
-      {label: "Arts & Design",v:"arts"},             {label: "Social Sciences",v:"social"},
-      {label: "Law & Policy",v:"law"},               {label: "Something else",v:"other"},
+      { label: "Very strongly (3+ years)",     v: "Very strongly (3 years and above)" },
+      { label: "Wouldn't mind (1-3 years)",    v: "Wouldn\u2019t mind (less than 3 years and more than 1 year)" },
+      { label: "Not really (1 year or less)",  v: "Not really (1 year or less)" }
     ] },
-  { id: "subfield", section: 4, kind: "chip", prompt: "Any specific focus within that?",
+
+  { id: "english_preference", section: 3, kind: "chip",
+    prompt: "Do you prefer studying in a country where English is the primary language?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.country_decided === "Yes",
+    options: [
+      { label: "Yes",                   v: "Yes" },
+      { label: "Prefer but flexible",   v: "Prefer but flexible" },
+      { label: "No preference",         v: "No preference" }
+    ] },
+
+  { id: "pr_importance", section: 3, kind: "chip",
+    prompt: "Does the option to immigrate permanently after graduation affect your choice?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.country_decided === "Yes",
+    options: [
+      { label: "Very important",     v: "Very strongly" },
+      { label: "Somewhat important", v: "Wouldn\u2019t mind" },
+      { label: "Not important",      v: "Don\u2019t care" }
+    ] },
+
+  // ─── Section 4: Course & Field ───
+  { id: "level", section: 4, kind: "chip",
+    prompt: "What level of programme are you looking to study abroad?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.profile_degree_completed === "Bachelor's",
+    options: [
+      { label: "Postgraduate (Masters)", v: "PG" },
+      { label: "PhD (Doctorate)",        v: "PhD" }
+    ] },
+
+  { id: "program_type_preference", section: 4, kind: "chip",
+    prompt: "What type of Masters programme are you looking for?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.level === "PhD",
+    options: [
+      { label: "Taught — Coursework and lectures",                v: "taught" },
+      { label: "Research — Independent research under supervision", v: "research" }
+    ] },
+
+  { id: "duration", section: 4, kind: "chip",
+    prompt: "What's your preferred programme duration?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.level === "PhD",
+    options: [
+      { label: "1 year or less",    v: "1 year or less" },
+      { label: "More than 1 year",  v: "More than 1 year" }
+    ] },
+
+  { id: "internship_importance", section: 4, kind: "chip",
+    prompt: "How important is it for you, that your course includes an internship?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.level === "PhD",
+    options: [
+      { label: "Very important",     v: "Very strongly" },
+      { label: "Somewhat important", v: "Wouldn\u2019t mind" },
+      { label: "Not important",      v: "Don\u2019t care" }
+    ] },
+
+  { id: "tuition_band", section: 4, kind: "chip",
+    prompt: "What's your maximum annual tuition budget?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Up to $5,000 / year",  v: "Up to $5k" },
+      { label: "Up to $15,000 / year", v: "Up to $15k" },
+      { label: "Up to $30,000 / year", v: "Up to $30k" },
+      { label: "Up to $50,000 / year", v: "Up to $50k" },
+      { label: "No upper limit",        v: "No limit" }
+    ] },
+
+  { id: "scholarship_importance", section: 4, kind: "chip",
+    prompt: "How important is it that your course offers scholarships or funding?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.level === "PhD" || a.tuition_band === "No limit",
+    options: [
+      { label: "Very important",     v: "Very strongly (more than 20% of tuition)" },
+      { label: "Somewhat important", v: "Wouldn\u2019t mind getting one (less than 20% of tuition or none)" },
+      { label: "Not important",      v: "Don\u2019t care" }
+    ] },
+
+  { id: "field", section: 4, kind: "chip",
+    prompt: "Pick the field that best matches what you want to study.",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Engineering & Technology",       v: "engineering & technology" },
+      { label: "Computer Science & Data",        v: "computer science & data technology" },
+      { label: "Natural Sciences",               v: "natural sciences" },
+      { label: "Life Sciences & Biotechnology",  v: "life sciences & biotechnology" },
+      { label: "Medicine & Clinical Health",     v: "medicine & clinical health" },
+      { label: "Public Health & Allied Health",  v: "public health & allied health" },
+      { label: "Business & Management",          v: "business & management" },
+      { label: "Economics, Finance & Accounting", v: "economics, finance & accounting" },
+      { label: "Social Sciences",                v: "social sciences" },
+      { label: "Humanities & Languages",         v: "humanities & languages" },
+      { label: "Arts & Design",                  v: "arts, design & creative studies" },
+      { label: "Law, Politics & Governance",     v: "law, politics & governance" },
+      { label: "Education & Teaching",           v: "education & teaching" },
+      { label: "Environment & Sustainability",   v: "environment, sustainability & agriculture" },
+      { label: "Hospitality & Tourism",          v: "hospitality, tourism & service industry" }
+    ] },
+
+  { id: "sub_field", section: 4, kind: "chip",
+    prompt: "Which specific area within this field interests you most?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
     depends: "field",
     optionsMap: {
-      engineering: [ {label: "Mechanical",v:"mech"}, {label: "Electrical",v:"ee"}, {label: "Civil",v:"civil"}, {label: "No preference",v:"any"} ],
-      cs:          [ {label: "AI / ML",v:"ai"}, {label: "Data Science",v:"ds"}, {label: "Systems",v:"sys"}, {label: "Cybersecurity",v:"sec"}, {label: "No preference",v:"any"} ],
-      science:     [ {label: "Physics",v:"phys"}, {label: "Chemistry",v:"chem"}, {label: "Mathematics",v:"math"}, {label: "No preference",v:"any"} ],
-      business:    [ {label: "General MBA",v:"mba"}, {label: "Analytics",v:"analytics"}, {label: "Marketing",v:"mkt"}, {label: "No preference",v:"any"} ],
-      finance:     [ {label: "Finance",v:"fin"}, {label: "Economics",v:"econ"}, {label: "Accounting",v:"acc"}, {label: "No preference",v:"any"} ],
-      life:        [ {label: "Biotech",v:"biotech"}, {label: "Public Health",v:"ph"}, {label: "No preference",v:"any"} ],
-      arts:        [ {label: "Design",v:"design"}, {label: "Film",v:"film"}, {label: "No preference",v:"any"} ],
-      social:      [ {label: "Psychology",v:"psy"}, {label: "Sociology",v:"soc"}, {label: "No preference",v:"any"} ],
-      law:         [ {label: "International Law",v:"intl"}, {label: "Public Policy",v:"policy"}, {label: "No preference",v:"any"} ],
-      other:       [ {label: "I&rsquo;ll specify later",v:"later"} ],
+      "engineering & technology": [
+        { label: "Mechanical Engineering", v: "Mechanical Engineering" },
+        { label: "Civil & Structural Engineering", v: "Civil & Structural Engineering" },
+        { label: "Chemical Engineering", v: "Chemical Engineering" },
+        { label: "Electrical & Electronic Engineering", v: "Electrical & Electronic Engineering" },
+        { label: "Aerospace Engineering", v: "Aerospace Engineering" },
+        { label: "Biomedical Engineering", v: "Biomedical Engineering" },
+        { label: "Manufacturing & Industrial Engineering", v: "Manufacturing & Industrial Engineering" },
+        { label: "Control Systems & Robotics", v: "Control Systems & Robotics" },
+        { label: "Energy & Power Engineering", v: "Energy & Power Engineering" },
+        { label: "Engineering Management", v: "Engineering Management" }
+      ],
+      "computer science & data technology": [
+        { label: "Computer Science & Software Engineering", v: "Computer Science & Software Engineering" },
+        { label: "Data Science & Analytics", v: "Data Science & Analytics" },
+        { label: "Artificial Intelligence & Machine Learning", v: "Artificial Intelligence & Machine Learning" },
+        { label: "Cybersecurity & Information Assurance", v: "Cybersecurity & Information Assurance" },
+        { label: "Information Systems & Management", v: "Information Systems & Management" },
+        { label: "Human-Computer Interaction & UX", v: "Human-Computer Interaction & UX" }
+      ],
+      "natural sciences": [
+        { label: "Mathematics & Statistics", v: "Mathematics & Statistics" },
+        { label: "Physics & Astronomy", v: "Physics & Astronomy" },
+        { label: "Chemistry", v: "Chemistry" },
+        { label: "Earth & Marine Sciences", v: "Earth & Marine Sciences" },
+        { label: "Materials Science", v: "Materials Science" }
+      ],
+      "life sciences & biotechnology": [
+        { label: "Biological Sciences", v: "Biological Sciences" },
+        { label: "Biochemistry & Molecular Biology", v: "Biochemistry & Molecular Biology" },
+        { label: "Genetics & Genomics", v: "Genetics & Genomics" },
+        { label: "Neuroscience", v: "Neuroscience" },
+        { label: "Biotechnology & Bioengineering", v: "Biotechnology & Bioengineering" },
+        { label: "Microbiology & Immunology", v: "Microbiology & Immunology" }
+      ],
+      "medicine & clinical health": [
+        { label: "Medicine & Surgery", v: "Medicine & Surgery" },
+        { label: "Dentistry & Oral Health", v: "Dentistry & Oral Health" },
+        { label: "Pharmacy & Pharmacology", v: "Pharmacy & Pharmacology" },
+        { label: "Veterinary Science", v: "Veterinary Science" },
+        { label: "Biomedical Sciences", v: "Biomedical Sciences" }
+      ],
+      "public health & allied health": [
+        { label: "Public Health & Epidemiology", v: "Public Health & Epidemiology" },
+        { label: "Nursing & Midwifery", v: "Nursing & Midwifery" },
+        { label: "Allied Health & Therapy", v: "Allied Health & Therapy" },
+        { label: "Anatomy & Physiology", v: "Anatomy & Physiology" },
+        { label: "Mental Health & Counselling", v: "Mental Health & Counselling" },
+        { label: "Global Health & International Development", v: "Global Health & International Development" },
+        { label: "Health Management & Health Informatics", v: "Health Management & Health Informatics" },
+        { label: "Sports Science & Exercise Science", v: "Sports Science & Exercise Science" },
+        { label: "Nutrition & Dietetics", v: "Nutrition & Dietetics" }
+      ],
+      "business & management": [
+        { label: "Business & Management", v: "Business & Management" },
+        { label: "Marketing & Communications", v: "Marketing & Communications" },
+        { label: "Entrepreneurship & Innovation", v: "Entrepreneurship & Innovation" },
+        { label: "Supply Chain & Operations Management", v: "Supply Chain & Operations Management" },
+        { label: "Human Resource Management", v: "Human Resource Management" },
+        { label: "International Business", v: "International Business" }
+      ],
+      "economics, finance & accounting": [
+        { label: "Accounting & Finance", v: "Accounting & Finance" },
+        { label: "Economics", v: "Economics" },
+        { label: "Statistics & Operations Research", v: "Statistics & Operations Research" },
+        { label: "Investment & Risk Management", v: "Investment & Risk Management" },
+        { label: "Actuarial Science", v: "Actuarial Science" }
+      ],
+      "social sciences": [
+        { label: "Sociology", v: "Sociology" },
+        { label: "Psychology", v: "Psychology" },
+        { label: "Criminology & Criminal Justice", v: "Criminology & Criminal Justice" },
+        { label: "Geography & Urban Studies", v: "Geography & Urban Studies" },
+        { label: "Development & Area Studies", v: "Development & Area Studies" },
+        { label: "Social Policy & Social Work", v: "Social Policy & Social Work" },
+        { label: "Gender, Diversity & Cultural Studies", v: "Gender, Diversity & Cultural Studies" },
+        { label: "Cognitive Science", v: "Cognitive Science" }
+      ],
+      "humanities & languages": [
+        { label: "History", v: "History" },
+        { label: "Philosophy & Ethics", v: "Philosophy & Ethics" },
+        { label: "Languages & Linguistics", v: "Languages & Linguistics" },
+        { label: "Anthropology & Archaeology", v: "Anthropology & Archaeology" },
+        { label: "Theology & Religious Studies", v: "Theology & Religious Studies" },
+        { label: "Literature & Creative Writing", v: "Literature & Creative Writing" },
+        { label: "Communication & Media Studies", v: "Communication & Media Studies" }
+      ],
+      "arts, design & creative studies": [
+        { label: "Art & Design", v: "Art & Design" },
+        { label: "Architecture & Built Environment", v: "Architecture & Built Environment" },
+        { label: "Music", v: "Music" },
+        { label: "Performing Arts & Drama", v: "Performing Arts & Drama" },
+        { label: "Film, Media & Animation", v: "Film, Media & Animation" },
+        { label: "History of Art", v: "History of Art" }
+      ],
+      "law, politics & governance": [
+        { label: "Law", v: "Law" },
+        { label: "International Law & Human Rights", v: "International Law & Human Rights" },
+        { label: "Corporate & Commercial Law", v: "Corporate & Commercial Law" },
+        { label: "Criminal Law & Justice", v: "Criminal Law & Justice" },
+        { label: "Public Policy & Administration", v: "Public Policy & Administration" },
+        { label: "Politics & International Relations", v: "Politics & International Relations" },
+        { label: "Library & Information Science", v: "Library & Information Science" }
+      ],
+      "education & teaching": [
+        { label: "Education Studies & Policy", v: "Education Studies & Policy" },
+        { label: "Teacher Training & Pedagogy", v: "Teacher Training & Pedagogy" },
+        { label: "Educational Psychology", v: "Educational Psychology" },
+        { label: "Higher Education Management", v: "Higher Education Management" },
+        { label: "Early Childhood & Special Education", v: "Early Childhood & Special Education" },
+        { label: "TESOL & Language Education", v: "TESOL & Language Education" }
+      ],
+      "environment, sustainability & agriculture": [
+        { label: "Environmental Sciences", v: "Environmental Sciences" },
+        { label: "Agriculture & Forestry", v: "Agriculture & Forestry" },
+        { label: "Ecology & Earth Systems", v: "Ecology & Earth Systems" },
+        { label: "Sustainable Development & Climate Change", v: "Sustainable Development & Climate Change" },
+        { label: "Land & Property Management", v: "Land & Property Management" },
+        { label: "Food Science & Nutrition", v: "Food Science & Nutrition" }
+      ],
+      "hospitality, tourism & service industry": [
+        { label: "Hospitality & Tourism Management", v: "Hospitality & Tourism Management" },
+        { label: "Event Management", v: "Event Management" }
+      ]
     } },
 
-  // — Section 5: University selection (9)
-  { id: "ranking",   section: 5, kind: "chip", prompt: "How much should global rankings drive the list?",
-    options: [ {label: "Top institutions only",v:"high"}, {label: "Top + middle are fine",v:"mid"}, {label: "Show everything",v:"low"} ] },
-  { id: "subject_v_overall", section: 5, kind: "chip", prompt: "Strength in your field, or overall reputation?",
-    options: [ {label: "Strength in my field",v:"subject"}, {label: "A balance of both",v:"balance"}, {label: "Overall reputation",v:"overall"} ] },
-  { id: "prestige",  section: 5, kind: "chip", prompt: "Is global name recognition important to you?",
-    options: [ {label: "Yes, strongly",v:"high"}, {label: "A nice bonus",v:"med"}, {label: "Not really",v:"low"} ] },
-  { id: "selectivity", section: 5, kind: "chip", prompt: "Prefer highly competitive universities?",
-    options: [ {label: "Yes, strongly",v:"high"}, {label: "A nice bonus",v:"med"}, {label: "Not really",v:"low"} ] },
-  { id: "research",  section: 5, kind: "chip", prompt: "Research-heavy or industry-connected?",
-    options: [ {label: "Research-focused",v:"research"}, {label: "Balanced",v:"bal"}, {label: "Industry-connected",v:"industry"} ] },
-  { id: "teaching",  section: 5, kind: "chip", prompt: "What kind of learning environment suits you?",
-    options: [ {label: "Small classes, high faculty contact",v:"small"}, {label: "Balanced — lectures + seminars",v:"bal"}, {label: "I&rsquo;m self-directed",v:"self"} ] },
-  { id: "diversity", section: 5, kind: "chip", prompt: "A globally diverse campus — how much does that matter?",
-    options: [ {label: "A lot",v:"high"}, {label: "A nice bonus",v:"med"}, {label: "Not really",v:"low"} ] },
-  { id: "career",    section: 5, kind: "chip", prompt: "Should I prioritise strong graduate-job placement?",
-    options: [ {label: "Critical",v:"high"}, {label: "A factor",v:"med"}, {label: "Doesn&rsquo;t really matter",v:"low"} ] },
-  { id: "careerType", section: 5, kind: "chip", prompt: "What outcome matters most after graduation?",
-    skipIf: (a) => a.career === "low",
-    options: [ {label: "Fast job placement",v:"speed"}, {label: "Strong starting salary",v:"salary"}, {label: "Big-name employers",v:"brand"} ] },
+  // ─── Section 5: University selection — order is Reputation → Character → Outcomes ───
+  { id: "ranking_importance", section: 5, kind: "chip",
+    prompt: "How much do you want global rankings to drive your recommendations?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Top institutions only",    v: "0.75" },
+      { label: "Top and middle are fine",  v: "0.50" },
+      { label: "All institutions",         v: "0.25" }
+    ] },
+
+  { id: "subject_ranking_importance", section: 5, kind: "chip",
+    prompt: "When choosing your university, should we focus on its strength in your specific field or its overall reputation?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Strength in my field matters more", v: "high" },
+      { label: "A balance of both",                 v: "medium" },
+      { label: "Overall reputation matters more",   v: "low" }
+    ] },
+
+  { id: "prestige_importance", section: 5, kind: "chip",
+    prompt: "Should we prioritise universities with strong global name recognition?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Yes, strongly", v: "high" },
+      { label: "A nice bonus",  v: "medium" },
+      { label: "Not really",    v: "low" }
+    ] },
+
+  { id: "selectivity_importance", section: 5, kind: "chip",
+    prompt: "Should we prioritise universities that are very competitive to get into?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Yes, strongly", v: "high" },
+      { label: "A nice bonus",  v: "medium" },
+      { label: "Not really",    v: "low" }
+    ] },
+
+  { id: "research_importance", section: 5, kind: "chip",
+    prompt: "Should we lean toward universities known for research strength, or those with stronger industry connections?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.level === "PhD",
+    options: [
+      { label: "Research-focused", v: "high" },
+      { label: "Balanced",         v: "medium" },
+      { label: "Industry-focused", v: "low" }
+    ] },
+
+  { id: "teaching_importance", section: 5, kind: "chip",
+    prompt: "What kind of learning environment do you prefer?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.level === "PhD",
+    options: [
+      { label: "Small classes with high faculty contact",                   v: "high" },
+      { label: "Balanced — mix of lectures and smaller sessions",           v: "medium" },
+      { label: "I'm self-directed, class size doesn't matter much to me",   v: "low" }
+    ] },
+
+  { id: "international_importance", section: 5, kind: "chip",
+    prompt: "Should we prioritise universities with a globally diverse campus?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Yes, strongly", v: "high" },
+      { label: "A nice bonus",  v: "medium" },
+      { label: "Not really",    v: "low" }
+    ] },
+
+  { id: "career_importance", section: 5, kind: "chip",
+    prompt: "Should we prioritise universities with strong graduate job placement?",
+    skipIf: (a) => a.profile_degree_completed === "High School",
+    options: [
+      { label: "Critical to my decision",       v: "high" },
+      { label: "A factor, but not the main one", v: "medium" },
+      { label: "Doesn't really matter",          v: "low" }
+    ] },
+
+  { id: "career_type", section: 5, kind: "chip",
+    prompt: "What's the main outcome you're hoping for after graduation?",
+    skipIf: (a) => a.profile_degree_completed === "High School" || a.career_importance === "low" || !a.career_importance,
+    options: [
+      { label: "Getting a job quickly after graduation",  v: "employment_rate" },
+      { label: "Earning a strong salary in my field",     v: "graduate_salary" },
+      { label: "Working with globally recognised employers", v: "employer_reputation" }
+    ] }
 ];
 
 /* ---- Callouts (spec: max 3/session, never consecutive, bias to S2–4) ---- */
 const CALLOUTS = [
-  { when: a => a.programLevel === "PhD",                 text: "A PhD path. That shifts the whole analysis toward research-strong universities." },
-  { when: a => a.selected_country === "Germany",         text: "Germany — often the best-value option in Europe. Strong pick." },
-  { when: a => a.priorities_1 === "Course",              text: "Refreshing — you care about the fit, not the badge." },
-  { when: a => a.tuition === "none",                     text: "No budget ceiling. That opens a lot of elite US and UK options." },
-  { when: a => a.field === "cs" && a.subfield === "ai",  text: "AI / ML — a crowded field, but a handful of universities genuinely lead it." },
-  { when: a => a.scholarship === "high" && a.tuition && ['15','5'].includes(a.tuition), text: "Tight budget with scholarship focus — I&rsquo;ll weight funded programs heavily." },
-  { when: a => a.english_pref === "no",                  text: "Open to non-English-speaking countries — that unlocks a lot of Europe." },
-  { when: a => a.workex === 4 || a.workex === 6,         text: "Solid work experience. That helps with admissions at competitive programs." },
+  { when: a => a.level === "PhD",                                        text: "A PhD path. That shifts the whole analysis toward research-strong universities." },
+  { when: a => a.selected_country === "Germany",                         text: "Germany — often the best-value option in Europe. Strong pick." },
+  { when: a => a.priorities_1 === "Course",                              text: "Refreshing — you care about the fit, not the badge." },
+  { when: a => a.tuition_band === "No limit",                            text: "Noted. That opens up a lot of premium options for you." },
+  { when: a => a.field === "computer science & data technology",         text: "Hot field. Also one where subject-specific ranking matters more than overall." },
+  { when: a => a.profile_backlogs && a.profile_backlogs !== "0",         text: "Noted. Many universities are fine with backlogs — we'll keep those in." },
+  { when: a => a.profile_english_test === "IELTS" && a.profile_english_scores && a.profile_english_scores.overall >= 7.5, text: "Strong score. That opens up the top universities in most countries." },
+  { when: a => a.priorities_1 === "Country",                             text: "Country-first. That makes the country filter the heaviest factor in your results." },
+  { when: a => a.selected_country === "United Kingdom",                  text: "UK — the classic choice for international Masters. Solid pick." },
+  { when: a => a.selected_country === "Canada",                          text: "Canada — strong post-study work rights and great value. Good call." },
+  { when: a => a.selected_country === "Australia",                       text: "Australia — generous work rights and long PR pathways. Worth noting." },
+  { when: a => a.program_type_preference === "research",                 text: "Research Masters. That's a pathway to PhD for many people — noted." },
+  { when: a => a.ranking_importance === "0.75",                          text: "Aiming high. I'll surface the most prestigious options in your field." },
+  { when: a => a.ranking_importance === "0.25",                          text: "Refreshing — you care about the fit, not the badge." }
 ];
+
+/* ---- High School block ---------------------------------------------------
+   If the student picks High School in Q1, halt the quiz with a blocking
+   message. If they change their answer later, the block clears.
+-------------------------------------------------------------------------- */
+function isUGBlocked() {
+  return state.answers.profile_degree_completed === "High School";
+}
+
+const UG_BLOCK_MESSAGE = "We're not quite ready for you yet. UNIFER currently helps students choose Masters and PhD programmes. Undergraduate support is on our roadmap — bookmark us and come back soon.";
+
+/* ---- Bachelor's auto-PG -------------------------------------------------
+   Bachelor's students never see the level question — it is implicitly PG.
+   Populate state.answers.level so downstream logic (callouts, skipIfs,
+   submit payload) works consistently.
+-------------------------------------------------------------------------- */
+function applyBachelorAutoPG() {
+  if (state.answers.profile_degree_completed === "Bachelor's" && !state.answers.level) {
+    state.answers.level = "PG";
+    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
+  }
+}
 
 /* ---- engine state ---- */
 const POOL_START = 10247;
@@ -1364,6 +1701,7 @@ function submitAnswer(stepId, value, displayLabel) {
   };
   state.answers[stepId] = value;
   window.UNIFER.answers = { ...state.answers };
+  applyBachelorAutoPG();
   const userBubble = addUserMsg(displayLabel);
   userBubble.dataset.stepId = stepId;
   // mark previous user bubbles as non-editable (we only allow undo of the last)
@@ -1372,6 +1710,14 @@ function submitAnswer(stepId, value, displayLabel) {
   // Remember snapshot so the last bubble AND the toast both point to it
   lastSnapshot = snap;
   showUndoToast(snap);
+  // High School → halt the quiz with a blocking message instead of advancing.
+  if (stepId === "profile_degree_completed" && isUGBlocked()) {
+    composer.innerHTML = "";
+    showTyping(500).then(() => {
+      addUniferMsg(UG_BLOCK_MESSAGE);
+    });
+    return;
+  }
   advance();
 }
 
