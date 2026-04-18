@@ -1216,6 +1216,20 @@ function updateStep(step) {
   progressFill.style.width = (step * 20) + "%";
 }
 
+function isGroupHiddenByConditionalLogic(group) {
+  // Walks up the DOM checking if any ancestor is hidden via inline style or computed CSS
+  var el = group;
+  while (el && el !== document.body) {
+    if (el.style && el.style.display === 'none') return true;
+    if (window.getComputedStyle && window.getComputedStyle(el).display === 'none') {
+      // Ignore the form-step display:none (that's step navigation, not conditional logic)
+      if (!el.classList.contains('form-step')) return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
 function validateCurrentStep() {
   var stepDiv = document.querySelector('.form-step[data-step="' + currentStep + '"]');
   var groupsInStep = stepDiv.querySelectorAll(".option-group");
@@ -1227,9 +1241,10 @@ function validateCurrentStep() {
     var groupName = group.dataset.name;
     if (optionalGroupNames.indexOf(groupName) !== -1) return;
     // Skip validation if this group's container is hidden (conditional logic)
-    var visibleParent = group.closest('[id$="-block"]');
-    if (visibleParent && visibleParent.style.display === 'none') return;
-    if (group.dataset.name === 'priority_3' && group.style.display === 'none') return;
+    if (isGroupHiddenByConditionalLogic(group)) {
+      group.classList.remove("invalid");
+      return;
+    }
     var hasSelection = group.querySelector(".option-card.selected");
     if (!hasSelection) {
       group.classList.add("invalid");
@@ -1288,14 +1303,12 @@ function checkPriorities() {
 
 function validateAllFields() {
   var allValid = true;
-  var optionalForValidation = ["student_experience_importance"];
+  var optionalForValidation = ["student_experience_importance", "profile_gre_scores", "profile_gmat_scores", "profile_subjects", "career_type", "profile_gpa_percentage", "profile_english_scores"];
   allGroups.forEach(function(group) {
     if (group.classList.contains("multi-select")) return;
     if (optionalForValidation.indexOf(group.dataset.name) !== -1) return;
-    // Skip if conditional block is hidden
-    var visibleParent = group.closest('[id$="-block"]');
-    if (visibleParent && visibleParent.style.display === 'none') return;
-    if (group.dataset.name === 'priority_3' && group.style.display === 'none') return;
+    // Skip if conditional block is hidden anywhere up the DOM tree
+    if (isGroupHiddenByConditionalLogic(group)) return;
     var visibleCards = Array.from(group.querySelectorAll(".option-card")).filter(
       function(c) { return c.style.display !== "none"; }
     );
@@ -1326,12 +1339,20 @@ document.querySelectorAll(".option-group").forEach(group => {
           hiddenInput.value = selected.join(",");
         }
       } else {
+        var wasAlreadySelected = card.classList.contains("selected");
         group.querySelectorAll(".option-card").forEach(c => {
           c.classList.remove("selected");
         });
-        card.classList.add("selected");
-        if (hiddenInput) {
-          hiddenInput.value = card.dataset.value;
+        if (!wasAlreadySelected) {
+          card.classList.add("selected");
+          if (hiddenInput) {
+            hiddenInput.value = card.dataset.value;
+          }
+        } else {
+          // Clicked an already-selected card → deselect it
+          if (hiddenInput) {
+            hiddenInput.value = "";
+          }
         }
       }
 
@@ -1631,11 +1652,11 @@ form.addEventListener("submit", function(e) {
       profile_gpa_percentage: document.getElementById("profile_gpa_percentage").value,
       profile_backlogs: document.getElementById("profile_backlogs").value,
       profile_english_test: document.getElementById("profile_english_test").value,
-      profile_english_score: document.getElementById("profile_english_score").value,
-      profile_gre_score: document.getElementById("profile_gre_score").value,
-      profile_gmat_score: document.getElementById("profile_gmat_score").value,
+      profile_english_scores: document.getElementById("profile_english_scores").value,
+      profile_exam_type: document.getElementById("profile_exam_type").value,
+      profile_gre_scores: document.getElementById("profile_gre_scores").value,
+      profile_gmat_scores: document.getElementById("profile_gmat_scores").value,
       profile_work_experience: document.getElementById("profile_work_experience").value,
-      profile_subjects: document.getElementById("profile_subjects").value,
       profile_grading_system: document.getElementById("profile_grading_system").value || "INDIA_PCT",
       profile_institution_id: document.getElementById("profile_institution_id").value,
       profile_institution_tier: document.getElementById("profile_institution_tier").value,
