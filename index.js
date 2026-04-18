@@ -851,11 +851,48 @@ app.post("/recommend", async (req, res) => {
 
     const { priority_1, priority_2, priority_3 } = req.body;
 
-    if (!priority_1 || !priority_2 || !priority_3) {
+    // Validation: priority_1 and priority_2 always required.
+    // priority_3 only required when no country is pre-selected (3-entity mode).
+    const hasPreselectedCountry = !!answers.selected_country;
+
+    if (!priority_1 || !priority_2) {
+      return res.status(400).json({ error: 'Priority 1 and Priority 2 must be provided.' });
+    }
+    if (!hasPreselectedCountry && !priority_3) {
       return res.status(400).json({ error: 'All three priorities must be provided.' });
     }
-    if (priority_1 === priority_2 || priority_1 === priority_3 || priority_2 === priority_3) {
-      return res.status(400).json({ error: 'Priority 1, 2 and 3 must all be different. Please select three distinct priorities.' });
+    if (priority_1 === priority_2) {
+      return res.status(400).json({ error: 'Priorities must all be different. Please select distinct priorities.' });
+    }
+    if (priority_3 && (priority_1 === priority_3 || priority_2 === priority_3)) {
+      return res.status(400).json({ error: 'Priorities must all be different. Please select distinct priorities.' });
+    }
+
+    // ─── AUTO-DEFAULTS based on conditional question logic ───
+    // PhD students: research is implicit, teaching/student experience are skipped
+    if (answers.level === 'PhD') {
+      if (!answers.research_importance) answers.research_importance = 'Very important (I want a university known for cutting-edge research)';
+      if (!answers.teaching_importance) answers.teaching_importance = 'medium';
+      if (!answers.student_experience_importance) answers.student_experience_importance = 'medium';
+      if (!answers.internship_importance) answers.internship_importance = "Don\u2019t care";
+      if (!answers.scholarship_importance) answers.scholarship_importance = "Don\u2019t care";
+    }
+
+    // Q5 in S5 deleted: student_experience_importance is always derived from teaching_importance
+    if (answers.teaching_importance) {
+      answers.student_experience_importance = answers.teaching_importance;
+    }
+
+    // No-upper-limit budget: scholarship importance is moot
+    if (answers.tuition_band === 'No limit' && !answers.scholarship_importance) {
+      answers.scholarship_importance = "Don\u2019t care";
+    }
+
+    // Country pre-selected: country preference fields are moot
+    if (hasPreselectedCountry) {
+      if (!answers.work_permit_importance) answers.work_permit_importance = 'Not really (1 year or less)';
+      if (!answers.english_preference) answers.english_preference = 'No preference';
+      if (!answers.pr_importance) answers.pr_importance = "Don\u2019t care";
     }
 
     // 0️⃣ Resolve institution tier + anabin server-side from student_institutions
@@ -1175,8 +1212,11 @@ app.post("/recommend", async (req, res) => {
     }
 
     // 3️⃣ MACRO WEIGHTS
+    // 3-entity (no country pre-selected): { 1: 0.50, 2: 0.32, 3: 0.18 } — AHP-derived
+    // 2-entity (country pre-selected): { 1: 0.61, 2: 0.39 } — preserves the 50:32 ratio renormalised
     function computeMacroWeights(p1, p2, p3) {
-      const base = { 1: 0.5, 2: 0.32, 3: 0.18 };
+      const base3 = { 1: 0.50, 2: 0.32, 3: 0.18 };
+      const base2 = { 1: 0.50/0.82, 2: 0.32/0.82 };  // = { 1: 0.6098, 2: 0.3902 }
 
       const normalise = (val) => {
         if (!val) return null;
@@ -1188,10 +1228,13 @@ app.post("/recommend", async (req, res) => {
         return map[val.toLowerCase()] || val;
       };
 
-      const weights = {};
+      const weights = { Country: 0, Course: 0, Institution: 0 };
+      const usingTwoEntity = !p3;
+      const base = usingTwoEntity ? base2 : base3;
+
       weights[normalise(p1)] = base[1];
       weights[normalise(p2)] = base[2];
-      weights[normalise(p3)] = base[3];
+      if (p3) weights[normalise(p3)] = base[3];
 
       const total = Object.values(weights).reduce((a, b) => a + b, 0);
       if (Math.abs(total - 1.0) > 0.01) {
@@ -1213,8 +1256,11 @@ app.post("/recommend", async (req, res) => {
     }
 
     function computeFinalScore(weights, scores) {
+      // When country is pre-selected, scores.country is null and weights.Country is 0.
+      // Both terms drop out cleanly; final score is composed of Course and Institution only.
+      const countryTerm = (scores.country != null) ? weights.Country * scores.country : 0;
       return (
-        weights.Country * scores.country +
+        countryTerm +
         weights.Course * scores.course +
         weights.Institution * scores.university
       );
@@ -1381,28 +1427,34 @@ app.post("/recommend", async (req, res) => {
 
     function computeLogisticsFit(course, answers) {
       let components = [];
-      let weights = [];
+      let weightsArr = [];
 
-      const iMap = {
-        'Very strongly': 1,
-        'Wouldn\u2019t mind': 0.6,
-        'Don\u2019t care': 0.3,
-      };
-      const internshipWeight = iMap[answers.internship_importance] || 0;
-      components.push(internshipWeight * (course.internship_available ? 1 : 0));
-      weights.push(internshipWeight);
+      // Internship: skipped for PhDs (no internship in PhD curriculum)
+      if (answers.level !== 'PhD') {
+        const iMap = {
+          'Very strongly': 1,
+          'Wouldn\u2019t mind': 0.6,
+          'Don\u2019t care': 0.3,
+        };
+        const internshipWeight = iMap[answers.internship_importance] || 0;
+        components.push(internshipWeight * (course.internship_available ? 1 : 0));
+        weightsArr.push(internshipWeight);
+      }
 
-      const sMap = {
-        'Very strongly (more than 20% of tuition)': 1,
-        'Wouldn\u2019t mind getting one (less than 20% of tuition or none)': 0.6,
-        'Don\u2019t care': 0.3,
-      };
-      const scholarshipWeight = sMap[answers.scholarship_importance] || 0;
-      const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
-      components.push(scholarshipWeight * scholarshipScore);
-      weights.push(scholarshipWeight);
+      // Scholarship: skipped for PhDs (almost always funded) and when budget is unlimited
+      if (answers.level !== 'PhD' && answers.tuition_band !== 'No limit') {
+        const sMap = {
+          'Very strongly (more than 20% of tuition)': 1,
+          'Wouldn\u2019t mind getting one (less than 20% of tuition or none)': 0.6,
+          'Don\u2019t care': 0.3,
+        };
+        const scholarshipWeight = sMap[answers.scholarship_importance] || 0;
+        const scholarshipScore = course.scholarship_available ? 0.8 : 0.2;
+        components.push(scholarshipWeight * scholarshipScore);
+        weightsArr.push(scholarshipWeight);
+      }
 
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      const totalWeight = weightsArr.reduce((a, b) => a + b, 0);
       return totalWeight > 0 ? clamp(components.reduce((a, b) => a + b, 0) / totalWeight) : 0.5;
     }
 
@@ -1451,7 +1503,11 @@ app.post("/recommend", async (req, res) => {
       const country = countries.find((c) => c.id === university.country_id);
       if (!country) return null;
 
-      let countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
+      // Skip country score entirely when country is pre-selected.
+      // All results are from the same country anyway, so country score adds no ranking signal.
+      let countryScore = hasPreselectedCountry
+        ? null
+        : computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
       let courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
       // Step 7: Blend composite ranking score with sub-indicator score
@@ -1491,11 +1547,11 @@ app.post("/recommend", async (req, res) => {
 
       const explanation = [];
 
-      if (countryScore >= 0.7)
+      if (countryScore != null && countryScore >= 0.7)
         explanation.push(
           "Strong country match based on your living and work preferences",
         );
-      else if (countryScore >= 0.4)
+      else if (countryScore != null && countryScore >= 0.4)
         explanation.push("Moderate country alignment with your preferences");
 
       if (
@@ -1566,7 +1622,7 @@ app.post("/recommend", async (req, res) => {
         admit_probability: pAdmit !== null ? Math.round(pAdmit * 100) / 100 : null,
         match_label: getMatchLabel(pAdmit, admitConf),
         scores: {
-          country: Math.round(countryScore * 100) / 100,
+          country: countryScore != null ? Math.round(countryScore * 100) / 100 : null,
           course: Math.round(courseScore * 100) / 100,
           university: Math.round(universityScore * 100) / 100,
         },
@@ -1628,7 +1684,9 @@ app.post("/recommend", async (req, res) => {
             ? alpha * compositeScore + beta * blendedSubScore
             : 0.70 * blendedSubScore;
 
-          const countryScore = computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
+          const countryScore = hasPreselectedCountry
+            ? null
+            : computeCountryScore(country, answers, countryMap, course, university.region_type, pswRulesMap, prScoresMap);
           const courseScore = computeCourseScore(course, answers, courseRelevanceMap);
 
           const softDestCode = COUNTRY_ISO[country.name] || null;
@@ -1662,13 +1720,13 @@ app.post("/recommend", async (req, res) => {
             admit_probability: softPAdmit !== null ? Math.round(softPAdmit * 100) / 100 : null,
             match_label: getMatchLabel(softPAdmit, softAdmitConf),
             scores: {
-              country: Math.round(countryScore * 100) / 100,
+              country: countryScore != null ? Math.round(countryScore * 100) / 100 : null,
               course: Math.round(courseScore * 100) / 100,
               university: Math.round(universityScore * 100) / 100,
             },
             explanation: [
-              countryScore >= 0.7 ? 'Strong country match based on your living and work preferences' :
-              countryScore >= 0.4 ? 'Moderate country alignment with your preferences' : null,
+              (countryScore != null && countryScore >= 0.7) ? 'Strong country match based on your living and work preferences' :
+              (countryScore != null && countryScore >= 0.4) ? 'Moderate country alignment with your preferences' : null,
               course.internship_available ? 'Includes internship as part of the curriculum' : null,
               courseScore >= 0.7 ? 'Strong match with your subject area and academic goals' :
               courseScore >= 0.4 ? 'Good alignment with your field and course preferences' : null,
