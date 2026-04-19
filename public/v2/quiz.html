@@ -893,6 +893,25 @@ const SECTIONS = [
   { id: 5, name: "University selection", intro: "Almost there. Now let's figure out what kind of university suits you.",                              drop: 1118 }
 ];
 
+// Stage 5E-B: real per-section counts fetched from /eligible-count at each boundary.
+let _lastKnownRealCount = null;
+let _pendingCountFetch = null;
+
+async function _refreshRealCount() {
+  if (!window.UNIFER || typeof window.UNIFER.fetchEligibleCount !== "function") return;
+  const myFetchToken = Symbol("countFetch");
+  _pendingCountFetch = myFetchToken;
+
+  const realCount = await window.UNIFER.fetchEligibleCount(state.answers);
+
+  if (_pendingCountFetch !== myFetchToken) return;
+  _pendingCountFetch = null;
+  if (realCount == null) return;
+
+  _lastKnownRealCount = realCount;
+  animateCounterTo(realCount, "section");
+}
+
 const FLOW = [
   // ─── Section 1: Academic profile ───
   { id: "profile_degree_completed", section: 1, kind: "chip",
@@ -2106,6 +2125,8 @@ async function advance() {
   // Section boundary?
   if (peek && nextSection !== prevSection) {
     await handleSectionBoundary(prevSection, nextSection);
+    // Stage 5E-B: fetch the real eligible-count after the fake drop animates.
+    _refreshRealCount();
   }
 
   // In-flight callout (not on section boundary turn)
@@ -2195,6 +2216,8 @@ async function startChat() {
   const first = FLOW[0];
   updateProgress();
   await askStep(first);
+  // Stage 5E-B: get real total count on quiz mount
+  _refreshRealCount();
 }
 
 /* ---- finish ---- */
@@ -2226,8 +2249,19 @@ async function finish() {
   stream.appendChild(end);
   scrollToBottom(50);
   composer.innerHTML = "";
-  document.getElementById("seeMatchesBtn").addEventListener("click", () => {
-    if (window.UNIFER) window.UNIFER.lastCourseCount = state.count;
+  document.getElementById("seeMatchesBtn").addEventListener("click", async () => {
+    // Stage 5E-B: final count refresh to reflect last section's answers
+    if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
+      const finalCount = await window.UNIFER.fetchEligibleCount(state.answers);
+      if (finalCount != null) {
+        state.count = finalCount;
+        window.UNIFER.lastCourseCount = finalCount;
+      } else {
+        window.UNIFER.lastCourseCount = state.count;
+      }
+    } else if (window.UNIFER) {
+      window.UNIFER.lastCourseCount = state.count;
+    }
     window.UNIFER.submitQuiz();
   });
 }

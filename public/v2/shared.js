@@ -685,4 +685,35 @@
       }
     }, 700);
   });
+
+  window.UNIFER.fetchEligibleCount = async function (partialAnswers) {
+    const a = partialAnswers || window.UNIFER.answers || {};
+    const payload = {};
+    if (a.level) payload.level = a.level;
+    if (a.field) payload.field = a.field;
+    if (a.sub_field) payload.sub_field = a.sub_field;
+    if (a.program_type_preference) payload.program_type_preference = a.program_type_preference;
+    if (a.tuition_band) payload.tuition_band = a.tuition_band;
+    if (a.duration) payload.duration = a.duration;
+    if (a.country_decided === 'Yes' && a.selected_country) {
+      payload.selected_country = a.selected_country;
+    }
+    const gpaPct = computeGpaPercentage ? computeGpaPercentage(a) : a.profile_gpa_percentage;
+    if (gpaPct) payload.profile_gpa_percentage = String(gpaPct);
+    if (a.profile_backlogs) payload.profile_backlogs = String(a.profile_backlogs);
+
+    try {
+      const res = await fetch('/eligible-count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return typeof data.count === 'number' ? data.count : null;
+    } catch (err) {
+      console.log('[unifer] eligible-count fetch failed', err);
+      return null;
+    }
+  };
 })();
