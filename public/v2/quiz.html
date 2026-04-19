@@ -1924,9 +1924,25 @@ function renderSearch(step) {
 
 /* ----- GRID (multi-component scores) ----- */
 function renderGrid(step) {
-  const key = state.answers[step.id === "englishScores" ? "english" : "exam"];
+  // Map grid question id → the answer key that holds the test type
+  const TEST_KEY_MAP = {
+    profile_english_scores: 'profile_english_test',
+    profile_exam_scores: 'profile_exam_type'
+  };
+  const testKey = TEST_KEY_MAP[step.id];
+  if (!testKey) return advance();
+  const key = state.answers[testKey];
   const config = step.gridMap[key];
   if (!config) return advance();
+
+  // Normalise a field label like "Verbal (130–170)" or "Listening (0–30)"
+  // into a compact key ('verbal', 'quant', 'listening', …) used for both
+  // DOM element ids and the JSON payload keys the backend reads.
+  function normaliseField(name) {
+    const first = String(name).toLowerCase().split(/\s/)[0];
+    if (first === 'quantitative') return 'quant';
+    return first;
+  }
 
   composer.innerHTML = `
     <div class="composer-body">
@@ -1947,7 +1963,7 @@ function renderGrid(step) {
   const overall = composer.querySelector("#gridOverall");
   const send = composer.querySelector("#gridSend");
   config.fields.forEach(([name, min, max, step]) => {
-    const id = "f_" + name;
+    const id = "f_" + normaliseField(name);
     const el = document.createElement("div");
     el.className = "score-field";
     el.innerHTML = `<label>${name}</label><input id="${id}" type="number" min="${min}" max="${max}" step="${step}" placeholder="—" />`;
@@ -1964,8 +1980,8 @@ function renderGrid(step) {
         if (key === "TOEFL") ov = Math.round(sum);
         else if (key === "PTE") ov = Math.round(sum / vals.length);
         else {
-          const v = parseFloat(grid.querySelector("#f_Verbal").value);
-          const q = parseFloat(grid.querySelector("#f_Quant").value);
+          const v = parseFloat(grid.querySelector("#f_verbal").value);
+          const q = parseFloat(grid.querySelector("#f_quant").value);
           ov = !isNaN(v) && !isNaN(q) ? v + q : "";
         }
       } else { // IELTS
@@ -1984,7 +2000,16 @@ function renderGrid(step) {
   overall.addEventListener("input", validate);
   send.addEventListener("click", () => {
     const ov = parseFloat(overall.value);
-    submitAnswer(step.id, ov, `${key}: ${ov}`);
+    // Collect all sub-field values into a structured object the backend can JSON-serialise.
+    const scores = { test: key };
+    config.fields.forEach(([fieldName]) => {
+      const fkey = normaliseField(fieldName);
+      const inputEl = grid.querySelector("#f_" + fkey);
+      const val = inputEl ? parseFloat(inputEl.value) : NaN;
+      scores[fkey] = isNaN(val) ? null : val;
+    });
+    scores.overall = isNaN(ov) ? null : ov;
+    submitAnswer(step.id, scores, `${key}: ${ov}`);
   });
   setTimeout(()=>inputs[0].focus({preventScroll:true}), 60);
 }
