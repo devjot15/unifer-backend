@@ -916,8 +916,10 @@
       box-sizing: border-box;
     `;
 
+    // Pull the wordmark from the existing DOM (quiz header has one; results page uses text logo).
+    // Only accept data: URIs — a missing/relative src would load the current page URL.
     const wordmarkImg = document.querySelector('.wordmark-img');
-    const wordmarkSrc = wordmarkImg ? wordmarkImg.src : '';
+    const wordmarkSrc = (wordmarkImg && wordmarkImg.src && wordmarkImg.src.startsWith('data:')) ? wordmarkImg.src : '';
 
     const title = firstName
       ? `${firstName}'s UNIFER shortlist`
@@ -926,8 +928,16 @@
 
     const header = document.createElement('div');
     header.style.cssText = `display:flex; align-items:center; gap:14px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e0e6e6;`;
+
+    const logoHtml = wordmarkSrc
+      ? `<img src="${wordmarkSrc}" alt="UNIFER" style="height:28px; width:auto; flex:0 0 auto;" />`
+      : `<div style="display:flex; align-items:center; gap:8px; flex:0 0 auto;">
+           <div style="width:28px; height:28px; border-radius:8px; background:#0a8a7a; color:white; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px;">U</div>
+           <span style="font-size:17px; font-weight:600; letter-spacing:-0.01em; color:#0a8a7a;">unifer</span>
+         </div>`;
+
     header.innerHTML = `
-      <img src="${wordmarkSrc}" alt="UNIFER" style="height:28px; width:auto; flex:0 0 auto;" />
+      ${logoHtml}
       <div style="flex:1; min-width:0;">
         <div style="font-size:20px; font-weight:600; color:#1a2a2a; line-height:1.2;">${title}</div>
         <div style="font-size:12.5px; color:#4a5a5a; margin-top:4px;">${subtitle}</div>
@@ -954,18 +964,21 @@
     clone.querySelectorAll('#whatifRow, .preview-chrome').forEach(el => el.remove());
     wrapper.appendChild(clone);
 
+    // Watermark (faded, centered). If no wordmark image, fall back to text.
+    const watermark = document.createElement('div');
+    watermark.style.cssText = `
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-20deg);
+      opacity: 0.04;
+      pointer-events: none;
+    `;
     if (wordmarkSrc) {
-      const watermark = document.createElement('div');
-      watermark.style.cssText = `
-        position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%) rotate(-20deg);
-        opacity: 0.05;
-        pointer-events: none;
-        width: 60%;
-      `;
+      watermark.style.width = '60%';
       watermark.innerHTML = `<img src="${wordmarkSrc}" alt="" style="width:100%;" />`;
-      wrapper.appendChild(watermark);
+    } else {
+      watermark.innerHTML = `<div style="font-size:180px; font-weight:800; letter-spacing:-0.04em; color:#0a8a7a; line-height:1; white-space:nowrap;">unifer</div>`;
     }
+    wrapper.appendChild(watermark);
 
     const footer = document.createElement('div');
     footer.style.cssText = `
