@@ -229,6 +229,36 @@
     });
   }
 
+  const CANONICAL_FIELDS = [
+    { label: 'Engineering & Technology',         value: 'engineering & technology' },
+    { label: 'Computer Science & Data',          value: 'computer science & data technology' },
+    { label: 'Natural Sciences',                 value: 'natural sciences' },
+    { label: 'Life Sciences & Biotechnology',    value: 'life sciences & biotechnology' },
+    { label: 'Medicine & Clinical Health',       value: 'medicine & clinical health' },
+    { label: 'Public Health & Allied Health',    value: 'public health & allied health' },
+    { label: 'Business & Management',            value: 'business & management' },
+    { label: 'Economics, Finance & Accounting',  value: 'economics, finance & accounting' },
+    { label: 'Social Sciences',                  value: 'social sciences' },
+    { label: 'Humanities & Languages',           value: 'humanities & languages' },
+    { label: 'Arts & Design',                    value: 'arts, design & creative studies' },
+    { label: 'Law, Politics & Governance',       value: 'law, politics & governance' },
+    { label: 'Education & Teaching',             value: 'education & teaching' },
+    { label: 'Environment & Sustainability',     value: 'environment, sustainability & agriculture' },
+    { label: 'Hospitality & Tourism',            value: 'hospitality, tourism & service industry' }
+  ];
+
+  function fieldValueToLabel(value) {
+    const match = CANONICAL_FIELDS.find(f => f.value === value);
+    return match ? match.label : value;
+  }
+
+  window.UNIFER.CANONICAL_FIELDS = CANONICAL_FIELDS;
+  window.UNIFER.fieldValueToLabel = fieldValueToLabel;
+  window.UNIFER.fieldLabelToValue = function (label) {
+    const match = CANONICAL_FIELDS.find(f => f.label === label);
+    return match ? match.value : label;
+  };
+
   function buildChipsFromAnswers(answers, item) {
     // Build 3-4 chips from the student's actual quiz answers — these are the inputs they can tweak.
     // Each chip: { k: 'shortKey', v: 'displayValue', q: 'modal question', opts: [...] }
@@ -239,9 +269,9 @@
     if (a.field) {
       chips.push({
         k: 'field',
-        v: titleCaseFromValue(a.field),
+        v: fieldValueToLabel(a.field),
         q: 'Change your field?',
-        opts: ['Computer Science & Data', 'Business & Management', 'Engineering & Technology', 'Economics, Finance & Accounting', 'Life Sciences & Biotechnology']
+        opts: CANONICAL_FIELDS.map(f => f.label)
       });
     }
 
