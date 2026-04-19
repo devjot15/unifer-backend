@@ -948,6 +948,34 @@ const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 const prefersReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+const CANONICAL_FIELDS = [
+  { label: 'Engineering & Technology',         value: 'engineering & technology' },
+  { label: 'Computer Science & Data',          value: 'computer science & data technology' },
+  { label: 'Natural Sciences',                 value: 'natural sciences' },
+  { label: 'Life Sciences & Biotechnology',    value: 'life sciences & biotechnology' },
+  { label: 'Medicine & Clinical Health',       value: 'medicine & clinical health' },
+  { label: 'Public Health & Allied Health',    value: 'public health & allied health' },
+  { label: 'Business & Management',            value: 'business & management' },
+  { label: 'Economics, Finance & Accounting',  value: 'economics, finance & accounting' },
+  { label: 'Social Sciences',                  value: 'social sciences' },
+  { label: 'Humanities & Languages',           value: 'humanities & languages' },
+  { label: 'Arts & Design',                    value: 'arts, design & creative studies' },
+  { label: 'Law, Politics & Governance',       value: 'law, politics & governance' },
+  { label: 'Education & Teaching',             value: 'education & teaching' },
+  { label: 'Environment & Sustainability',     value: 'environment, sustainability & agriculture' },
+  { label: 'Hospitality & Tourism',            value: 'hospitality, tourism & service industry' }
+];
+
+function fieldValueToLabel(value) {
+  const match = CANONICAL_FIELDS.find(f => f.value === value);
+  return match ? match.label : value;
+}
+
+function fieldLabelToValue(label) {
+  const match = CANONICAL_FIELDS.find(f => f.label === label);
+  return match ? match.value : label;
+}
+
 /* ---------- Seed data (illustrative; placeholder figures) ---------- */
 const _MOCK_UNIS = [
   {
@@ -1720,14 +1748,7 @@ function chipKeyToAnswerKey(k, displayValue){
   }
   // Hard-filter mappings — Stage 5B-3 routes these to /recommend. Keep mapping ready.
   if (k === 'field') {
-    const m = {
-      'Computer Science & Data': 'computer science & data technology',
-      'Business & Management': 'business & management',
-      'Engineering & Technology': 'engineering & technology',
-      'Economics, Finance & Accounting': 'economics, finance & accounting',
-      'Life Sciences & Biotechnology': 'life sciences & biotechnology'
-    };
-    return { field: m[displayValue] || String(displayValue).toLowerCase() };
+    return { field: fieldLabelToValue(displayValue) };
   }
   if (k === 'budget') {
     const m = {
