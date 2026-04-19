@@ -391,16 +391,18 @@
     `;
     document.body.appendChild(overlay);
 
-    // Auto-remove on next view mount
-    const remove = () => {
-      if (root) root.classList.remove('unifer-computing-blur');
-      const o = document.getElementById('unifer-computing-overlay');
-      if (o) o.remove();
-    };
-    window.addEventListener('unifer:viewmounted', remove, { once: true });
-    // Safety timeout
-    setTimeout(remove, 15000);
+    // Safety timeout in case cleanup never fires (network hang, etc.)
+    setTimeout(() => window.UNIFER.hideComputingLoader(), 15000);
   }
+
+  // Public cleanup so other callers (submitQuiz, preview returns, etc.) can force-clear
+  // the blur + overlay without depending on the viewmounted event alone.
+  window.UNIFER.hideComputingLoader = function () {
+    const root = document.getElementById('app-root');
+    if (root) root.classList.remove('unifer-computing-blur');
+    const o = document.getElementById('unifer-computing-overlay');
+    if (o) o.remove();
+  };
 
   // ----- Build /recommend payload from a UNIFER.answers-shaped object -----
   function buildRecommendPayload(a) {
@@ -553,6 +555,10 @@
 
     // ─── Navigate to results ───
     window.UNIFER.navigate('results');
+    // Wait for the results view to mount its initial cards, then unblur so the
+    // transition reads as "computing → sharpen new". If the viewmounted listener
+    // below already cleaned up, this is a harmless no-op.
+    setTimeout(() => window.UNIFER.hideComputingLoader(), 600);
   };
 
   // ----- Init -----
@@ -561,4 +567,14 @@
   if (document.readyState === 'interactive' || document.readyState === 'complete') {
     renderView(parseHash());
   }
+
+  // Safety net: every time a view mounts, schedule a loader/blur cleanup so a
+  // stuck computing overlay can never persist across navigation.
+  window.addEventListener('unifer:viewmounted', () => {
+    setTimeout(() => {
+      if (window.UNIFER && typeof window.UNIFER.hideComputingLoader === 'function') {
+        window.UNIFER.hideComputingLoader();
+      }
+    }, 700);
+  });
 })();
