@@ -1350,6 +1350,46 @@ const FLOW = [
     ] }
 ];
 
+/* Stage 5E-E: diagnostic — list every leaf element whose text matches
+   "X courses match…". Call window._quizDebug.findCountDisplays() in DevTools. */
+window._quizDebug = {
+  findCountDisplays() {
+    const all = document.querySelectorAll('*');
+    const found = [];
+    all.forEach(el => {
+      if (el.children.length !== 0) return;
+      const text = el.textContent || '';
+      if (text.match(/[\d,]+\s*courses?\s*match/i)) {
+        found.push({
+          tag: el.tagName,
+          id: el.id,
+          className: el.className,
+          text: text.trim().slice(0, 60)
+        });
+      }
+    });
+    console.table(found);
+    return found;
+  }
+};
+
+/* Stage 5E-E: single source of truth. Walks the DOM and updates every
+   leaf element whose text matches "X courses match…" to state.count.
+   Skips transition chips (they contain →). */
+function _renderCount() {
+  const display = state.count.toLocaleString();
+  const all = document.querySelectorAll('*');
+  all.forEach(el => {
+    if (el.children.length !== 0) return;
+    const text = el.textContent || '';
+    if (text.includes('→')) return;
+    const m = text.match(/^([\d,]+)(\s*courses?\s*match.*)$/i);
+    if (m) {
+      el.textContent = display + m[2];
+    }
+  });
+}
+
 /* ---- Callouts (spec: max 3/session, never consecutive, bias to S2–4) ---- */
 const CALLOUTS = [
   { when: a => a.level === "PhD",                                        text: "A PhD path. That shifts the whole analysis toward research-strong universities." },
@@ -1536,6 +1576,7 @@ function animateCounterTo(newN, mode = "section") {
       if (p < 1) requestAnimationFrame(frame);
       else {
         state.count = newN;
+        _renderCount();
         if (mode === "section") setTimeout(() => counterEl.classList.remove("pulsing"), 200);
         resolve();
       }
@@ -1765,6 +1806,7 @@ function undoTo(snap) {
   // counter: restore visually
   const counterEl = $("#counter");
   state.count = snap.count;
+  _renderCount();
   if (snap.count != null) {
     renderCounter(formatN(snap.count));
     const pfEl = document.getElementById("poolFill");
@@ -2222,10 +2264,23 @@ async function startChat() {
 /* ---- finish ---- */
 async function finish() {
   state.finished = true;
-  // Final section-boundary fake tick for section 5 — the real fetch below corrects it.
+
+  // Stage 5E-E: fetch the real final count BEFORE anything else paints so the
+  // ribbon, All-done card, header pill and loader all read the SAME number.
   const oldCount = state.count;
-  const drop = SECTIONS[4].drop;
-  const newCount = Math.max(12, oldCount - drop);
+  let realFinal = null;
+  if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
+    try {
+      realFinal = await window.UNIFER.fetchEligibleCount(state.answers);
+    } catch (e) {
+      console.error("[unifer] all-done final fetch failed", e);
+    }
+  }
+  const newCount = (typeof realFinal === "number")
+    ? realFinal
+    : Math.max(12, oldCount - SECTIONS[4].drop);
+  if (typeof realFinal === "number") _lastKnownRealCount = realFinal;
+
   await animateCounterTo(newCount, "section");
   addRibbon(oldCount, state.count);
   await showTyping(500);
@@ -2233,27 +2288,12 @@ async function finish() {
     `That&rsquo;s it. I have everything I need.`, "section-intro", "All done"
   );
 
-  // Stage 5E-D: fetch the final real count BEFORE rendering the card so
-  // state.count is the single source of truth when the card paints.
-  if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
-    try {
-      const real = await window.UNIFER.fetchEligibleCount(state.answers);
-      if (real != null) {
-        _lastKnownRealCount = real;
-        await animateCounterTo(real, "section");
-      }
-    } catch (e) {
-      console.error("[unifer] all-done final fetch failed", e);
-    }
-  }
-
-  const displayCount = state.count;
   const end = document.createElement("div");
   end.className = "msg u enter";
   end.innerHTML = `
     <div class="avatar small">U</div>
     <div class="end-card">
-      <h3 class="alldone-text"><span class="alldone-count">${formatN(displayCount)}</span> courses match your profile.</h3>
+      <h3 class="alldone-text">${formatN(state.count)} courses match your profile.</h3>
       <p>I&rsquo;ll rank them by fit, shortlist the top universities, and surface the countries that actually make sense for <em>your</em> priorities.</p>
       <button class="primary-cta" id="seeMatchesBtn">
         Show me my matches
@@ -2264,6 +2304,7 @@ async function finish() {
   stream.appendChild(end);
   scrollToBottom(50);
   composer.innerHTML = "";
+  _renderCount();
 
   const showMatchesBtn = document.getElementById("seeMatchesBtn");
   showMatchesBtn.addEventListener("click", () => {
@@ -2370,6 +2411,7 @@ function resetQuizState() {
     state.answers = {};
     state.index = 0;
     state.count = POOL_START;
+    _renderCount();
     state.calloutsFired = 0;
     state.lastCalloutIndex = -99;
     state.prevCount = POOL_START;
