@@ -927,7 +927,7 @@
     const header = document.createElement('div');
     header.style.cssText = `display:flex; align-items:center; gap:14px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e0e6e6;`;
     header.innerHTML = `
-      <img src="${wordmarkSrc}" alt="UNIFER" style="height:28px; width:auto; flex:0 0 auto;" crossorigin="anonymous" />
+      <img src="${wordmarkSrc}" alt="UNIFER" style="height:28px; width:auto; flex:0 0 auto;" />
       <div style="flex:1; min-width:0;">
         <div style="font-size:20px; font-weight:600; color:#1a2a2a; line-height:1.2;">${title}</div>
         <div style="font-size:12.5px; color:#4a5a5a; margin-top:4px;">${subtitle}</div>
@@ -963,7 +963,7 @@
         pointer-events: none;
         width: 60%;
       `;
-      watermark.innerHTML = `<img src="${wordmarkSrc}" alt="" style="width:100%;" crossorigin="anonymous" />`;
+      watermark.innerHTML = `<img src="${wordmarkSrc}" alt="" style="width:100%;" />`;
       wrapper.appendChild(watermark);
     }
 
@@ -981,18 +981,30 @@
 
     document.body.appendChild(wrapper);
 
+    // Wait for images (wordmark) to load. Errors are non-fatal — we proceed anyway.
     await new Promise(resolve => {
       const imgs = wrapper.querySelectorAll('img');
       if (imgs.length === 0) return resolve();
       let remaining = imgs.length;
+      const done = () => {
+        remaining--;
+        if (remaining <= 0) resolve();
+      };
       imgs.forEach(img => {
-        if (img.complete) { remaining--; if (remaining === 0) resolve(); }
-        else {
-          img.addEventListener('load', () => { remaining--; if (remaining === 0) resolve(); });
-          img.addEventListener('error', () => { remaining--; if (remaining === 0) resolve(); });
+        if (img.complete && img.naturalWidth > 0) {
+          done();
+        } else if (img.complete && img.naturalWidth === 0) {
+          console.warn('[unifer] PDF: image failed to load, continuing without it', img.src.slice(0, 80));
+          done();
+        } else {
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', () => {
+            console.warn('[unifer] PDF: image errored, continuing without it', img.src.slice(0, 80));
+            done();
+          }, { once: true });
         }
       });
-      setTimeout(resolve, 2000);
+      setTimeout(resolve, 2500);
     });
 
     // Capture using html-to-image (supports oklch, lab, color() functions).
@@ -1002,6 +1014,18 @@
       backgroundColor: '#ffffff',
       cacheBust: true,
       width: 820,
+      // Skip remote stylesheet inlining (Google Fonts CSS blocked by CORS).
+      // The page's already-loaded fonts will be used from the browser's cache
+      // via font-family fallbacks. Inter renders if available, else system sans.
+      skipFonts: true,
+      // Filter out elements that shouldn't be captured (interactive controls)
+      filter: (node) => {
+        if (!node.classList) return true;
+        if (node.classList.contains('low-results-banner')) return false;
+        if (node.classList.contains('whatif')) return false;
+        if (node.classList.contains('preview-chrome')) return false;
+        return true;
+      },
       style: {
         // Ensure the captured wrapper renders at its intended width even though
         // it's positioned off-screen.
