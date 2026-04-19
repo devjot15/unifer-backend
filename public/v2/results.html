@@ -1061,7 +1061,7 @@ const _MOCK_UNIS = [
   }
 ];
 
-const UNIS = (window.UNIFER && window.UNIFER.results && window.UNIFER.results.length)
+let UNIS = (window.UNIFER && window.UNIFER.results && window.UNIFER.results.length)
   ? window.UNIFER.results
   : _MOCK_UNIS;
 
@@ -1351,26 +1351,97 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 function pickOption(v){
   closeModal();
   bump();
-  // Capture FIRST before mutation
-  const firstRects = new Map();
-  $$('#rankedStack .card').forEach(el => firstRects.set(el.dataset.uid, el.getBoundingClientRect()));
+  const ctx = modalContext || {};
+  const chip = ctx.chip;
+  if (!chip) return;
 
-  // Deterministic "reshuffle": cycle through some plausible orderings based on v's length
-  const seed = (v || '').length;
-  const pools = [
-    ['u1','u2','u3','u4','u5'],
-    ['u2','u1','u5','u3','u4'],
-    ['u6','u1','u2','u5','u4'], // budget-tight → Thornbury
-    ['u7','u1','u4','u2','u3'], // workrights
-    ['u1','u3','u5','u6','u2'],
-    ['u4','u2','u1','u7','u5'],
-    ['u1','u7','u2','u4','u6']
-  ];
-  let next = pools[seed % pools.length];
-  // Guarantee change: if same as current, rotate
-  if (next.join() === currentTop.join()) next = pools[(seed+1) % pools.length];
-  currentTop = [...next];
-  renderRanked(firstRects);
+  const mapping = chipKeyToAnswerKey(chip.k, v);
+  if (!mapping) {
+    console.warn('[unifer] unknown chip key', chip.k);
+    return;
+  }
+
+  // Apply the student's new answer to the shell state
+  if (window.UNIFER) {
+    window.UNIFER.answers = window.UNIFER.answers || {};
+    Object.entries(mapping).forEach(([key, val]) => { window.UNIFER.answers[key] = val; });
+  }
+
+  // Soft filters re-rank in-browser. Hard filters need a new /recommend — Stage 5B-3.
+  const SOFT_KEYS = new Set([
+    'ranking_importance', 'subject_ranking_importance',
+    'prestige_importance', 'selectivity_importance',
+    'research_importance', 'teaching_importance',
+    'international_importance', 'career_importance',
+    'career_type',
+    'priorities_1', 'priorities_2', 'priorities_3'
+  ]);
+  const isSoft = Object.keys(mapping).every(k => SOFT_KEYS.has(k));
+
+  if (!isSoft) {
+    console.log('[unifer] hard-filter chip change — Stage 5B-3 will re-query', mapping);
+    return;
+  }
+
+  if (!window.UNIFER || typeof window.UNIFER.rerank !== 'function') {
+    console.warn('[unifer] rerank unavailable — pool not cached');
+    return;
+  }
+  const reranked = window.UNIFER.rerank(window.UNIFER.answers);
+  if (!reranked.length) return;
+
+  // Replace UNIS with the reranked top-5 so byId() resolves to the fresh data.
+  UNIS = reranked;
+  window.UNIFER.results = reranked;
+  currentTop = reranked.map(u => u.id);
+  compareSelected = new Set(currentTop);
+
+  // Instant rebuild in new order (Stage 5B-1: no animation; Stage 5B-2 will add FLIP-back).
+  const wrap = $('#rankedStack');
+  wrap.innerHTML = '';
+  currentTop.forEach((id, i) => {
+    const u = byId(id);
+    if (u) wrap.appendChild(buildCard(u, i + 1));
+  });
+  requestAnimationFrame(() => {
+    $$('.score-fill', wrap).forEach(f => f.style.width = (f.dataset.w || 0) + '%');
+  });
+}
+
+/* Map a chip (k, displayValue) → answer-key mutations for window.UNIFER.answers. */
+function chipKeyToAnswerKey(k, displayValue){
+  if (k === 'tier') {
+    const m = {
+      'Top institutions only': '0.75',
+      'Top and middle are fine': '0.50',
+      'All institutions': '0.25'
+    };
+    return { ranking_importance: m[displayValue] || '0.50' };
+  }
+  if (k === 'focus') {
+    const m = { 'Research-focused': 'high', 'Balanced': 'medium', 'Industry-focused': 'low' };
+    return { research_importance: m[displayValue] || 'medium' };
+  }
+  // Hard-filter mappings — Stage 5B-3 routes these to /recommend. Keep mapping ready.
+  if (k === 'field') {
+    const m = {
+      'Computer Science & Data': 'computer science & data technology',
+      'Business & Management': 'business & management',
+      'Engineering & Technology': 'engineering & technology',
+      'Economics, Finance & Accounting': 'economics, finance & accounting',
+      'Life Sciences & Biotechnology': 'life sciences & biotechnology'
+    };
+    return { field: m[displayValue] || String(displayValue).toLowerCase() };
+  }
+  if (k === 'budget') {
+    const m = {
+      'Up to $5k': 'Up to $5k', 'Up to $15k': 'Up to $15k',
+      'Up to $30k': 'Up to $30k', 'Up to $50k': 'Up to $50k',
+      'No upper limit': 'No limit'
+    };
+    return { tuition_band: m[displayValue] || displayValue };
+  }
+  return null;
 }
 
 /* ---------- Compare view ---------- */
