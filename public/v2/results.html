@@ -1199,6 +1199,30 @@ function buildCard(u, rank){
   card.dataset.rank = rank;
   card.setAttribute('data-rank', rank);
 
+  // Only render "More data" when the backend provides at least one of these
+  // enrichment fields. With Stage-4 real data none are populated yet, so the
+  // drawer hides entirely instead of showing empty rows.
+  const hasMore = !!(u.rankings || u.subject || u.stats || u.employ || u.cost);
+  const moreHtml = hasMore ? `
+      <div class="more">
+        <button class="more-toggle" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+          More data
+        </button>
+        <div class="more-body"><div>
+          <div class="data-grid">
+            ${u.rankings ? `<div class="data-row"><span class="lab">University rankings</span><span class="val">${fmtRanks(u.rankings)}</span></div>` : ''}
+            ${(u.subject && u.subject.name) ? `<div class="data-row"><span class="lab">Subject (${u.subject.name})</span><span class="val">QS #${u.subject.QS ?? '—'}<span class="src">QS 2025</span></span></div>` : ''}
+            ${(u.stats && u.stats.medianGPA) ? `<div class="data-row"><span class="lab">Median admitted GPA</span><span class="val">${u.stats.medianGPA}<span class="src">university site</span></span></div>` : ''}
+            ${(u.stats && u.stats.gre) ? `<div class="data-row"><span class="lab">GRE (Q) typical</span><span class="val">${u.stats.gre}<span class="src">university site</span></span></div>` : ''}
+            ${(u.stats && u.stats.acceptance) ? `<div class="data-row"><span class="lab">Acceptance rate</span><span class="val">${u.stats.acceptance}%<span class="src">university site</span></span></div>` : ''}
+            ${(u.employ && u.employ.rate) ? `<div class="data-row"><span class="lab">Employment rate</span><span class="val">${u.employ.rate}%<span class="src">university site</span></span></div>` : ''}
+            ${(u.employ && u.employ.salary) ? `<div class="data-row"><span class="lab">Median starting salary</span><span class="val">${fmt$(u.employ.salary)}<span class="src">university site</span></span></div>` : ''}
+            ${(u.cost && u.cost.living) ? `<div class="data-row"><span class="lab">Estimated living${u.city ? ' (' + u.city + ')' : ''}</span><span class="val">${fmt$(u.cost.living)}/yr<span class="src">gov. immigration data</span></span></div>` : ''}
+          </div>
+        </div></div>
+      </div>` : '';
+
   card.innerHTML = `
     <div class="card-body">
       <div class="card-head">
@@ -1226,8 +1250,8 @@ function buildCard(u, rank){
         ${['country','course','institution'].map(k => `
           <div class="score">
             <div class="score-label">${k[0].toUpperCase()+k.slice(1)} match</div>
-            <div class="score-track"><div class="score-fill" data-w="${u.scores[k]}" style="width:0"></div></div>
-            <div class="score-val">${u.scores[k]}%</div>
+            <div class="score-track"><div class="score-fill" data-w="${u.scores[k] ?? 0}" style="width:0"></div></div>
+            <div class="score-val">${u.scores[k] ?? '—'}%</div>
           </div>`).join('')}
       </div>
 
@@ -1240,43 +1264,31 @@ function buildCard(u, rank){
         </button>`).join('')}
       </div>
 
-      <div class="more">
-        <button class="more-toggle" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-          More data
-        </button>
-        <div class="more-body"><div>
-          <div class="data-grid">
-            <div class="data-row"><span class="lab">University rankings</span><span class="val">${fmtRanks(u.rankings)}</span></div>
-            <div class="data-row"><span class="lab">Subject (${u.subject.name})</span><span class="val">QS #${u.subject.QS}<span class="src">QS 2025</span></span></div>
-            <div class="data-row"><span class="lab">Median admitted GPA</span><span class="val">${u.stats.medianGPA || '—'}<span class="src">university site</span></span></div>
-            <div class="data-row"><span class="lab">GRE (Q) typical</span><span class="val">${u.stats.gre || '—'}<span class="src">university site</span></span></div>
-            <div class="data-row"><span class="lab">Acceptance rate</span><span class="val">${u.stats.acceptance ? u.stats.acceptance + '%' : '—'}<span class="src">university site</span></span></div>
-            <div class="data-row"><span class="lab">Employment rate</span><span class="val">${u.employ.rate}%<span class="src">university site</span></span></div>
-            <div class="data-row"><span class="lab">Median starting salary</span><span class="val">${fmt$(u.employ.salary)}<span class="src">university site</span></span></div>
-            <div class="data-row"><span class="lab">Estimated living (${u.city})</span><span class="val">${fmt$(u.cost.living)}/yr<span class="src">gov. immigration data</span></span></div>
-          </div>
-        </div></div>
-      </div>
+      ${moreHtml}
     </div>`;
 
   // Chip taps
   $$('.chip', card).forEach(c => c.addEventListener('click', ()=> openChipModal(c, u.id)));
-  // More toggle
-  const more = $('.more', card);
-  $('.more-toggle', card).addEventListener('click', ()=>{
-    const open = more.getAttribute('data-open') === 'true';
-    more.setAttribute('data-open', String(!open));
-    $('.more-toggle', card).setAttribute('aria-expanded', String(!open));
-  });
+  // More toggle (only wired if the drawer was rendered)
+  const moreToggle = $('.more-toggle', card);
+  if (moreToggle) {
+    const more = $('.more', card);
+    moreToggle.addEventListener('click', ()=>{
+      const open = more.getAttribute('data-open') === 'true';
+      more.setAttribute('data-open', String(!open));
+      moreToggle.setAttribute('aria-expanded', String(!open));
+    });
+  }
   return card;
 }
 
 function fmtRanks(r){
+  if (!r || typeof r !== 'object') return '';
   const parts = [];
   ['QS','THE','ARWU','CUG','Guardian','GUG'].forEach(k => {
     if (r[k] != null) parts.push(`${k} #${r[k]}`);
   });
+  if (parts.length === 0) return '';
   return parts.slice(0,3).map(p => `${p}`).join(' · ') + `<span class="src">primary sources</span>`;
 }
 
@@ -1556,6 +1568,19 @@ function bindToggles(){
 }
 
 function scoreUni(u){
+  // Guard: when the backend hasn't populated dims/stats (Stage 4 real data path),
+  // fall back to the institution score from the /recommend engine so sliders
+  // still produce a sensible ordering instead of throwing.
+  if (!u.dims || !u.stats) {
+    const base = (u.scores && typeof u.scores.institution === 'number') ? u.scores.institution : 50;
+    const ctryMap = {'United Kingdom':'UK','Canada':'Canada','Australia':'Australia','Germany':'Germany','Netherlands':'Netherlands','Singapore':'Singapore','USA':'USA'};
+    let s = base;
+    // Budget penalty is still meaningful regardless of dims/stats
+    const budgetCeiling = scen.budget >= 101 ? Infinity : scen.budget*1000;
+    if (u.tuition && u.tuition > budgetCeiling) s -= Math.min(40, (u.tuition - budgetCeiling)/1000);
+    if (scen.countries && !scen.countries.has(ctryMap[u.country]||'?')) s -= 25;
+    return Math.max(0, Math.min(100, s));
+  }
   let s = (u.scores.country*0.3 + u.scores.course*0.4 + u.scores.institution*0.3);
   // GPA: penalty if GPA below admitted median
   const gpa4 = scen.gpa/100 * 4;
