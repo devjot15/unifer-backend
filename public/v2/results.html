@@ -1634,9 +1634,13 @@ if (startOverBtn) {
     if (window.UNIFER) {
       window.UNIFER.answers = {};
       window.UNIFER.session_id = null;
+      window.UNIFER.sessionId = null;
       window.UNIFER.results = [];
       window.UNIFER.tweakCount = 0;
       window.UNIFER.eligiblePool = null;
+      window.UNIFER.recommendError = null;
+      // Tell the quiz view to reset its own closure-scoped state.
+      window.dispatchEvent(new CustomEvent('unifer:reset-quiz'));
       window.UNIFER.navigate('quiz');
     } else {
       location.hash = '#/quiz';

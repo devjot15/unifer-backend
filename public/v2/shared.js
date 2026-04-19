@@ -122,6 +122,121 @@
     return pct.toFixed(1);
   }
 
+  // ----- /recommend response → UI shape -----
+  function transformRecommendResponse(rawArray) {
+    if (!Array.isArray(rawArray)) return [];
+
+    return rawArray.map((item, idx) => {
+      // Real backend fields:
+      //   course, university, country, duration, tuition_usd,
+      //   scores.{country,course,university}, explanation[]
+      // UI-expected fields:
+      //   id, name, country, city, course, duration, tuition,
+      //   scores.{country,course,institution} (0-100 ints),
+      //   confidence, why, chips, dims, rankings, subject, stats, employ, cost
+
+      const scores = item.scores || {};
+      return {
+        id: 'u' + (idx + 1),
+        name: item.university || 'Unknown',
+        country: item.country || '',
+        city: item.city || '',  // backend may or may not provide
+        course: item.course || '',
+        duration: typeof item.duration === 'number'
+          ? (item.duration === 1 ? '1 year' : item.duration + ' years')
+          : (item.duration || ''),
+        tuition: item.tuition_usd || null,
+
+        // Backend sends scores as 0-1 floats; UI expects 0-100 ints. Map "university" → "institution".
+        scores: {
+          country: scores.country !== null && scores.country !== undefined ? Math.round(scores.country * 100) : null,
+          course: scores.course !== null && scores.course !== undefined ? Math.round(scores.course * 100) : null,
+          institution: scores.university !== null && scores.university !== undefined ? Math.round(scores.university * 100) : null,
+        },
+
+        // "Why this aligns" — backend sends an array of strings; UI shows a paragraph.
+        // Join them into a single string. UI can format as bullet list internally too.
+        why: Array.isArray(item.explanation) ? item.explanation.join(' ') : (item.explanation || ''),
+        whyList: Array.isArray(item.explanation) ? item.explanation : [],
+
+        // Confidence: backend doesn't currently return this. Default to true for top 3, false otherwise (placeholder).
+        confidence: idx < 3,
+
+        // Tappable chips for the tweak loop. Use the user's actual answers as the source so chips reflect what they picked.
+        chips: buildChipsFromAnswers(window.UNIFER.answers, item),
+
+        // The following fields aren't returned by the backend yet — Stage 6 may surface real data.
+        rankings: item.rankings || null,
+        subject: item.subject || null,
+        stats: item.stats || null,
+        employ: item.employ || null,
+        cost: item.cost || null,
+        dims: item.dims || null,
+      };
+    });
+  }
+
+  function buildChipsFromAnswers(answers, item) {
+    // Build 3-4 chips from the student's actual quiz answers — these are the inputs they can tweak.
+    // Each chip: { k: 'shortKey', v: 'displayValue', q: 'modal question', opts: [...] }
+    const a = answers || {};
+    const chips = [];
+
+    // Field
+    if (a.field) {
+      chips.push({
+        k: 'field',
+        v: titleCaseFromValue(a.field),
+        q: 'Change your field?',
+        opts: ['Computer Science & Data', 'Business & Management', 'Engineering & Technology', 'Economics, Finance & Accounting', 'Life Sciences & Biotechnology']
+      });
+    }
+
+    // Budget
+    if (a.tuition_band) {
+      const budgetLabels = {
+        'Up to $5k': 'up to $5k', 'Up to $15k': 'up to $15k',
+        'Up to $30k': 'up to $30k', 'Up to $50k': 'up to $50k',
+        'No limit': 'no upper limit'
+      };
+      chips.push({
+        k: 'budget',
+        v: budgetLabels[a.tuition_band] || a.tuition_band,
+        q: 'Change your budget?',
+        opts: ['Up to $5k', 'Up to $15k', 'Up to $30k', 'Up to $50k', 'No upper limit']
+      });
+    }
+
+    // Research vs industry
+    if (a.research_importance) {
+      const focusLabels = { high: 'Research-focused', medium: 'Balanced', low: 'Industry-focused' };
+      chips.push({
+        k: 'focus',
+        v: focusLabels[a.research_importance] || 'Balanced',
+        q: 'Change your focus?',
+        opts: ['Research-focused', 'Balanced', 'Industry-focused']
+      });
+    }
+
+    // Ranking importance
+    if (a.ranking_importance) {
+      const rankLabels = { '0.75': 'Top institutions only', '0.50': 'Top + middle', '0.25': 'All institutions' };
+      chips.push({
+        k: 'tier',
+        v: rankLabels[a.ranking_importance] || 'Top + middle',
+        q: 'How picky on institution tier?',
+        opts: ['Top institutions only', 'Top and middle are fine', 'All institutions']
+      });
+    }
+
+    return chips;
+  }
+
+  function titleCaseFromValue(v) {
+    // Convert "computer science & data technology" → "Computer Science & Data Technology"
+    return String(v).replace(/\b\w/g, c => c.toUpperCase());
+  }
+
   // ----- Computing-state overlay -----
   function showComputingLoader() {
     const existing = document.getElementById('unifer-computing-overlay');
@@ -244,8 +359,9 @@
         window.UNIFER.results = [];
         window.UNIFER.recommendError = data && (data.message || 'No matches found');
       } else {
-        window.UNIFER.results = data;
-        window.UNIFER.eligiblePool = data;  // cache for Stage 5 tweak loop
+        const transformed = transformRecommendResponse(data);
+        window.UNIFER.results = transformed;
+        window.UNIFER.eligiblePool = transformed;  // cache for Stage 5 tweak loop
         window.UNIFER.recommendError = null;
       }
     } catch (err) {

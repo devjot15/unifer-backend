@@ -2303,5 +2303,35 @@ window.addEventListener("hashchange", function cleanupToast() {
   if (t) t.remove();
 }, { once: true });
 
+/* Start-over reset — results.html dispatches this event before navigating
+   back to the quiz. Clear closure-scoped state and DOM so the returning
+   student lands on the landing page, not the last answered step. */
+window.addEventListener("unifer:reset-quiz", function () {
+  if (typeof state !== "undefined" && state) {
+    state.answers = {};
+    state.index = 0;
+    state.count = POOL_START;
+    state.calloutsFired = 0;
+    state.lastCalloutIndex = -99;
+    state.prevCount = POOL_START;
+    state.pendingSection = null;
+    state.finished = false;
+    state.insertedCallout = false;
+  }
+  const streamEl = document.getElementById("stream");
+  if (streamEl) streamEl.innerHTML = "";
+  const composerEl = document.getElementById("composerInner");
+  if (composerEl) composerEl.innerHTML = "";
+  const appEl = document.getElementById("app");
+  if (appEl) appEl.classList.remove("in-chat");
+  const chatEl = document.getElementById("chat");
+  if (chatEl) chatEl.setAttribute("aria-hidden", "true");
+  const counterEl = document.getElementById("counter");
+  if (counterEl) counterEl.classList.add("hidden");
+  const toastEl = document.getElementById("undoToast");
+  if (toastEl) toastEl.remove();
+  if (window.UNIFER) window.UNIFER.answers = {};
+});
+
 })();
 </script>
