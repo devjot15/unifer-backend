@@ -1078,9 +1078,18 @@ const _MOCK_UNIS = [
   }
 ];
 
-let UNIS = (window.UNIFER && window.UNIFER.results && window.UNIFER.results.length)
-  ? window.UNIFER.results
-  : _MOCK_UNIS;
+// If no real results exist (fresh visit, stale/expired session), bounce back
+// to the quiz rather than rendering the mock UNIS from Stage 1B.
+if (!window.UNIFER || !window.UNIFER.results || window.UNIFER.results.length === 0) {
+  console.log('[unifer] no results available; redirecting to quiz');
+  if (window.UNIFER && typeof window.UNIFER.navigate === 'function') {
+    window.UNIFER.navigate('quiz');
+  } else {
+    location.hash = '#/quiz';
+  }
+  return;
+}
+let UNIS = window.UNIFER.results;
 
 
 // Starting top-5 ids
@@ -1394,8 +1403,12 @@ async function applyWhatif(id){
     }
   } else if (window.UNIFER && typeof window.UNIFER.requeryRecommend === 'function') {
     showRequeryLoader();
-    const data = await window.UNIFER.requeryRecommend();
-    hideRequeryLoader();
+    let data = [];
+    try {
+      data = await window.UNIFER.requeryRecommend();
+    } finally {
+      hideRequeryLoader();
+    }
     if (data && data.length) {
       UNIS = data;
       currentTop = data.slice(0, 5).map(u => u.id);
@@ -1483,14 +1496,15 @@ function pickOption(v){
       return;
     }
     showRequeryLoader();
-    window.UNIFER.requeryRecommend().then(data => {
-      hideRequeryLoader();
-      if (!data || !data.length) return;
-      UNIS = data;
-      currentTop = data.slice(0, 5).map(u => u.id);
-      compareSelected = new Set(currentTop);
-      setTimeout(() => { bump(); rerenderResults(); }, 60);
-    });
+    window.UNIFER.requeryRecommend()
+      .then(data => {
+        if (!data || !data.length) return;
+        UNIS = data;
+        currentTop = data.slice(0, 5).map(u => u.id);
+        compareSelected = new Set(currentTop);
+        setTimeout(() => { bump(); rerenderResults(); }, 60);
+      })
+      .finally(hideRequeryLoader);
     return;
   }
 
@@ -1506,6 +1520,7 @@ function pickOption(v){
   window.UNIFER.results = reranked;
   currentTop = reranked.map(u => u.id);
   compareSelected = new Set(currentTop);
+  if (window.UNIFER._persistResults) window.UNIFER._persistResults(reranked);
 
   // Defer the reshuffle so the modal exit animation lands first.
   setTimeout(() => {
@@ -1521,48 +1536,84 @@ function pickOption(v){
 
    Stable identity uses the university name (item.id is recycled to 'u1'..'u5'
    on each rerank, so it cannot be used as a tracking key). */
-function showRequeryLoader(){
-  // Defensive: strip any stale loader/pill from a previous cycle so we never
-  // stack two requery pills, and clear stuck blur before adding a new one.
-  document.querySelectorAll('#requery-loader').forEach(el => el.remove());
+/* Counter-based loader lifecycle: each show increments, each hide decrements.
+   The pill/blur actually tear down only when the counter returns to 0, so we
+   can't double-show or half-hide when tweaks overlap (e.g. slider drag).
+   forceClearLoader() is the escape hatch — also called by a safety timeout. */
+let _pendingRequeryCount = 0;
+let _requerySafetyTimer = null;
 
-  // Blur the matches/results container while we wait for the new ranking.
+function showRequeryLoader(){
+  _pendingRequeryCount++;
+
+  // Apply blur if not already set.
   const target = document.querySelector('.matches-wrap')
               || document.querySelector('[data-tab-content="matches"]')
               || document.getElementById('app-root');
   if (target) target.classList.add('unifer-computing-blur');
 
-  const loader = document.createElement('div');
-  loader.id = 'requery-loader';
-  loader.style.cssText = `
-    position:fixed; top:80px; left:50%; transform:translateX(-50%);
-    background:var(--card, #fff); border:1px solid var(--hair, var(--line));
-    border-radius:999px; padding:10px 18px; display:flex; align-items:center; gap:10px;
-    box-shadow:var(--shadow-md); z-index:1500; font-size:13px; color:var(--ink-soft, var(--ink-2));
-    animation: requeryFadeIn 200ms ease-out;
-  `;
-  loader.innerHTML = `
-    <div style="width:14px; height:14px; border:2px solid var(--hair, var(--line)); border-top-color:var(--teal); border-radius:50%; animation:unifer-spin 0.7s linear infinite;"></div>
-    <span>Recomputing matches…</span>
-  `;
-  document.body.appendChild(loader);
+  // Render the pill only if not already present.
+  if (!document.getElementById('requery-loader')) {
+    const loader = document.createElement('div');
+    loader.id = 'requery-loader';
+    loader.style.cssText = `
+      position:fixed; top:80px; left:50%; transform:translateX(-50%);
+      background:var(--card, #fff); border:1px solid var(--hair, var(--line));
+      border-radius:999px; padding:10px 18px; display:flex; align-items:center; gap:10px;
+      box-shadow:var(--shadow-md); z-index:1500; font-size:13px; color:var(--ink-soft, var(--ink-2));
+      animation: requeryFadeIn 200ms ease-out;
+    `;
+    loader.innerHTML = `
+      <div style="width:14px; height:14px; border:2px solid var(--hair, var(--line)); border-top-color:var(--teal); border-radius:50%; animation:unifer-spin 0.7s linear infinite;"></div>
+      <span>Recomputing matches…</span>
+    `;
+    document.body.appendChild(loader);
+  }
+
+  // Safety net: if show/hide counter gets out of sync, force-clear after 5s of inactivity.
+  if (_requerySafetyTimer) clearTimeout(_requerySafetyTimer);
+  _requerySafetyTimer = setTimeout(forceClearLoader, 5000);
 }
 
 function hideRequeryLoader(){
-  // Strip the blur class from EVERY element that has it (previous versions only
-  // cleared from one spot, which meant a blur applied to .matches-wrap could
-  // outlive the requery). Also zero inline filter/backdrop-filter as belt-and-braces.
+  _pendingRequeryCount = Math.max(0, _pendingRequeryCount - 1);
+  if (_pendingRequeryCount > 0) return;  // other requests still in flight
+
+  // Strip blur from every element that has it.
+  document.querySelectorAll('.unifer-computing-blur').forEach(el => {
+    el.classList.remove('unifer-computing-blur');
+    el.style.filter = '';
+    el.style.backdropFilter = '';
+  });
+
+  const loader = document.getElementById('requery-loader');
+  if (loader) {
+    loader.style.opacity = '0';
+    loader.style.transition = 'opacity 180ms ease-out';
+    setTimeout(() => {
+      const stillThere = document.getElementById('requery-loader');
+      if (stillThere) stillThere.remove();
+    }, 200);
+  }
+  if (_requerySafetyTimer) { clearTimeout(_requerySafetyTimer); _requerySafetyTimer = null; }
+}
+
+function forceClearLoader(){
+  _pendingRequeryCount = 0;
   document.querySelectorAll('.unifer-computing-blur').forEach(el => {
     el.classList.remove('unifer-computing-blur');
     el.style.filter = '';
     el.style.backdropFilter = '';
   });
   const loader = document.getElementById('requery-loader');
-  if (!loader) return;
-  loader.style.opacity = '0';
-  loader.style.transition = 'opacity 180ms ease-out';
-  setTimeout(() => loader.remove(), 200);
+  if (loader) loader.remove();
+  if (_requerySafetyTimer) { clearTimeout(_requerySafetyTimer); _requerySafetyTimer = null; }
 }
+
+// Scenarios "drag session" flag — during a slider drag, we want the pill to
+// appear once (not once per input event) and only clear when the debounced
+// compute actually finishes.
+let _scenarioPillShown = false;
 
 function rerenderResults(){
   const wrap = $('#rankedStack');
@@ -1946,9 +1997,15 @@ function renderTogglesAndFields(){
 
 function bindSliders(){
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); }; };
-  // Show the recomputing pill on the first gesture, keep it up until the
-  // debounced requery completes (hideRequeryLoader is called inside).
-  const showPill = () => { if (typeof showRequeryLoader === 'function') showRequeryLoader(); };
+  // Show the recomputing pill ONCE per drag session. _scenarioPillShown prevents
+  // the counter from getting over-incremented by rapid input events; the matching
+  // hide runs when updateScenPreview's finally block completes.
+  const showPill = () => {
+    if (!_scenarioPillShown && typeof showRequeryLoader === 'function') {
+      showRequeryLoader();
+      _scenarioPillShown = true;
+    }
+  };
   const upd = debounce(()=> updateScenPreview(true), 180);
   const tick = () => { showPill(); upd(); };
 
@@ -1992,7 +2049,12 @@ function bindToggles(){
     const c = b.dataset.c;
     if (scen.countries.has(c)) scen.countries.delete(c); else scen.countries.add(c);
     b.dataset.on = scen.countries.has(c);
-    if (typeof showRequeryLoader === 'function') showRequeryLoader();
+    // Same drag-flag pattern as the sliders so updateScenPreview's finally
+    // block correctly matches show → hide.
+    if (!_scenarioPillShown && typeof showRequeryLoader === 'function') {
+      showRequeryLoader();
+      _scenarioPillShown = true;
+    }
     updateScenPreview(true);
   }));
 }
@@ -2095,12 +2157,23 @@ async function updateScenPreview(animate){
   // Active render (slider / toggle change): re-query the backend transiently.
   if (!window.UNIFER || typeof window.UNIFER.requeryRecommend !== 'function') {
     _renderScenMiniCards(UNIS.map(u => ({ u, s: scoreUni(u) })).sort((a,b)=>b.s-a.s).slice(0,5), true);
+    if (typeof hideRequeryLoader === 'function' && _scenarioPillShown) { hideRequeryLoader(); _scenarioPillShown = false; }
     return;
   }
 
   const myToken = ++_scenAborted;
   const transientAnswers = scenToAnswers();
-  const data = await window.UNIFER.requeryRecommend(transientAnswers, { transient: true });
+  let data = [];
+  try {
+    data = await window.UNIFER.requeryRecommend(transientAnswers, { transient: true });
+  } finally {
+    // Pair the slider-drag's single showRequeryLoader with a single hide.
+    // (The request itself may have been aborted by a newer drag — that's fine.)
+    if (_scenarioPillShown && typeof hideRequeryLoader === 'function') {
+      hideRequeryLoader();
+      _scenarioPillShown = false;
+    }
+  }
   if (myToken !== _scenAborted) return;  // a newer slider change took over
 
   // Render the top-5 as mini-cards using institution score as the magnitude bar.
@@ -2168,6 +2241,9 @@ $('#sIelts').dispatchEvent(new Event('input'));
 const startOverBtn = $('#startOverLink');
 if (startOverBtn) {
   startOverBtn.addEventListener('click', () => {
+    // Clear any persisted session so a refresh during the next quiz doesn't
+    // silently rehydrate the old results.
+    try { sessionStorage.removeItem('unifer_session_v1'); } catch (e) {}
     if (window.UNIFER) {
       window.UNIFER.answers = {};
       window.UNIFER.session_id = null;
@@ -2176,6 +2252,7 @@ if (startOverBtn) {
       window.UNIFER.tweakCount = 0;
       window.UNIFER.eligiblePool = null;
       window.UNIFER.recommendError = null;
+      window.UNIFER.lastCourseCount = null;
       // Tell the quiz view to reset its own closure-scoped state.
       window.dispatchEvent(new CustomEvent('unifer:reset-quiz'));
       window.UNIFER.navigate('quiz');
