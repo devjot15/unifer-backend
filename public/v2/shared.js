@@ -469,9 +469,63 @@
     `;
     document.body.appendChild(overlay);
 
-    // Safety timeout in case cleanup never fires (network hang, etc.)
-    setTimeout(() => window.UNIFER.hideComputingLoader(), 15000);
+    // Stage 6B: if the loader is still spinning (no error shown) after 20s, treat as stuck.
+    setTimeout(() => {
+      const o = document.getElementById('unifer-computing-overlay');
+      if (o && !o.querySelector('.submit-error')) {
+        showSubmitError('This is taking longer than expected. Your quiz is saved — try again.');
+      }
+    }, 20000);
   }
+
+  // Stage 6B: retry UI rendered inside the computing overlay on /recommend failure or timeout.
+  function showSubmitError(errorMsg) {
+    let overlay = document.getElementById('unifer-computing-overlay');
+    if (!overlay) {
+      const root = document.getElementById('app-root');
+      if (root) root.classList.add('unifer-computing-blur');
+      overlay = document.createElement('div');
+      overlay.id = 'unifer-computing-overlay';
+      overlay.style.cssText = 'position:fixed; inset:0; background:rgba(255,255,255,0.94); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:20px; font-family:var(--font);';
+      document.body.appendChild(overlay);
+    }
+
+    overlay.innerHTML = `
+      <div class="submit-error">
+        <div class="submit-error-icon">!</div>
+        <div class="submit-error-title">Something went wrong</div>
+        <div class="submit-error-sub">${errorMsg || 'We could not reach the ranking engine.'}</div>
+        <button type="button" class="submit-error-retry" id="submitRetryBtn">Try again</button>
+        <button type="button" class="submit-error-back" id="submitBackBtn">Back to quiz</button>
+      </div>
+      <style>
+        .submit-error { display:flex; flex-direction:column; align-items:center; gap:14px; max-width:380px; text-align:center; font-family:var(--font); padding:0 24px; }
+        .submit-error-icon { width:44px; height:44px; border-radius:50%; background:var(--amber-soft, #fff7e6); color:var(--amber-ink, #7a4a00); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; }
+        .submit-error-title { font-size:18px; font-weight:600; color:var(--ink); }
+        .submit-error-sub { font-size:14px; color:var(--ink-2); line-height:1.5; }
+        .submit-error-retry, .submit-error-back { padding:10px 20px; border-radius:999px; font-size:14px; cursor:pointer; }
+        .submit-error-retry { background:var(--teal); color:white; border:none; }
+        .submit-error-back { background:transparent; color:var(--ink-3); border:1px solid var(--line); }
+      </style>
+    `;
+
+    const retryBtn = document.getElementById('submitRetryBtn');
+    const backBtn = document.getElementById('submitBackBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        window.UNIFER.hideComputingLoader();
+        showComputingLoader();
+        window.UNIFER.submitQuiz();
+      });
+    }
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        window.UNIFER.hideComputingLoader();
+        window.UNIFER.navigate('quiz');
+      });
+    }
+  }
+  window.UNIFER.showSubmitError = showSubmitError;
 
   // Public cleanup so other callers (submitQuiz, preview returns, etc.) can force-clear
   // the blur + overlay without depending on the viewmounted event alone.
@@ -642,12 +696,22 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(recommendPayload)
       });
+      if (!res.ok) {
+        showSubmitError(`Server responded ${res.status}. Your quiz is saved — try again.`);
+        return;
+      }
       const data = await res.json();
 
       if (!Array.isArray(data)) {
-        // Backend returned an error-shaped object: { message, suggestion } or similar
-        window.UNIFER.results = [];
-        window.UNIFER.recommendError = data && (data.message || 'No matches found');
+        // Backend returned an error-shaped object or an explicit empty payload.
+        if (data && data.empty) {
+          window.UNIFER.results = [];
+          window.UNIFER.recommendError = null;
+          _persistResults([]);
+        } else {
+          showSubmitError((data && data.message) || 'No matches returned.');
+          return;
+        }
       } else {
         const transformed = transformRecommendResponse(data);
         window.UNIFER.results = transformed;
@@ -657,8 +721,8 @@
       }
     } catch (err) {
       console.error('[unifer] /recommend failed', err);
-      window.UNIFER.results = [];
-      window.UNIFER.recommendError = 'Network error — please try again.';
+      showSubmitError('Network error. Check your connection and retry.');
+      return;
     }
 
     // ─── Navigate to results ───
