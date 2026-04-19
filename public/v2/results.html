@@ -1107,63 +1107,47 @@ const _MOCK_UNIS = [
 ];
 
 /* Shown when a completed quiz returns 0 results — stays on this page rather
-   than bouncing back to quiz, gives the user loosening suggestions. */
+   than bouncing back to quiz. Adapts copy based on whether the user's filters
+   are restrictive (loosen-able) vs. already loose (no inventory in DB). */
 function renderEmptyResultsView(){
-  const root = document.getElementById('app-root');
-  if (!root) return;
+  const container = document.querySelector('.matches-wrap, [data-tab-content="matches"], .matches-list');
+  if (!container) return;
+
+  container.innerHTML = '';
 
   const a = (window.UNIFER && window.UNIFER.answers) || {};
-  const suggestions = [];
-  if (a.tuition_band && a.tuition_band !== 'No limit') {
-    suggestions.push({ text: 'Raise your budget ceiling', apply: () => { window.UNIFER.answers.tuition_band = 'No limit'; } });
-  }
-  if (a.country_decided === 'Yes' && a.selected_country) {
-    suggestions.push({ text: `Open up beyond ${a.selected_country}`, apply: () => { window.UNIFER.answers.country_decided = 'No'; window.UNIFER.answers.selected_country = null; } });
-  }
-  if (a.duration === '1 year or less' || a.duration === '3 years or less') {
-    suggestions.push({ text: 'Consider longer programmes', apply: () => { window.UNIFER.answers.duration = (a.duration === '1 year or less') ? 'More than 1 year' : 'More than 3 years'; } });
-  }
-  if (a.sub_field) {
-    suggestions.push({ text: `Broaden from "${a.sub_field}" to the full field`, apply: () => { window.UNIFER.answers.sub_field = ''; } });
+
+  const hasRestrictiveFilter =
+    (a.tuition_band && a.tuition_band !== 'No limit') ||
+    (a.country_decided === 'Yes' && a.selected_country) ||
+    (a.duration === '1 year or less' || a.duration === '3 years or less') ||
+    (a.sub_field && a.sub_field !== '') ||
+    (a.level === 'PhD') ||
+    (a.program_type_preference === 'research' || a.program_type_preference === 'taught');
+
+  const hero = document.createElement('div');
+  hero.className = 'empty-results-hero';
+  hero.style.cssText = `
+    padding: 40px 24px; text-align: center;
+    display: flex; flex-direction: column; gap: 12px; align-items: center;
+  `;
+
+  if (hasRestrictiveFilter) {
+    hero.innerHTML = `
+      <div style="font-size: 42px; line-height: 1;">🔍</div>
+      <div style="font-size: 20px; font-weight: 600; color: var(--ink); max-width: 420px;">Your exact profile has no matches right now.</div>
+      <div style="font-size: 14px; color: var(--ink-2); max-width: 420px; line-height: 1.5;">Loosen any filter below to open up options.</div>
+    `;
+  } else {
+    hero.innerHTML = `
+      <div style="font-size: 42px; line-height: 1;">📚</div>
+      <div style="font-size: 20px; font-weight: 600; color: var(--ink); max-width: 460px;">We don't have courses for this combination yet.</div>
+      <div style="font-size: 14px; color: var(--ink-2); max-width: 460px; line-height: 1.5;">Our database is growing. Try a different field or start over.</div>
+    `;
   }
 
-  const suggestionsHtml = suggestions.length
-    ? `<div class="low-results-actions" style="margin-top:16px; justify-content:center;">
-        ${suggestions.map((s, i) => `<button type="button" class="low-results-action" data-idx="${i}">${s.text}</button>`).join('')}
-       </div>`
-    : `<div style="margin-top:12px; font-size:13px; color:var(--ink-3);">Try starting over and broadening your filters.</div>`;
-
-  root.innerHTML = `
-    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:0; padding:40px 24px; font-family:var(--font); text-align:center;">
-      <div style="font-size:40px; margin-bottom:16px;">🔍</div>
-      <h1 style="font-size:22px; font-weight:700; color:var(--ink); margin:0 0 10px; letter-spacing:-0.02em;">No programmes matched your filters</h1>
-      <p style="font-size:15px; color:var(--ink-2); max-width:400px; line-height:1.6; margin:0 0 8px;">Your criteria are quite specific. A small change usually opens up options:</p>
-      ${suggestionsHtml}
-      <div style="margin-top:28px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-        <a href="/v2" style="padding:10px 22px; background:var(--teal); color:#fff; border-radius:999px; font-size:14px; font-weight:600; text-decoration:none;">Start over</a>
-      </div>
-    </div>`;
-
-  // Wire suggestion buttons
-  root.querySelectorAll('.low-results-action').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const s = suggestions[parseInt(btn.dataset.idx, 10)];
-      if (!s) return;
-      s.apply();
-      if (typeof window.UNIFER.requeryRecommend !== 'function') return;
-      btn.disabled = true;
-      btn.textContent = 'Searching…';
-      window.UNIFER.requeryRecommend().then(data => {
-        if (data && data.length) {
-          window.UNIFER.results = data;
-          window.location.reload();
-        } else {
-          btn.disabled = false;
-          btn.textContent = s.text;
-        }
-      });
-    });
-  });
+  container.appendChild(hero);
+  renderLowResultsBanner(0);
 }
 
 // If no real results exist, decide whether to redirect (fresh visit) or stay
@@ -1820,35 +1804,35 @@ function rerenderResults(){
   });
 }
 
-/* Stage 6A: low-result banner with one-click filter tweaks. */
-function renderLowResultsBanner(){
-  const items = (window.UNIFER && window.UNIFER.results) || [];
-  const count = items.length;
+/* Stage 6A-fix-3: low-result banner that only suggests loosening filters which
+   are actually restrictive. If every filter is already at its loosest setting,
+   the narrow pool is a data-inventory problem and the only useful action is to
+   restart with different answers. */
+function renderLowResultsBanner(count){
+  if (typeof count !== 'number') {
+    const items = (window.UNIFER && window.UNIFER.results) || [];
+    count = items.length;
+  }
+  if (count >= 3) return;
 
-  const container = document.querySelector('.matches-wrap');
+  const container = document.querySelector('.matches-wrap, [data-tab-content="matches"], .matches-list');
   if (!container) return;
 
   const existing = document.getElementById('low-results-banner');
   if (existing) existing.remove();
-
-  if (count >= 3) return;
-  if (count === 0) {
-    if (typeof renderEmptyResultsView === 'function') renderEmptyResultsView();
-    return;
-  }
 
   const a = (window.UNIFER && window.UNIFER.answers) || {};
   const suggestions = [];
 
   if (a.tuition_band && a.tuition_band !== 'No limit') {
     suggestions.push({
-      text: 'Raise your budget ceiling',
+      text: 'Remove budget cap',
       apply: () => { window.UNIFER.answers.tuition_band = 'No limit'; }
     });
   }
   if (a.country_decided === 'Yes' && a.selected_country) {
     suggestions.push({
-      text: `Open up beyond ${a.selected_country}`,
+      text: `Expand beyond ${a.selected_country}`,
       apply: () => {
         window.UNIFER.answers.country_decided = 'No';
         window.UNIFER.answers.selected_country = null;
@@ -1858,23 +1842,62 @@ function renderLowResultsBanner(){
   if (a.duration === '1 year or less' || a.duration === '3 years or less') {
     suggestions.push({
       text: 'Consider longer programmes',
-      apply: () => {
-        window.UNIFER.answers.duration = (a.duration === '1 year or less')
-          ? 'More than 1 year'
-          : 'More than 3 years';
-      }
+      apply: () => { window.UNIFER.answers.duration = 'More than 1 year'; }
     });
   }
-  if (a.sub_field) {
+  if (a.sub_field && a.sub_field !== '') {
     suggestions.push({
       text: `Broaden from "${a.sub_field}" to the full field`,
       apply: () => { window.UNIFER.answers.sub_field = ''; }
     });
   }
+  if (a.level === 'PhD') {
+    suggestions.push({
+      text: 'Include taught Masters programmes',
+      apply: () => { window.UNIFER.answers.level = 'PG'; }
+    });
+  }
+  if (a.program_type_preference === 'research') {
+    suggestions.push({
+      text: 'Include taught programmes too',
+      apply: () => { window.UNIFER.answers.program_type_preference = ''; }
+    });
+  } else if (a.program_type_preference === 'taught') {
+    suggestions.push({
+      text: 'Include research programmes too',
+      apply: () => { window.UNIFER.answers.program_type_preference = ''; }
+    });
+  }
 
-  const headline = count === 1
-    ? "Just one match. Want to see more?"
-    : "Only a few matches. Broaden any filter below.";
+  if (suggestions.length === 0) {
+    suggestions.push({
+      text: 'Start over with different answers',
+      apply: () => {
+        try { sessionStorage.removeItem('unifer_session_v1'); } catch(e) {}
+        window.dispatchEvent(new CustomEvent('unifer:reset-quiz'));
+        if (window.UNIFER && typeof window.UNIFER.navigate === 'function') {
+          window.UNIFER.navigate('quiz');
+        } else {
+          window.location.href = '/v2';
+        }
+      },
+      isRestart: true
+    });
+  }
+
+  const onlyRestart = suggestions.length === 1 && suggestions[0].isRestart;
+
+  const headline = count === 0
+    ? (onlyRestart
+        ? "Your field has no matches in our database yet."
+        : "Loosen one filter to see options:")
+    : count === 1
+      ? "Just one match. Want to see more?"
+      : "Only a few matches. Broaden any filter below:";
+
+  const subtext = (count === 0 && onlyRestart)
+    ? "We don't have courses indexed for this specific combination. Try a different field or sub-field."
+    : '';
 
   const banner = document.createElement('div');
   banner.id = 'low-results-banner';
@@ -1882,38 +1905,54 @@ function renderLowResultsBanner(){
   banner.innerHTML = `
     <div class="low-results-inner">
       <div class="low-results-headline">${headline}</div>
-      ${suggestions.length
-        ? `<div class="low-results-sub">Your filters are narrow. Loosening any of these usually helps:</div>
-           <div class="low-results-actions">
-             ${suggestions.map((s, i) => `<button type="button" class="low-results-action" data-idx="${i}">${s.text}</button>`).join('')}
-           </div>`
-        : `<div class="low-results-sub">Try <a href="/v2" style="color:var(--teal-ink);text-decoration:underline;">starting over</a> and broadening your filters.</div>`}
+      ${subtext ? `<div class="low-results-sub">${subtext}</div>` : ''}
+      <div class="low-results-actions">
+        ${suggestions.map((s, i) => `<button type="button" class="low-results-action" data-idx="${i}">${s.text}</button>`).join('')}
+      </div>
     </div>`;
 
-  container.insertBefore(banner, container.firstChild);
+  container.appendChild(banner);
 
-  banner.querySelectorAll('.low-results-action').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const i = parseInt(btn.dataset.idx, 10);
+  banner.querySelectorAll('.low-results-action').forEach((btn, i) => {
+    btn.addEventListener('click', async () => {
       const sug = suggestions[i];
       if (!sug) return;
+
+      if (sug.isRestart) {
+        sug.apply();
+        return;
+      }
+
       sug.apply();
+
       if (typeof showRequeryLoader === 'function') showRequeryLoader();
       const fn = window.UNIFER && window.UNIFER.requeryRecommend;
       if (typeof fn !== 'function') {
         if (typeof hideRequeryLoader === 'function') hideRequeryLoader();
         return;
       }
-      fn().then(data => {
-        if (data && data.length) {
+      try {
+        const data = await fn();
+        if (data && data.length > 0) {
           UNIS = data;
+          window.UNIFER.results = data;
           currentTop = data.slice(0, 5).map(u => u.id);
           compareSelected = new Set(currentTop);
+          window.UNIFER.tweakCount = (window.UNIFER.tweakCount || 0) + 1;
+          rerenderResults();
+        } else {
+          renderEmptyResultsView();
         }
-      }).finally(() => {
+      } catch (err) {
+        console.error('[unifer] loosen requery failed', err);
+        const actions = banner.querySelector('.low-results-actions');
+        if (actions) {
+          actions.insertAdjacentHTML('beforeend',
+            '<div style="color:var(--red,#b33); font-size:12px; margin-top:8px;">Network error. Please try again.</div>');
+        }
+      } finally {
         if (typeof hideRequeryLoader === 'function') hideRequeryLoader();
-        rerenderResults();
-      });
+      }
     });
   });
 }

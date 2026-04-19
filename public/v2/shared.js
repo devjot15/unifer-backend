@@ -625,6 +625,18 @@
         body: JSON.stringify(recommendPayload),
         signal: signal
       });
+
+      if (!res.ok) {
+        // Stage 6A-fix-3: log the error body so we can see WHAT the backend rejected.
+        let errBody = '';
+        try { errBody = await res.text(); } catch(e) {}
+        console.error('[unifer] /recommend failed:', res.status, errBody);
+        if (!options.transient) {
+          window.UNIFER.recommendError = `Server error ${res.status}`;
+        }
+        return [];
+      }
+
       const data = await res.json();
       if (signal.aborted) return [];
 
