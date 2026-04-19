@@ -368,6 +368,9 @@
   function showComputingLoader() {
     const existing = document.getElementById('unifer-computing-overlay');
     if (existing) existing.remove();
+    const root = document.getElementById('app-root');
+    if (root) root.classList.add('unifer-computing-blur');
+
     const overlay = document.createElement('div');
     overlay.id = 'unifer-computing-overlay';
     overlay.style.cssText = 'position:fixed; inset:0; background:rgba(255,255,255,0.94); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:20px; font-family:var(--font);';
@@ -390,6 +393,7 @@
 
     // Auto-remove on next view mount
     const remove = () => {
+      if (root) root.classList.remove('unifer-computing-blur');
       const o = document.getElementById('unifer-computing-overlay');
       if (o) o.remove();
     };

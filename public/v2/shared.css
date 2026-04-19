@@ -106,3 +106,20 @@ button { background: none; border: 0; cursor: pointer; padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .view-swap { animation: none; opacity: 1; }
 }
+
+/* Intentional "recomputing" blur — applied while a /recommend round-trip is
+   in flight. Old content blurs as if being recomputed, snaps back sharp when
+   the new results land. */
+.unifer-computing-blur {
+  filter: blur(6px) saturate(0.85);
+  transition: filter 240ms ease-out;
+  pointer-events: none;
+}
+/* The overlays themselves must stay sharp — they sit in front of the blurred content. */
+#unifer-computing-overlay,
+#requery-loader {
+  filter: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .unifer-computing-blur { filter: saturate(0.85); }
+}

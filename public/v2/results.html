@@ -780,7 +780,7 @@
 <div class="loading" id="loading" role="status" aria-live="polite">
   <div class="loading-inner">
     <div class="ring" aria-hidden="true"></div>
-    <h2>Running your profile through <span class="fr">1,068</span> universities<span class="dot-anim" id="dotAnim">…</span></h2>
+    <h2>Running your profile through <span class="fr" id="loadCount">your eligible</span> <span id="loadCountWord">courses</span><span class="dot-anim" id="dotAnim">…</span></h2>
     <p>Cross-referencing rankings, acceptance data, and your stated priorities.</p>
   </div>
 </div>
@@ -1102,7 +1102,16 @@ const byId = id => UNIS.find(u => u.id === id);
 /* ---------- Loading ---------- */
 (function loading(){
   const el = $('#loading');
+  if (!el) return;
   const dots = $('#dotAnim');
+  // Populate the live course count (set by the quiz's "Show me my matches" click)
+  const count = (window.UNIFER && window.UNIFER.lastCourseCount) || null;
+  const loadCount = $('#loadCount');
+  const loadWord = $('#loadCountWord');
+  if (count && loadCount) {
+    loadCount.textContent = count.toLocaleString();
+    if (loadWord) loadWord.textContent = count === 1 ? 'course' : 'courses';
+  }
   let i = 0;
   const tick = setInterval(()=> { i=(i+1)%4; dots.textContent = '.'.repeat(i || 0).padEnd(3,' '); }, 220);
   setTimeout(()=> {
@@ -1513,6 +1522,12 @@ function pickOption(v){
    Stable identity uses the university name (item.id is recycled to 'u1'..'u5'
    on each rerank, so it cannot be used as a tracking key). */
 function showRequeryLoader(){
+  // Blur the matches/results container while we wait for the new ranking.
+  const target = document.querySelector('.matches-wrap')
+              || document.querySelector('[data-tab-content="matches"]')
+              || document.getElementById('app-root');
+  if (target) target.classList.add('unifer-computing-blur');
+
   if (document.getElementById('requery-loader')) return;
   const loader = document.createElement('div');
   loader.id = 'requery-loader';
@@ -1531,6 +1546,9 @@ function showRequeryLoader(){
 }
 
 function hideRequeryLoader(){
+  // Clear the blur on whichever element it got applied to.
+  document.querySelectorAll('.unifer-computing-blur').forEach(el => el.classList.remove('unifer-computing-blur'));
+
   const loader = document.getElementById('requery-loader');
   if (!loader) return;
   loader.style.opacity = '0';
@@ -1665,10 +1683,14 @@ function chipKeyToAnswerKey(k, displayValue){
 
 /* ---------- Compare view ---------- */
 function renderCompare(){
-  // Columns
+  // Columns — only render universities still selected in compareSelected.
+  // Removed universities show up as ghost chips the student can tap to re-add.
   const cols = $('#compareCols');
-  cols.innerHTML = currentTop.map((id, i) => {
+  const activeIds = currentTop.filter(id => compareSelected.has(id));
+  cols.innerHTML = activeIds.map((id) => {
     const u = byId(id);
+    if (!u) return '';
+    const i = currentTop.indexOf(id);
     return `<div class="col" data-uid="${id}" style="--col: var(${COL_VARS[i]})">
       <button class="col-x" aria-label="Remove ${u.name}">×</button>
       <div class="col-name"><span class="col-dot"></span>${u.name}</div>
@@ -1684,9 +1706,47 @@ function renderCompare(){
     setTimeout(()=>{ col.setAttribute('data-deselected','true'); renderCompare(); }, 260);
   }));
 
+  // Removed-universities strip — ghost chips below the header row
+  renderCompareGhosts();
+
   renderCompareTable();
   renderBreakdown();
   renderStrips();
+}
+
+function renderCompareGhosts(){
+  const parent = document.querySelector('.cols-scroll');
+  if (!parent) return;
+  // Remove any prior ghost row
+  const old = document.getElementById('compareGhosts');
+  if (old) old.remove();
+
+  const removedIds = currentTop.filter(id => !compareSelected.has(id));
+  if (!removedIds.length) return;
+
+  const row = document.createElement('div');
+  row.id = 'compareGhosts';
+  row.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0 4px; padding-top:12px; border-top:1px dashed var(--hair, var(--line));';
+  row.innerHTML = '<span style="font-size:12px; color:var(--ink-mute, var(--ink-3)); margin-right:4px;">Removed:</span>';
+
+  removedIds.forEach(id => {
+    const u = byId(id);
+    if (!u) return;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.dataset.uid = id;
+    chip.style.cssText = 'padding:6px 12px; border:1px dashed var(--hair, var(--line)); border-radius:999px; background:transparent; color:var(--ink-mute, var(--ink-3)); font-size:12px; cursor:pointer; opacity:0.7; transition:opacity 140ms ease, border-color 140ms ease;';
+    chip.textContent = '+ ' + u.name;
+    chip.addEventListener('mouseenter', () => { chip.style.opacity = '1'; chip.style.borderColor = 'var(--teal)'; });
+    chip.addEventListener('mouseleave', () => { chip.style.opacity = '0.7'; chip.style.borderColor = 'var(--hair, var(--line))'; });
+    chip.addEventListener('click', () => {
+      compareSelected.add(id);
+      renderCompare();
+    });
+    row.appendChild(chip);
+  });
+
+  parent.parentElement.insertBefore(row, parent.nextSibling);
 }
 
 function renderCompareTable(){
@@ -1878,29 +1938,33 @@ function renderTogglesAndFields(){
 
 function bindSliders(){
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); }; };
-  const upd = debounce(()=> updateScenPreview(true), 400);
+  // Show the recomputing pill on the first gesture, keep it up until the
+  // debounced requery completes (hideRequeryLoader is called inside).
+  const showPill = () => { if (typeof showRequeryLoader === 'function') showRequeryLoader(); };
+  const upd = debounce(()=> updateScenPreview(true), 180);
+  const tick = () => { showPill(); upd(); };
 
   $('#sGpa').addEventListener('input', e => {
     scen.gpa = +e.target.value;
     $('#valGpa').textContent = (scen.gpa/100*4).toFixed(2) + ' / 4.0';
-    upd();
+    tick();
   });
   $('#sBudget').addEventListener('input', e => {
     scen.budget = +e.target.value;
     $('#valBudget').textContent = scen.budget >= 101 ? 'No upper limit' : 'up to $' + scen.budget + 'k';
-    upd();
+    tick();
   });
   $('#sIelts').addEventListener('input', e => {
     scen.ielts = +e.target.value;
     $('#valIelts').textContent = (scen.ielts/10).toFixed(1);
-    upd();
+    tick();
   });
-  $('#sField').addEventListener('change', e => { scen.field = e.target.value; upd(); });
+  $('#sField').addEventListener('change', e => { scen.field = e.target.value; tick(); });
   $$('#sLevel button').forEach(b => b.addEventListener('click', ()=>{
     $$('#sLevel button').forEach(x => x.dataset.on = 'false');
     b.dataset.on = 'true';
     scen.level = b.dataset.v;
-    upd();
+    tick();
   }));
   $('#resetScen').addEventListener('click', ()=>{
     scen = { gpa:88, budget:50, ielts:75, countries:new Set(['UK','Canada','Australia','Netherlands']), field:'Computer Science', level:'Masters' };
@@ -1920,6 +1984,7 @@ function bindToggles(){
     const c = b.dataset.c;
     if (scen.countries.has(c)) scen.countries.delete(c); else scen.countries.add(c);
     b.dataset.on = scen.countries.has(c);
+    if (typeof showRequeryLoader === 'function') showRequeryLoader();
     updateScenPreview(true);
   }));
 }
