@@ -518,6 +518,102 @@ async function getSubScore(universityId, body) {
   return subScore;
 }
 
+/**
+ * Sibling to getSubScore: returns the per-dimension dimScore breakdown
+ * instead of the final weighted average. Used by /recommend to expose
+ * _components.subScoreBreakdown so the frontend can re-rank locally
+ * when the student tweaks soft filters (without re-hitting Supabase).
+ *
+ * This duplicates the body of getSubScore up through the dimScore loop
+ * verbatim — the final weighted-average step is the only omission.
+ * Do NOT refactor getSubScore into this helper without careful testing;
+ * production scoring math depends on getSubScore staying byte-identical.
+ */
+async function getSubScoreBreakdown(universityId, body) {
+  const { data: rows, error } = await supabase.rpc("get_sub_indicator_scores", {
+    p_university_id: universityId
+  });
+
+  if (error) return null;
+  if (!rows) return null;
+  if (rows.length === 0) return null;
+
+  const intent = getResearchIntent(body.research_importance);
+  const multipliers = GLOBAL_FW_MULTIPLIERS[intent] || GLOBAL_FW_MULTIPLIERS.balanced;
+
+  const conceptBuckets = {};
+  for (const row of rows) {
+    const { dimension, concept_group, framework } = row;
+    const score = row.normalized_score;
+    if (score == null) continue;
+    const shortName = GLOBAL_FW_NAME_MAP[framework] || null;
+    const baseWeight = shortName ? (GLOBAL_FW_BASE_WEIGHTS[shortName] || 1.0) : 1.0;
+    const intentMultiplier = shortName ? (multipliers[shortName] || 1.0) : 1.0;
+    const adjWeight = baseWeight * intentMultiplier;
+    if (!conceptBuckets[dimension]) conceptBuckets[dimension] = {};
+    if (!conceptBuckets[dimension][concept_group]) conceptBuckets[dimension][concept_group] = [];
+    conceptBuckets[dimension][concept_group].push({ value: Number(score), weight: adjWeight });
+  }
+
+  const dimConceptScore = {};
+  for (const [dim, concepts] of Object.entries(conceptBuckets)) {
+    dimConceptScore[dim] = {};
+    for (const [concept, entries] of Object.entries(concepts)) {
+      const totalW = entries.reduce((s, x) => s + x.weight, 0);
+      dimConceptScore[dim][concept] = entries.reduce((s, x) => s + x.value * x.weight, 0) / totalW;
+    }
+  }
+
+  const answerMap = {
+    employability: body.career_importance,
+    teaching: body.teaching_importance,
+    research: body.research_importance,
+    student_experience: body.student_experience_importance,
+    international: body.international_importance,
+    selectivity: body.selectivity_importance,
+    prestige: body.prestige_importance,
+  };
+
+  const dimScore = {};
+  for (const [dim, concepts] of Object.entries(dimConceptScore)) {
+    const conceptNames = Object.keys(concepts);
+    if (dim === "employability") {
+      const careerType = body.career_type || null;
+      const weights = {};
+      for (const c of conceptNames) weights[c] = 1;
+
+      if (careerType === "graduate_salary" && concepts["graduate_salary"] == null) {
+        // Fallback: equal weighting of employer_reputation and employment_rate
+      } else if (
+        careerType === "employment_rate" ||
+        careerType === "employer_reputation" ||
+        careerType === "graduate_salary"
+      ) {
+        if (concepts[careerType] != null) weights[careerType] = 2;
+      }
+
+      const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+      const weightedSum = conceptNames.reduce((acc, c) => acc + weights[c] * concepts[c], 0);
+      dimScore[dim] = totalWeight > 0 ? weightedSum / totalWeight : null;
+    } else {
+      const scores = Object.values(concepts);
+      const answer = answerMap[dim] || "low";
+      const isHighPriority = answer === "high";
+      const hasAdequateCoverage = scores.length >= 2;
+
+      if (isHighPriority && hasAdequateCoverage) {
+        const flooredScores = scores.map(s => Math.max(s, 0.05));
+        const product = flooredScores.reduce((a, b) => a * b, 1);
+        dimScore[dim] = Math.pow(product, 1 / flooredScores.length);
+      } else {
+        dimScore[dim] = scores.reduce((a, b) => a + b, 0) / scores.length;
+      }
+    }
+  }
+
+  return dimScore;
+}
+
 async function bulkFetchSubjectScores(universityIds, answers, supabase) {
   if (!answers.sub_field || !answers.field || universityIds.length === 0) return {};
 
@@ -1518,6 +1614,7 @@ app.post("/recommend", async (req, res) => {
 
       // Step 7: Blend composite ranking score with sub-indicator score
       const subScore = await getSubScore(university.id, answers);
+      const subScoreBreakdown = await getSubScoreBreakdown(university.id, answers);
       const compositeScore = rankingMap[university.id] ?? 0.5;
       const alpha = parseFloat(answers.ranking_importance) || 0;
       const beta = 1 - alpha;
@@ -1633,6 +1730,34 @@ app.post("/recommend", async (req, res) => {
           university: Math.round(universityScore * 100) / 100,
         },
         explanation,
+        _components: {
+          compositeScore: compositeScore,
+          subScore: subScore,
+          subScoreBreakdown: subScoreBreakdown,
+          subjectSubScore: subjectSubScore,
+          coverageConf: coverageConf,
+          blendedSubScore: blendedSubScore,
+          universityScoreRaw: universityScore,
+          modulatedUniversityScore: modulatedUniversityScore,
+          pAdmit: pAdmit,
+          admitConf: admitConf,
+          countryScoreRaw: countryScore,
+          courseScoreRaw: courseScore,
+          courseRelevance: courseRelevanceMap[course.id] ?? null,
+          countryComponents: {
+            countryName: country.name,
+            pr_pathway_clarity_score: country.pr_pathway_clarity_score ?? null,
+            post_study_work_years: country.post_study_work_years ?? null,
+            english_primary_language: country.english_primary_language ?? false,
+          },
+          weights: {
+            country: weights.Country,
+            course: weights.Course,
+            institution: weights.Institution,
+          },
+          alpha: alpha,
+          delta: delta,
+        },
       };
     }));
 
@@ -1676,6 +1801,7 @@ app.post("/recommend", async (req, res) => {
           if (!country) return null;
 
           const subScore = softSubScoreCache[university.id] ?? 0.5;
+          const subScoreBreakdown = await getSubScoreBreakdown(university.id, answers);
           const compositeScore = rankingMap[university.id] ?? 0.5;
           const alpha = parseFloat(answers.ranking_importance) || 0;
           const beta = 1 - alpha;
@@ -1739,6 +1865,34 @@ app.post("/recommend", async (req, res) => {
               universityScore >= 0.7 ? 'Institution scores well on ranking, location, and services' :
               universityScore >= 0.5 ? 'Institution meets your core university preferences' : null,
             ].filter(Boolean),
+            _components: {
+              compositeScore: compositeScore,
+              subScore: subScore,
+              subScoreBreakdown: subScoreBreakdown,
+              subjectSubScore: subjectSubScore,
+              coverageConf: coverageConf,
+              blendedSubScore: blendedSubScore,
+              universityScoreRaw: universityScore,
+              modulatedUniversityScore: softModulatedUniScore,
+              pAdmit: softPAdmit,
+              admitConf: softAdmitConf,
+              countryScoreRaw: countryScore,
+              courseScoreRaw: courseScore,
+              courseRelevance: courseRelevanceMap[course.id] ?? null,
+              countryComponents: {
+                countryName: country.name,
+                pr_pathway_clarity_score: country.pr_pathway_clarity_score ?? null,
+                post_study_work_years: country.post_study_work_years ?? null,
+                english_primary_language: country.english_primary_language ?? false,
+              },
+              weights: {
+                country: weights.Country,
+                course: weights.Course,
+                institution: weights.Institution,
+              },
+              alpha: alpha,
+              delta: delta,
+            },
           };
           }));
           softPathways.push(...batchResults);
