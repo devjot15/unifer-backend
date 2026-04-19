@@ -800,6 +800,15 @@
       <button id="tgCompare" aria-pressed="false">Compare</button>
     </div>
 
+    <button type="button" id="pdfBtn" class="pdf-btn" aria-label="Download PDF of shortlist">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <span>PDF</span>
+    </button>
+
     <div class="tweak-counter" id="tweakCounter" title="Profile changes this session">
       <span class="n" id="tweakNum">0</span>
       <span>tweaks</span>
@@ -1184,6 +1193,27 @@ if (!window.UNIFER || !window.UNIFER.results || window.UNIFER.results.length ===
 }
 let UNIS = window.UNIFER.results;
 
+// Stage 6C: PDF button wiring
+const pdfBtn = document.getElementById('pdfBtn');
+if (pdfBtn) {
+  const refreshPdfBtn = () => {
+    const n = (window.UNIFER.results || []).filter(Boolean).length;
+    pdfBtn.style.display = n > 0 ? '' : 'none';
+  };
+  refreshPdfBtn();
+  pdfBtn.addEventListener('click', () => {
+    if (typeof window.UNIFER.downloadPdf === 'function') {
+      window.UNIFER.downloadPdf();
+    } else {
+      console.error('[unifer] downloadPdf not loaded');
+    }
+  });
+  const rs = document.getElementById('rankedStack');
+  if (rs) {
+    const mo = new MutationObserver(() => refreshPdfBtn());
+    mo.observe(rs, { childList: true });
+  }
+}
 
 // Starting top-5 ids
 const ORIGINAL_TOP = ['u1','u2','u3','u4','u5'];

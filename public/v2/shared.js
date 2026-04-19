@@ -803,4 +803,339 @@
       return null;
     }
   };
+
+  /* ═══════════════════════════════════════════════════════
+     Stage 6C — PDF export of results page
+     Lazy-loads html2canvas + jsPDF on first use.
+     ═══════════════════════════════════════════════════════ */
+
+  let _pdfLibsPromise = null;
+  function _loadPdfLibs() {
+    if (_pdfLibsPromise) return _pdfLibsPromise;
+    _pdfLibsPromise = new Promise((resolve, reject) => {
+      const s1 = document.createElement('script');
+      s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s1.onload = () => {
+        const s2 = document.createElement('script');
+        s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s2.onload = () => {
+          if (window.html2canvas && (window.jspdf || window.jsPDF)) resolve();
+          else reject(new Error('PDF libs failed to initialise'));
+        };
+        s2.onerror = () => reject(new Error('Failed to load jsPDF'));
+        document.head.appendChild(s2);
+      };
+      s1.onerror = () => reject(new Error('Failed to load html2canvas'));
+      document.head.appendChild(s1);
+    });
+    return _pdfLibsPromise;
+  }
+
+  function _formatFilterSummary(answers) {
+    const a = answers || {};
+    const parts = [];
+
+    const levelLabel = {
+      'PG': "Masters",
+      'PhD': "PhD"
+    }[a.level] || "Masters";
+
+    const fieldLabel = a.field
+      ? a.field.replace(/&/g, 'and').replace(/\b\w/g, c => c.toUpperCase())
+      : "any field";
+
+    parts.push(`${levelLabel} programmes in ${fieldLabel}`);
+
+    if (a.sub_field && a.sub_field !== '') {
+      parts.push(`specifically ${a.sub_field.toLowerCase()}`);
+    }
+
+    if (a.country_decided === 'Yes' && a.selected_country) {
+      parts.push(`in ${a.selected_country}`);
+    } else {
+      parts.push(`open to any country`);
+    }
+
+    if (a.tuition_band && a.tuition_band !== 'No limit') {
+      parts.push(`with tuition ${a.tuition_band.toLowerCase()}/year`);
+    } else {
+      parts.push(`with no budget ceiling`);
+    }
+
+    if (a.duration && a.duration !== 'More than 3 years') {
+      parts.push(`of ${a.duration.toLowerCase()}`);
+    }
+
+    if (a.ranking_importance === '0.75') {
+      parts.push(`prioritising highly-ranked institutions`);
+    } else if (a.ranking_importance === '0.25') {
+      parts.push(`prioritising fit over prestige`);
+    } else {
+      parts.push(`balancing ranking and course fit`);
+    }
+
+    const arr = Array.isArray(a.priorities)
+      ? a.priorities
+      : [a.priorities_1, a.priorities_2, a.priorities_3].filter(Boolean);
+    if (arr.length > 0) {
+      parts.push(`ranked by ${arr.join(' > ').toLowerCase()}`);
+    }
+
+    return parts.join(', ') + '.';
+  }
+
+  function _slugify(s) {
+    return (s || 'student').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30) || 'student';
+  }
+
+  function _formatDate(d) {
+    const opts = { year: 'numeric', month: 'long', day: 'numeric' };
+    return new Intl.DateTimeFormat('en-US', opts).format(d);
+  }
+
+  function _isoDate(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  /* Render an off-screen wrapper around a cloned content node with a page
+     header + footer, capture to canvas, return canvas. Cleans up afterwards. */
+  async function _capturePageAsCanvas({ contentNode, firstName, filterSummary, pageNum, totalPages, isPage1 }) {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = `
+      position: fixed; top: -10000px; left: 0;
+      width: 820px; background: white;
+      padding: 48px 44px 56px;
+      font-family: var(--font, 'Inter', system-ui, sans-serif);
+      color: var(--ink, #1a2a2a);
+      z-index: -9999;
+      box-sizing: border-box;
+    `;
+
+    const wordmarkImg = document.querySelector('.wordmark-img');
+    const wordmarkSrc = wordmarkImg ? wordmarkImg.src : '';
+
+    const title = firstName
+      ? `${firstName}'s UNIFER shortlist`
+      : `Your UNIFER shortlist`;
+    const subtitle = `Personalised study abroad recommendations · ${_formatDate(new Date())}`;
+
+    const header = document.createElement('div');
+    header.style.cssText = `display:flex; align-items:center; gap:14px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e0e6e6;`;
+    header.innerHTML = `
+      <img src="${wordmarkSrc}" alt="UNIFER" style="height:28px; width:auto; flex:0 0 auto;" crossorigin="anonymous" />
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:20px; font-weight:600; color:#1a2a2a; line-height:1.2;">${title}</div>
+        <div style="font-size:12.5px; color:#4a5a5a; margin-top:4px;">${subtitle}</div>
+      </div>
+    `;
+    wrapper.appendChild(header);
+
+    if (isPage1 && filterSummary) {
+      const summary = document.createElement('div');
+      summary.style.cssText = `font-size:13px; color:#4a5a5a; line-height:1.6; margin-bottom:22px; font-style:italic;`;
+      summary.textContent = filterSummary;
+      wrapper.appendChild(summary);
+    }
+
+    const clone = contentNode.cloneNode(true);
+    clone.querySelectorAll('button, input, .chip, .whatif, .preview-banner, #low-results-banner, .skip-btn').forEach(el => {
+      if (el.classList.contains('chip')) {
+        el.style.pointerEvents = 'none';
+        el.style.cursor = 'default';
+      } else if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') {
+        el.remove();
+      }
+    });
+    clone.querySelectorAll('#whatifRow, .preview-chrome').forEach(el => el.remove());
+    wrapper.appendChild(clone);
+
+    if (wordmarkSrc) {
+      const watermark = document.createElement('div');
+      watermark.style.cssText = `
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%) rotate(-20deg);
+        opacity: 0.05;
+        pointer-events: none;
+        width: 60%;
+      `;
+      watermark.innerHTML = `<img src="${wordmarkSrc}" alt="" style="width:100%;" crossorigin="anonymous" />`;
+      wrapper.appendChild(watermark);
+    }
+
+    const footer = document.createElement('div');
+    footer.style.cssText = `
+      margin-top: 32px; padding-top: 14px; border-top: 1px solid #e0e6e6;
+      display:flex; justify-content:space-between;
+      font-size:11px; color:#7a8a8a;
+    `;
+    footer.innerHTML = `
+      <span>Page ${pageNum} of ${totalPages}</span>
+      <span>Generated by UNIFER · unifer.app</span>
+    `;
+    wrapper.appendChild(footer);
+
+    document.body.appendChild(wrapper);
+
+    await new Promise(resolve => {
+      const imgs = wrapper.querySelectorAll('img');
+      if (imgs.length === 0) return resolve();
+      let remaining = imgs.length;
+      imgs.forEach(img => {
+        if (img.complete) { remaining--; if (remaining === 0) resolve(); }
+        else {
+          img.addEventListener('load', () => { remaining--; if (remaining === 0) resolve(); });
+          img.addEventListener('error', () => { remaining--; if (remaining === 0) resolve(); });
+        }
+      });
+      setTimeout(resolve, 2000);
+    });
+
+    const canvas = await window.html2canvas(wrapper, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: 820
+    });
+
+    wrapper.remove();
+
+    return canvas;
+  }
+
+  window.UNIFER.downloadPdf = async function() {
+    const results = (window.UNIFER.results || []).filter(Boolean);
+    if (results.length === 0) {
+      console.warn('[unifer] downloadPdf: no results to export');
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pdf-generating-overlay';
+    overlay.style.cssText = `
+      position: fixed; inset: 0; z-index: 6500;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.9); backdrop-filter: blur(4px);
+      font-family: var(--font, system-ui); font-size: 14px; color: var(--ink, #1a2a2a);
+    `;
+    overlay.innerHTML = `
+      <div style="display:flex; flex-direction:column; align-items:center; gap:14px;">
+        <div style="width:36px; height:36px; border:3px solid #e0e6e6; border-top-color: var(--teal, #0a8a7a); border-radius:50%; animation: pdfSpin 900ms linear infinite;"></div>
+        <div>Generating your PDF...</div>
+      </div>
+      <style>@keyframes pdfSpin { to { transform: rotate(360deg); } }</style>
+    `;
+    document.body.appendChild(overlay);
+
+    try {
+      await _loadPdfLibs();
+
+      const answers = window.UNIFER.answers || {};
+      const firstName = (answers.first_name || '').trim();
+      const filterSummary = _formatFilterSummary(answers);
+
+      const body = document.body;
+      const originalView = body.getAttribute('data-view') || 'ranked';
+      const originalTab = body.getAttribute('data-tab') || 'matches';
+
+      if (originalTab !== 'matches') {
+        body.setAttribute('data-tab', 'matches');
+      }
+
+      body.setAttribute('data-view', 'ranked');
+      await new Promise(r => setTimeout(r, 120));
+      const rankedNode = document.querySelector('#rankedStack, .ranked-stack, [data-view-content="ranked"]');
+      if (!rankedNode) throw new Error('Ranked view DOM not found');
+
+      const canvas1 = await _capturePageAsCanvas({
+        contentNode: rankedNode,
+        firstName,
+        filterSummary,
+        pageNum: 1,
+        totalPages: 2,
+        isPage1: true
+      });
+
+      body.setAttribute('data-view', 'compare');
+      await new Promise(r => setTimeout(r, 200));
+
+      const compareStack = document.createElement('div');
+      compareStack.style.cssText = `display:flex; flex-direction:column; gap:28px;`;
+
+      const tableEl = document.querySelector('#compareTable, .compare-table, [data-compare-sub="table"]');
+      const barsEl = document.querySelector('#compareBars, .compare-bars, [data-compare-sub="bars"]');
+      const stripsEl = document.querySelector('#compareStrips, .compare-strips, [data-compare-sub="strips"]');
+
+      [tableEl, barsEl, stripsEl].forEach(el => {
+        if (!el) return;
+        const sub = el.cloneNode(true);
+        sub.style.display = 'block';
+        sub.style.visibility = 'visible';
+        compareStack.appendChild(sub);
+      });
+
+      if (compareStack.children.length === 0) {
+        const compareWrap = document.querySelector('.compare-wrap, [data-view-content="compare"]');
+        if (compareWrap) compareStack.appendChild(compareWrap.cloneNode(true));
+      }
+
+      const canvas2 = await _capturePageAsCanvas({
+        contentNode: compareStack,
+        firstName,
+        filterSummary,
+        pageNum: 2,
+        totalPages: 2,
+        isPage1: false
+      });
+
+      body.setAttribute('data-view', originalView);
+      body.setAttribute('data-tab', originalTab);
+
+      const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!jsPDFCtor) throw new Error('jsPDF constructor not found');
+
+      const pdf = new jsPDFCtor({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+
+      function addCanvasToPage(canvas, isFirstPage) {
+        if (!isFirstPage) pdf.addPage();
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        const ratio = canvas.width / canvas.height;
+        const targetW = pdfW - 8;
+        const targetH = targetW / ratio;
+        let finalW = targetW;
+        let finalH = targetH;
+        if (targetH > pdfH - 8) {
+          finalH = pdfH - 8;
+          finalW = finalH * ratio;
+        }
+        const x = (pdfW - finalW) / 2;
+        const y = (pdfH - finalH) / 2;
+        pdf.addImage(imgData, 'JPEG', x, y, finalW, finalH);
+      }
+
+      addCanvasToPage(canvas1, true);
+      addCanvasToPage(canvas2, false);
+
+      const slug = _slugify(firstName);
+      const date = _isoDate(new Date());
+      const filename = `unifer-shortlist-${slug}-${date}.pdf`;
+      pdf.save(filename);
+    } catch (err) {
+      console.error('[unifer] downloadPdf failed', err);
+      alert('Sorry, PDF generation failed. Please try again or contact support.');
+    } finally {
+      overlay.remove();
+    }
+  };
 })();
