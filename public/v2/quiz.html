@@ -2221,7 +2221,8 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
     : Math.max(0, oldCount - SECTIONS[prevSectionId - 1].drop - Math.floor(Math.random() * 250));
   if (typeof realCount === "number") _lastKnownRealCount = realCount;
 
-  state.count = newCount;
+  // Stage 5E-G: do NOT set state.count = newCount here. animateCounterTo reads state.count
+  // as its starting point; presetting it short-circuits the animation (oldN === newN).
   await animateCounterTo(newCount, "section");
   addRibbon(oldCount, newCount);
 
@@ -2291,11 +2292,9 @@ async function finish() {
     : Math.max(12, oldCount - SECTIONS[4].drop);
   if (typeof realFinal === "number") _lastKnownRealCount = realFinal;
 
-  // CRITICAL: set state.count NOW, before any DOM writes that depend on it.
-  state.count = newCount;
-
-  // Animate the header from oldCount → newCount without blocking the card render.
-  animateCounterTo(newCount, "section");
+  // Stage 5E-G: do NOT preset state.count — animateCounterTo reads it as the
+  // start and sets it to newCount at the end. Presetting short-circuits animation.
+  await animateCounterTo(newCount, "section");
   addRibbon(oldCount, newCount);
 
   await showTyping(500);
