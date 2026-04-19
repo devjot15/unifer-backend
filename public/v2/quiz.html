@@ -414,6 +414,20 @@
 .bar .send:not([disabled]):hover { background: oklch(48% 0.075 185); }
 .bar .send:active { transform: scale(.96); }
 
+/* Stage 6C — optional skip button for text questions */
+.skip-btn {
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  color: var(--ink-3, #7a8a8a);
+  cursor: pointer;
+  padding: 6px 12px;
+  margin-right: 6px;
+  border-radius: 999px;
+  transition: background 140ms;
+}
+.skip-btn:hover { background: var(--chip-bg, #f3f5f5); color: var(--ink-2); }
+
 /* free-text & score grids */
 .num-row {
   display: flex; gap: 10px; align-items: center;
@@ -914,6 +928,13 @@ async function _refreshRealCount() {
 
 const FLOW = [
   // ─── Section 1: Academic profile ───
+  { id: "first_name", section: 1, kind: "text",
+    prompt: "Before we start — what should I call you?",
+    hint: "Just your first name is fine. Used only to personalise your shortlist.",
+    placeholder: "First name",
+    maxLength: 40,
+    allowSkip: true },
+
   { id: "profile_degree_completed", section: 1, kind: "chip",
     prompt: "What is the highest level of education you have completed or are currently pursuing?",
     options: [
@@ -1899,6 +1920,7 @@ function renderComposer(step) {
     case "grid":    return renderGrid(step);
     case "country": return renderCountry(step);
     case "rank":    return renderRank(step);
+    case "text":    return renderText(step);
   }
 }
 
@@ -2078,6 +2100,45 @@ function renderNumeric(step) {
     const v = parseFloat(input.value);
     submitAnswer(step.id, v, `${v}${unit==="%"?"%":` ${unit}`}`);
   });
+}
+
+/* ----- TEXT (freeform short text with optional skip) ----- */
+function renderText(step) {
+  composer.innerHTML = `
+    <div class="composer-body">
+      <div class="composer-hint">${step.hint || 'Just your first name is fine'}</div>
+      <div class="num-row">
+        <input id="textInput" type="text" maxlength="${step.maxLength || 40}" placeholder="${step.placeholder || 'Your name'}" autocomplete="given-name" />
+      </div>
+    </div>
+    <div class="bar">
+      <span class="fake">Enter to submit</span>
+      ${step.allowSkip ? '<button class="skip-btn" id="textSkip" type="button">Skip</button>' : ''}
+      <button class="send" id="textSend" disabled aria-label="send">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M12 6l4 4-4 4"/></svg>
+      </button>
+    </div>`;
+  const input = composer.querySelector("#textInput");
+  const send = composer.querySelector("#textSend");
+  const skip = composer.querySelector("#textSkip");
+  setTimeout(() => input.focus({preventScroll: true}), 60);
+
+  function validate() {
+    const v = input.value.trim();
+    send.disabled = v.length === 0;
+  }
+  input.addEventListener("input", validate);
+  input.addEventListener("keydown", e => { if (e.key === "Enter" && !send.disabled) send.click(); });
+  send.addEventListener("click", () => {
+    const v = input.value.trim();
+    if (!v) return;
+    submitAnswer(step.id, v, v);
+  });
+  if (skip) {
+    skip.addEventListener("click", () => {
+      submitAnswer(step.id, "", "Skipped");
+    });
+  }
 }
 
 /* ----- SEARCH institution ----- */

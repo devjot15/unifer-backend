@@ -172,3 +172,30 @@ button { background: none; border: 0; cursor: pointer; padding: 0; }
   .low-results-banner { animation: none; }
   .low-results-action { transition: none; }
 }
+
+/* Stage 6C — PDF download button */
+.pdf-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px;
+  background: transparent;
+  border: 1px solid var(--line, #d5dcdc);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink, #1a2a2a);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  margin-right: 10px;
+  font-family: inherit;
+}
+.pdf-btn:hover {
+  background: var(--chip-bg, #f3f5f5);
+  border-color: var(--teal, #0a8a7a);
+  color: var(--teal-ink, #066a5e);
+}
+.pdf-btn:active { transform: scale(0.98); }
+.pdf-btn svg { flex: 0 0 auto; }
+
+@media (max-width: 720px) {
+  .pdf-btn span { display: none; }
+  .pdf-btn { padding: 7px 10px; }
+}
