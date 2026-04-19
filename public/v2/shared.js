@@ -388,24 +388,18 @@
     setTimeout(remove, 15000);
   }
 
-  // ----- Submit: call /recommend + fire-and-forget /ml/save-profile -----
-  window.UNIFER.submitQuiz = async function () {
-    const a = window.UNIFER.answers || {};
-    const sessionId = window.UNIFER.sessionId;
-
-    // ─── Construct /recommend payload — matches production exactly ───
-    const recommendPayload = {
-      // Priorities (priorities_1/2/3 from the rank question)
+  // ----- Build /recommend payload from a UNIFER.answers-shaped object -----
+  function buildRecommendPayload(a) {
+    a = a || {};
+    return {
       priority_1: a.priorities_1 || '',
       priority_2: a.priorities_2 || '',
       priority_3: a.priorities_3 || '',
 
-      // Section 3 — country prefs (empty string when country pre-selected)
       work_permit_importance: a.work_permit_importance || '',
       english_preference: a.english_preference || '',
       pr_importance: a.pr_importance || '',
 
-      // Section 4 — course & field
       level: a.level || '',
       duration: a.duration || '',
       tuition_band: a.tuition_band || '',
@@ -414,7 +408,6 @@
       internship_importance: a.internship_importance || '',
       scholarship_importance: a.scholarship_importance || '',
 
-      // Section 5 — university selection
       ranking_importance: a.ranking_importance || '',
       career_importance: a.career_importance || '',
       career_type: a.career_type || '',
@@ -426,7 +419,6 @@
       prestige_importance: a.prestige_importance || '',
       subject_ranking_importance: a.subject_ranking_importance || '',
 
-      // Section 1 — profile
       profile_degree_completed: a.profile_degree_completed || '',
       profile_gpa_percentage: computeGpaPercentage(a) || '',
       profile_backlogs: a.profile_backlogs || '',
@@ -442,9 +434,58 @@
       profile_institution_name: a.profile_institution_name || '',
       profile_institution_anabin: a.profile_institution_anabin || '',
 
-      // Selected country — only when country_decided === "Yes"
       selected_country: (a.country_decided === 'Yes' && a.selected_country) ? a.selected_country : null
     };
+  }
+
+  // ----- Re-run /recommend with current (or overridden) answers -----
+  // Called by hard-filter chip taps, what-if previews, and scenarios sliders.
+  // Unlike submitQuiz, does NOT fire /ml/save-profile, does NOT show the
+  // computing loader, and does NOT navigate. Returns the transformed top-5.
+  //
+  // Options:
+  //   transient: true  → do not mutate window.UNIFER.results/eligiblePool; just return the data
+  //                      (used by the scenarios tab for pure exploration)
+  window.UNIFER.requeryRecommend = async function (overrideAnswers, options) {
+    options = options || {};
+    const a = overrideAnswers || window.UNIFER.answers || {};
+    const recommendPayload = buildRecommendPayload(a);
+
+    try {
+      const res = await fetch('/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recommendPayload)
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const transformed = transformRecommendResponse(data);
+        if (!options.transient) {
+          window.UNIFER.results = transformed;
+          window.UNIFER.eligiblePool = transformed;
+          window.UNIFER.recommendError = null;
+        }
+        return transformed;
+      } else {
+        if (!options.transient) {
+          window.UNIFER.recommendError = data && (data.message || 'No matches found');
+        }
+        return [];
+      }
+    } catch (err) {
+      console.error('[unifer] requeryRecommend failed', err);
+      if (!options.transient) window.UNIFER.recommendError = 'Network error';
+      return [];
+    }
+  };
+
+  // ----- Submit: call /recommend + fire-and-forget /ml/save-profile -----
+  window.UNIFER.submitQuiz = async function () {
+    const a = window.UNIFER.answers || {};
+    const sessionId = window.UNIFER.sessionId;
+
+    // ─── Construct /recommend payload — matches production exactly ───
+    const recommendPayload = buildRecommendPayload(a);
 
     // ─── Fire /ml/save-profile in parallel (non-blocking) ───
     if (sessionId) {

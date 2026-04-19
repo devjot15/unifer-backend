@@ -79,6 +79,12 @@
     40%{ transform: scale(1.08); background: color-mix(in oklab, var(--teal) 18%, var(--teal-softer)); }
     100%{ transform: scale(1); background: var(--teal-softer); }
   }
+  @keyframes requeryFadeIn{
+    from{ opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    to{ opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  @keyframes unifer-spin{ to{ transform: rotate(360deg); } }
+
 
   /* Tabs */
   .tabs{
@@ -1306,28 +1312,99 @@ function renderWhatifs(){
     </button>`).join('');
   $$('#whatifRow .whatif').forEach(b => b.addEventListener('click', ()=> applyWhatif(b.dataset.wi)));
 }
-function applyWhatif(id){
+/* Each what-if card applies a small tweak against the student's real answers
+   and previews the reshuffle. Return-to-original restores both the answer
+   snapshot and the matching results snapshot. Soft tweaks re-rank locally;
+   hard tweaks (budget, PhD level) go through /recommend. */
+const PREVIEW_DEFS = {
+  lessranking:  { answers: { ranking_importance: '0.25' },                                                                                                        label: 'Less ranking-weighted' },
+  raisedbudget: { answers: { tuition_band: 'No limit', scholarship_importance: '' },                                                                               label: 'Budget → no limit' },
+  phd:          { answers: { level: 'PhD', research_importance: 'high', internship_importance: '', scholarship_importance: '', teaching_importance: 'medium' },   label: 'Masters → PhD' }
+};
+const _PREVIEW_SOFT_KEYS = new Set([
+  'ranking_importance', 'subject_ranking_importance',
+  'prestige_importance', 'selectivity_importance',
+  'research_importance', 'teaching_importance',
+  'international_importance', 'career_importance', 'career_type',
+  'priorities_1', 'priorities_2', 'priorities_3'
+]);
+
+async function applyWhatif(id){
   const w = WHATIFS.find(x => x.id === id);
-  if (!w) return;
+  const def = PREVIEW_DEFS[id];
+  if (!w || !def) return;
+
+  // If we're already previewing something, revert first so snapshots are clean.
+  if (previewMode && previewMode !== id) {
+    await returnFromPreview({ silent: true });
+  }
+  if (previewMode === id) {
+    // Tap the same preview again → toggle off
+    await returnFromPreview();
+    return;
+  }
+
   if (!originalBeforePreview) originalBeforePreview = [...currentTop];
+  if (!window.UNIFER._previewAnswerSnapshot) {
+    window.UNIFER._previewAnswerSnapshot = Object.assign({}, window.UNIFER.answers || {});
+    window.UNIFER._previewResultsSnapshot = (window.UNIFER.results || []).slice();
+  }
+
+  // Apply the preview's answer changes
+  const a = window.UNIFER.answers = Object.assign({}, window.UNIFER.answers || {});
+  Object.entries(def.answers).forEach(([k, v]) => { a[k] = v; });
+
   previewMode = id;
   document.body.setAttribute('data-preview','true');
   $('#previewLabel').innerHTML = `Preview: <span class="fr">${w.hint}</span>`;
-  const firstRects = new Map();
-  $$('#rankedStack .card').forEach(el => firstRects.set(el.dataset.uid, el.getBoundingClientRect()));
-  currentTop = [...w.top];
-  renderRanked(firstRects);
+
+  const isSoft = Object.keys(def.answers).every(k => _PREVIEW_SOFT_KEYS.has(k) || def.answers[k] === '');
+
+  if (isSoft && window.UNIFER && typeof window.UNIFER.rerank === 'function') {
+    const reranked = window.UNIFER.rerank(a);
+    if (reranked.length) {
+      UNIS = reranked;
+      window.UNIFER.results = reranked;
+      currentTop = reranked.map(u => u.id);
+      compareSelected = new Set(currentTop);
+      rerenderResults();
+    }
+  } else if (window.UNIFER && typeof window.UNIFER.requeryRecommend === 'function') {
+    showRequeryLoader();
+    const data = await window.UNIFER.requeryRecommend();
+    hideRequeryLoader();
+    if (data && data.length) {
+      UNIS = data;
+      currentTop = data.slice(0, 5).map(u => u.id);
+      compareSelected = new Set(currentTop);
+      rerenderResults();
+    }
+  }
 }
-$('#returnOriginal').addEventListener('click', ()=>{
-  if (!originalBeforePreview) return;
+
+async function returnFromPreview(opts){
+  opts = opts || {};
+  const snapA = window.UNIFER._previewAnswerSnapshot;
+  const snapR = window.UNIFER._previewResultsSnapshot;
   previewMode = null;
   document.body.setAttribute('data-preview','false');
-  const firstRects = new Map();
-  $$('#rankedStack .card').forEach(el => firstRects.set(el.dataset.uid, el.getBoundingClientRect()));
-  currentTop = [...originalBeforePreview];
+  if (snapA) {
+    window.UNIFER.answers = snapA;
+    window.UNIFER._previewAnswerSnapshot = null;
+  }
+  if (snapR) {
+    window.UNIFER.results = snapR;
+    window.UNIFER.eligiblePool = snapR;  // snapshot represents the pre-preview eligible state
+    window.UNIFER._previewResultsSnapshot = null;
+    UNIS = snapR;
+    currentTop = snapR.slice(0, 5).map(u => u.id);
+    compareSelected = new Set(currentTop);
+  }
   originalBeforePreview = null;
-  renderRanked(firstRects);
-});
+  if (!opts.silent) rerenderResults();
+}
+
+$('#returnOriginal').addEventListener('click', () => returnFromPreview());
 
 /* ---------- Chip modal ---------- */
 const scrim = $('#modalScrim');
@@ -1378,7 +1455,19 @@ function pickOption(v){
   const isSoft = Object.keys(mapping).every(k => SOFT_KEYS.has(k));
 
   if (!isSoft) {
-    console.log('[unifer] hard-filter chip change — Stage 5B-3 will re-query', mapping);
+    if (!window.UNIFER || typeof window.UNIFER.requeryRecommend !== 'function') {
+      console.warn('[unifer] requeryRecommend unavailable');
+      return;
+    }
+    showRequeryLoader();
+    window.UNIFER.requeryRecommend().then(data => {
+      hideRequeryLoader();
+      if (!data || !data.length) return;
+      UNIS = data;
+      currentTop = data.slice(0, 5).map(u => u.id);
+      compareSelected = new Set(currentTop);
+      setTimeout(() => { bump(); rerenderResults(); }, 60);
+    });
     return;
   }
 
@@ -1409,6 +1498,32 @@ function pickOption(v){
 
    Stable identity uses the university name (item.id is recycled to 'u1'..'u5'
    on each rerank, so it cannot be used as a tracking key). */
+function showRequeryLoader(){
+  if (document.getElementById('requery-loader')) return;
+  const loader = document.createElement('div');
+  loader.id = 'requery-loader';
+  loader.style.cssText = `
+    position:fixed; top:80px; left:50%; transform:translateX(-50%);
+    background:var(--card, #fff); border:1px solid var(--hair, var(--line));
+    border-radius:999px; padding:10px 18px; display:flex; align-items:center; gap:10px;
+    box-shadow:var(--shadow-md); z-index:1500; font-size:13px; color:var(--ink-soft, var(--ink-2));
+    animation: requeryFadeIn 200ms ease-out;
+  `;
+  loader.innerHTML = `
+    <div style="width:14px; height:14px; border:2px solid var(--hair, var(--line)); border-top-color:var(--teal); border-radius:50%; animation:unifer-spin 0.7s linear infinite;"></div>
+    <span>Recomputing matches…</span>
+  `;
+  document.body.appendChild(loader);
+}
+
+function hideRequeryLoader(){
+  const loader = document.getElementById('requery-loader');
+  if (!loader) return;
+  loader.style.opacity = '0';
+  loader.style.transition = 'opacity 180ms ease-out';
+  setTimeout(() => loader.remove(), 200);
+}
+
 function rerenderResults(){
   const wrap = $('#rankedStack');
   if (!wrap) return;
@@ -1678,7 +1793,7 @@ function renderTogglesAndFields(){
 
 function bindSliders(){
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); }; };
-  const upd = debounce(()=> updateScenPreview(true), 150);
+  const upd = debounce(()=> updateScenPreview(true), 400);
 
   $('#sGpa').addEventListener('input', e => {
     scen.gpa = +e.target.value;
@@ -1756,9 +1871,74 @@ function scoreUni(u){
   if (scen.level === 'PhD') s += (u.dims.research - 0.75) * 10;
   return Math.max(0, Math.min(100, s));
 }
-function updateScenPreview(animate){
-  const scored = UNIS.map(u => ({u, s: scoreUni(u)})).sort((a,b)=> b.s - a.s).slice(0,5);
+/* Build a transient answers object from the scenarios-tab `scen` state so
+   requeryRecommend has a shape the backend recognises without touching the
+   student's real answers. */
+function scenToAnswers(){
+  const a = Object.assign({}, (window.UNIFER && window.UNIFER.answers) || {});
+  if (typeof scen.gpa === 'number') a.profile_gpa_percentage = String(scen.gpa);
+  if (typeof scen.budget === 'number') {
+    const b = scen.budget;
+    a.tuition_band = b <= 5  ? 'Up to $5k'
+                   : b <= 15 ? 'Up to $15k'
+                   : b <= 30 ? 'Up to $30k'
+                   : b <= 50 ? 'Up to $50k'
+                             : 'No limit';
+  }
+  if (scen.field) {
+    const fieldMap = {
+      'Computer Science': 'computer science & data technology',
+      'Data Science': 'computer science & data technology',
+      'Business Analytics': 'business & management',
+      'Finance': 'economics, finance & accounting',
+      'Economics': 'economics, finance & accounting',
+      'Electrical Engineering': 'engineering & technology',
+      'Mechanical Engineering': 'engineering & technology',
+      'Civil Engineering': 'engineering & technology',
+      'Architecture': 'arts, design & creative studies',
+      'Design': 'arts, design & creative studies',
+      'Law': 'law, politics & governance',
+      'Public Policy': 'law, politics & governance',
+      'Biology': 'life sciences & biotechnology',
+      'Chemistry': 'natural sciences',
+      'Physics': 'natural sciences'
+    };
+    a.field = fieldMap[scen.field] || a.field;
+  }
+  if (scen.level) a.level = scen.level === 'PhD' ? 'PhD' : 'PG';
+  return a;
+}
+
+/* Scenarios-tab preview. Transient — does NOT mutate the student's real
+   answers or the Matches tab results. Uses /recommend under the hood so
+   slider changes reflect real pool re-scoring, not just mini-card math. */
+let _scenAborted = 0;
+async function updateScenPreview(animate){
   const list = $('#scenList');
+  if (!list) return;
+
+  // Fallback to local mini-card scoring if we haven't wired up yet.
+  if (!window.UNIFER || typeof window.UNIFER.requeryRecommend !== 'function') {
+    _renderScenMiniCards(UNIS.map(u => ({ u, s: scoreUni(u) })).sort((a,b)=>b.s-a.s).slice(0,5), animate);
+    return;
+  }
+
+  const myToken = ++_scenAborted;
+  const transientAnswers = scenToAnswers();
+  const data = await window.UNIFER.requeryRecommend(transientAnswers, { transient: true });
+  if (myToken !== _scenAborted) return;  // a newer slider change took over
+
+  // Render the top-5 as mini-cards using institution score as the magnitude bar.
+  const scored = (data || []).slice(0, 5).map(u => ({
+    u,
+    s: (u.scores && typeof u.scores.institution === 'number') ? u.scores.institution : 50
+  }));
+  _renderScenMiniCards(scored, animate);
+}
+
+function _renderScenMiniCards(scored, animate){
+  const list = $('#scenList');
+  if (!list) return;
   const existing = new Map();
   $$('.mini-card', list).forEach(el => existing.set(el.dataset.uid, el));
   const firstRects = new Map();
