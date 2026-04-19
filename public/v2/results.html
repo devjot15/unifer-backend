@@ -1522,13 +1522,16 @@ function pickOption(v){
    Stable identity uses the university name (item.id is recycled to 'u1'..'u5'
    on each rerank, so it cannot be used as a tracking key). */
 function showRequeryLoader(){
+  // Defensive: strip any stale loader/pill from a previous cycle so we never
+  // stack two requery pills, and clear stuck blur before adding a new one.
+  document.querySelectorAll('#requery-loader').forEach(el => el.remove());
+
   // Blur the matches/results container while we wait for the new ranking.
   const target = document.querySelector('.matches-wrap')
               || document.querySelector('[data-tab-content="matches"]')
               || document.getElementById('app-root');
   if (target) target.classList.add('unifer-computing-blur');
 
-  if (document.getElementById('requery-loader')) return;
   const loader = document.createElement('div');
   loader.id = 'requery-loader';
   loader.style.cssText = `
@@ -1546,9 +1549,14 @@ function showRequeryLoader(){
 }
 
 function hideRequeryLoader(){
-  // Clear the blur on whichever element it got applied to.
-  document.querySelectorAll('.unifer-computing-blur').forEach(el => el.classList.remove('unifer-computing-blur'));
-
+  // Strip the blur class from EVERY element that has it (previous versions only
+  // cleared from one spot, which meant a blur applied to .matches-wrap could
+  // outlive the requery). Also zero inline filter/backdrop-filter as belt-and-braces.
+  document.querySelectorAll('.unifer-computing-blur').forEach(el => {
+    el.classList.remove('unifer-computing-blur');
+    el.style.filter = '';
+    el.style.backdropFilter = '';
+  });
   const loader = document.getElementById('requery-loader');
   if (!loader) return;
   loader.style.opacity = '0';

@@ -397,11 +397,19 @@
 
   // Public cleanup so other callers (submitQuiz, preview returns, etc.) can force-clear
   // the blur + overlay without depending on the viewmounted event alone.
+  // Strips the blur class from EVERY element that carries it — previous versions
+  // only targeted #app-root and missed blur set on .matches-wrap by showRequeryLoader.
   window.UNIFER.hideComputingLoader = function () {
-    const root = document.getElementById('app-root');
-    if (root) root.classList.remove('unifer-computing-blur');
+    document.querySelectorAll('.unifer-computing-blur').forEach(el => {
+      el.classList.remove('unifer-computing-blur');
+      el.style.filter = '';
+      el.style.backdropFilter = '';
+    });
     const o = document.getElementById('unifer-computing-overlay');
     if (o) o.remove();
+    // Also clear any stuck requery pill that outlived its request.
+    const pill = document.getElementById('requery-loader');
+    if (pill) pill.remove();
   };
 
   // ----- Build /recommend payload from a UNIFER.answers-shaped object -----

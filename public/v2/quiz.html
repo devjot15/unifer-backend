@@ -967,7 +967,7 @@ const FLOW = [
     skipIf: (a) => a.profile_degree_completed === "High School" || a.profile_exam_type === "None" || !a.profile_exam_type,
     gridMap: {
       GRE:  { fields: [["Verbal (130–170)", 130, 170, 1], ["Quantitative (130–170)", 130, 170, 1], ["Writing (0–6)", 0, 6, 0.5]], overall: "Overall (260–340)", overallRange: [260, 340, 1] },
-      GMAT: { fields: [["Verbal (0–60)", 0, 60, 1], ["Quantitative (0–60)", 0, 60, 1], ["Writing (0–6)", 0, 6, 0.5]], overall: "Overall (205–805)", overallRange: [205, 805, 1] }
+      GMAT: { fields: [["Verbal (60–90)", 60, 90, 1], ["Quantitative (60–90)", 60, 90, 1], ["Data Insights (60–90)", 60, 90, 1]], overall: "Overall (205–805)", overallRange: [205, 805, 1] }
     } },
 
   { id: "profile_work_experience", section: 1, kind: "chip",
@@ -1954,7 +1954,7 @@ function renderGrid(step) {
       </div>
     </div>
     <div class="bar">
-      <span class="fake" id="gridHint">Fill any 4 to auto-calculate overall</span>
+      <span class="fake" id="gridHint">Enter overall score manually</span>
       <button class="send" id="gridSend" disabled aria-label="send">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M12 6l4 4-4 4"/></svg>
       </button>
@@ -1962,11 +1962,6 @@ function renderGrid(step) {
   const grid = composer.querySelector("#gridScores");
   const overall = composer.querySelector("#gridOverall");
   const send = composer.querySelector("#gridSend");
-  // GMAT/GRE don't have a clean closed-form for the overall — the student has to type it.
-  if (key === "GMAT" || key === "GRE") {
-    const hint = composer.querySelector("#gridHint");
-    if (hint) hint.textContent = "Enter overall score manually for " + key;
-  }
   config.fields.forEach(([name, min, max, step]) => {
     const id = "f_" + normaliseField(name);
     const el = document.createElement("div");
@@ -1976,27 +1971,10 @@ function renderGrid(step) {
   });
   const inputs = grid.querySelectorAll("input");
   function recompute() {
-    // GMAT and GRE: do NOT auto-compute. The official overall is not a simple function
-    // of the sub-scores (GMAT 205-805 is GMAC-calculated; GRE 260-340 = verbal+quant only
-    // and ignores AWA). Require the student to type the overall themselves.
-    if (key === "GMAT" || key === "GRE") {
-      validate();
-      return;
-    }
-    const vals = Array.from(inputs).map(i => parseFloat(i.value));
-    if (vals.every(v => !isNaN(v))) {
-      const sum = vals.reduce((a,b)=>a+b, 0);
-      let ov;
-      if (key === "TOEFL") {
-        ov = Math.round(sum);                  // 4 sub-scores 0-30 → total 0-120
-      } else if (key === "PTE") {
-        ov = Math.round(sum / vals.length);    // average of 4 sub-scores
-      } else if (key === "IELTS") {
-        const avg = sum / vals.length;
-        ov = Math.round(avg * 2) / 2;          // nearest 0.5
-      }
-      if (ov !== undefined) overall.value = ov;
-    }
+    // No auto-calculate. Student types the overall for every test — sub-scores are
+    // validated independently, and auto-compute can't faithfully reproduce the
+    // official scoring for any of these test formats (IELTS rounding, TOEFL/PTE
+    // integer quirks, GMAT GMAC algorithm, GRE writing-excluded total).
     validate();
   }
   function validate() {
