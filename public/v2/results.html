@@ -1350,7 +1350,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 
 function pickOption(v){
   closeModal();
-  bump();
   const ctx = modalContext || {};
   const chip = ctx.chip;
   if (!chip) return;
@@ -1396,15 +1395,102 @@ function pickOption(v){
   currentTop = reranked.map(u => u.id);
   compareSelected = new Set(currentTop);
 
-  // Instant rebuild in new order (Stage 5B-1: no animation; Stage 5B-2 will add FLIP-back).
+  // Defer the reshuffle so the modal exit animation lands first.
+  setTimeout(() => {
+    bump();
+    rerenderResults();
+  }, 120);
+}
+
+/* FLIP reshuffle of #rankedStack. Captures FIRST positions, replaces children
+   with fresh buildCard() output, then animates each card from its old spot to
+   its new spot. Cards that didn't exist before fade in from below; cards whose
+   universities are still in the top-5 just slide.
+
+   Stable identity uses the university name (item.id is recycled to 'u1'..'u5'
+   on each rerank, so it cannot be used as a tracking key). */
+function rerenderResults(){
   const wrap = $('#rankedStack');
-  wrap.innerHTML = '';
-  currentTop.forEach((id, i) => {
-    const u = byId(id);
-    if (u) wrap.appendChild(buildCard(u, i + 1));
+  if (!wrap) return;
+
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ── FIRST: snapshot positions of existing cards keyed by university name
+  const oldPositions = new Map();
+  Array.from(wrap.children).forEach(el => {
+    const name = el.dataset.universityName;
+    if (!name) return;
+    const r = el.getBoundingClientRect();
+    oldPositions.set(name, { top: r.top, left: r.left });
   });
+
+  // ── LAST: rebuild from window.UNIFER.results
+  const items = (window.UNIFER && window.UNIFER.results) || [];
+  wrap.innerHTML = '';
+  items.forEach((item, i) => {
+    item.id = 'u' + (i + 1);
+    const card = buildCard(item, i + 1);
+    card.dataset.universityName = item.name;
+    wrap.appendChild(card);
+  });
+
+  // Trigger score-bar fills (the inline width:0 → data-w% animation is purely CSS-driven)
   requestAnimationFrame(() => {
     $$('.score-fill', wrap).forEach(f => f.style.width = (f.dataset.w || 0) + '%');
+  });
+
+  if (reduce) return;
+
+  // ── INVERT + PLAY: animate each new card from its old visual position
+  const newCards = Array.from(wrap.children);
+  newCards.forEach((card, idx) => {
+    const name = card.dataset.universityName;
+    if (!name) return;
+
+    const oldPos = oldPositions.get(name);
+    const r = card.getBoundingClientRect();
+
+    if (!oldPos) {
+      // New card entering — fade + slide from below with stagger
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(20px)';
+      card.style.transition = 'none';
+      requestAnimationFrame(() => {
+        card.style.transition = 'opacity 360ms cubic-bezier(0.2, 0.9, 0.25, 1), transform 360ms cubic-bezier(0.2, 0.9, 0.25, 1)';
+        card.style.transitionDelay = (idx * 40) + 'ms';
+        card.style.transform = '';
+        card.style.opacity = '';
+      });
+      card.addEventListener('transitionend', function clean(e) {
+        if (e.propertyName !== 'transform') return;
+        card.style.transition = '';
+        card.style.transitionDelay = '';
+        card.removeEventListener('transitionend', clean);
+      });
+      return;
+    }
+
+    const dx = oldPos.left - r.left;
+    const dy = oldPos.top - r.top;
+    if (dx === 0 && dy === 0) return;
+
+    card.style.transform = `translate(${dx}px, ${dy}px)`;
+    card.style.transition = 'none';
+    card.style.zIndex = String(100 - idx);
+
+    requestAnimationFrame(() => {
+      card.style.transition = 'transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1)';
+      card.style.transitionDelay = (idx * 30) + 'ms';
+      card.style.transform = '';
+    });
+
+    card.addEventListener('transitionend', function clean(e) {
+      if (e.propertyName !== 'transform') return;
+      card.style.transition = '';
+      card.style.transitionDelay = '';
+      card.style.zIndex = '';
+      card.removeEventListener('transitionend', clean);
+    });
   });
 }
 
