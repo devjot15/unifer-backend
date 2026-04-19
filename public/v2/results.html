@@ -319,10 +319,12 @@
     font-size: 13px; color: var(--teal-ink);
     align-items: center; justify-content: space-between;
     gap: 10px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   body[data-preview="true"] .preview-banner{ display: flex; }
   body[data-preview="true"] .stack-ranked{ opacity: 1; }
-  body[data-preview="true"] .stack-ranked .card:not([data-preview-active]){ opacity: 0.28; filter: saturate(0.7); }
+  body[data-preview="true"] .stack-ranked .card:not([data-preview-active]){ opacity: 0.38; }
   .preview-banner button{
     padding: 6px 12px; border-radius: 999px;
     background: #fff; color: var(--teal-ink);
@@ -333,16 +335,22 @@
   /* ─────────── Modal ─────────── */
   .modal-scrim{
     position: fixed; inset: 0; z-index: 60;
-    background: oklch(0.2 0.02 200 / 0.35);
-    backdrop-filter: blur(3px);
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 220ms var(--ease);
+    transition: opacity 220ms var(--ease), background 220ms var(--ease);
     display: grid;
     place-items: end center;
   }
   @media (min-width: 640px){ .modal-scrim{ place-items: center; } }
-  .modal-scrim[data-open="true"]{ opacity: 1; pointer-events: auto; }
+  .modal-scrim[data-open="true"]{
+    opacity: 1; pointer-events: auto;
+    background: oklch(0.2 0.02 200 / 0.35);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
   .modal{
     background: #fff;
     border-radius: 24px 24px 0 0;
@@ -1106,6 +1114,9 @@ $$('.tab').forEach(t => t.addEventListener('click', ()=>{
   const v = t.dataset.tab;
   document.body.dataset.tab = v;
   $$('.tab').forEach(x => x.setAttribute('aria-selected', String(x === t)));
+  // When switching to Scenarios, seed the preview with the current top-5 so
+  // it's never blank — user hasn't touched a slider yet.
+  if (v === 'scenarios' && typeof updateScenPreview === 'function') updateScenPreview(false);
 }));
 
 $('#tgRanked').addEventListener('click', ()=> setView('ranked'));
@@ -1528,6 +1539,10 @@ function rerenderResults(){
   const wrap = $('#rankedStack');
   if (!wrap) return;
 
+  // Safety: clear any stale filter/backdrop styles that shouldn't survive a reshuffle.
+  document.body.style.filter = '';
+  document.body.style.backdropFilter = '';
+
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ── FIRST: snapshot positions of existing cards keyed by university name
@@ -1673,23 +1688,66 @@ function renderCompare(){
 
 function renderCompareTable(){
   const actives = currentTop.filter(id => compareSelected.has(id));
+  console.log('[compare] table rendering with', actives.length, 'items');
+
+  // Each row: [label, format(id), numeric(id)|null, direction|null, hasData(id)]
+  // `hasData` lets us drop entire rows when no active uni has the underlying field
+  // (real /recommend results lack rankings, stats, employ, etc.).
   const rows = [
-    ['Tuition / yr',   id => fmt$(byId(id).tuition),      id => byId(id).tuition, 'min'],
-    ['Duration',       id => byId(id).duration,           id => parseFloat(byId(id).duration), 'min'],
-    ['Country',        id => byId(id).country,            null, null],
-    ['Overall ranking (avg QS·THE·ARWU)', id => avgRank(byId(id).rankings), id => avgRank(byId(id).rankings,true), 'min'],
-    ['Subject rank (QS)', id => '#' + byId(id).subject.QS, id => byId(id).subject.QS, 'min'],
-    ['Median admitted GPA', id => byId(id).stats.medianGPA || '—', id => byId(id).stats.medianGPA || 0, 'max'],
-    ['Employment rate',    id => byId(id).employ.rate + '%', id => byId(id).employ.rate, 'max'],
-    ['Post-study work',    id => workRights(byId(id).country), null, null],
-    ['Acceptance rate',    id => byId(id).stats.acceptance ? byId(id).stats.acceptance + '%' : '—', id => byId(id).stats.acceptance ?? 999, 'min']
+    ['Tuition / yr',
+      id => { const u = byId(id); return u && u.tuition != null ? fmt$(u.tuition) : '—'; },
+      id => { const u = byId(id); return (u && u.tuition != null) ? u.tuition : Infinity; },
+      'min',
+      id => { const u = byId(id); return u && u.tuition != null; }],
+    ['Duration',
+      id => { const u = byId(id); return u && u.duration ? u.duration : '—'; },
+      id => { const u = byId(id); return parseFloat(u && u.duration) || 0; },
+      'min',
+      id => { const u = byId(id); return !!(u && u.duration); }],
+    ['Country',
+      id => { const u = byId(id); return u && u.country ? u.country : '—'; },
+      null, null,
+      id => { const u = byId(id); return !!(u && u.country); }],
+    ['Overall ranking (avg QS·THE·ARWU)',
+      id => { const u = byId(id); return u && u.rankings ? avgRank(u.rankings) : '—'; },
+      id => { const u = byId(id); return u && u.rankings ? avgRank(u.rankings, true) : 999; },
+      'min',
+      id => { const u = byId(id); return !!(u && u.rankings); }],
+    ['Subject rank (QS)',
+      id => { const u = byId(id); return (u && u.subject && u.subject.QS != null) ? '#' + u.subject.QS : '—'; },
+      id => { const u = byId(id); return (u && u.subject && u.subject.QS != null) ? u.subject.QS : 999; },
+      'min',
+      id => { const u = byId(id); return !!(u && u.subject && u.subject.QS != null); }],
+    ['Median admitted GPA',
+      id => { const u = byId(id); return (u && u.stats && u.stats.medianGPA) ? u.stats.medianGPA : '—'; },
+      id => { const u = byId(id); return (u && u.stats && u.stats.medianGPA) ? u.stats.medianGPA : 0; },
+      'max',
+      id => { const u = byId(id); return !!(u && u.stats && u.stats.medianGPA); }],
+    ['Employment rate',
+      id => { const u = byId(id); return (u && u.employ && u.employ.rate != null) ? u.employ.rate + '%' : '—'; },
+      id => { const u = byId(id); return (u && u.employ && u.employ.rate != null) ? u.employ.rate : 0; },
+      'max',
+      id => { const u = byId(id); return !!(u && u.employ && u.employ.rate != null); }],
+    ['Post-study work',
+      id => { const u = byId(id); return (u && u.country) ? workRights(u.country) : '—'; },
+      null, null,
+      id => { const u = byId(id); return !!(u && u.country && workRights(u.country) !== '—'); }],
+    ['Acceptance rate',
+      id => { const u = byId(id); return (u && u.stats && u.stats.acceptance) ? u.stats.acceptance + '%' : '—'; },
+      id => { const u = byId(id); return (u && u.stats && u.stats.acceptance != null) ? u.stats.acceptance : 999; },
+      'min',
+      id => { const u = byId(id); return !!(u && u.stats && u.stats.acceptance != null); }]
   ];
+
+  // Drop rows where no active uni has real data
+  const visibleRows = rows.filter(([, , , , hasData]) => actives.some(id => hasData(id)));
+
   const t = $('#compareTable');
-  const thead = `<thead><tr><th></th>${actives.map((id,i) => {
+  const thead = `<thead><tr><th></th>${actives.map((id) => {
     const u = byId(id); const cv = COL_VARS[currentTop.indexOf(id)];
-    return `<th><span class="dot" style="--col: var(${cv})"></span>${u.name.split(' ')[0]}</th>`;
+    return `<th><span class="dot" style="--col: var(${cv})"></span>${u ? u.name.split(' ')[0] : '—'}</th>`;
   }).join('')}</tr></thead>`;
-  const tbody = `<tbody>${rows.map(([lab, fmt, num, dir]) => {
+  const tbody = `<tbody>${visibleRows.map(([lab, fmt, num, dir]) => {
     let bestIdx = -1;
     if (num && dir){
       const vals = actives.map(id => num(id));
@@ -1711,6 +1769,7 @@ function workRights(c){
 
 function renderBreakdown(){
   const actives = currentTop.filter(id => compareSelected.has(id));
+  console.log('[compare] bars rendering with', actives.length, 'items');
   const groups = [
     ['Country match', 'country'],
     ['Course match',  'course'],
@@ -1721,10 +1780,12 @@ function renderBreakdown(){
       <div class="bd-title">${label}</div>
       ${actives.map(id => {
         const u = byId(id); const idx = currentTop.indexOf(id);
+        if (!u) return '';
+        const v = (u.scores && u.scores[key] != null) ? u.scores[key] : 0;
         return `<div class="bd-row" style="--col: var(${COL_VARS[idx]});">
           <div class="n">${u.name}</div>
-          <div class="t"><i style="--w: ${u.scores[key]}%"></i></div>
-          <div class="v">${u.scores[key]}</div>
+          <div class="t"><i style="--w: ${v}%"></i></div>
+          <div class="v">${v}</div>
         </div>`;
       }).join('')}
     </div>`).join('');
@@ -1733,8 +1794,26 @@ function renderBreakdown(){
   });
 }
 
+/* Dimensional strips. Dimension source is _components.subScoreBreakdown
+   (shipped from Stage 5A) when the mock `dims` field isn't populated.
+   Strip keys map to backend dim names; 'diversity' is an alias for
+   'international'. Strips with no data for any active uni are skipped. */
+function _getDimValue(u, k){
+  // Prefer _components.subScoreBreakdown (0-1 → scale to 0-100)
+  const bd = u && u._components && u._components.subScoreBreakdown;
+  if (bd) {
+    const key = k === 'diversity' ? 'international' : k;
+    const v = bd[key];
+    if (v != null) return v * 100;
+  }
+  // Fall back to legacy mock `dims` if present (already 0-1)
+  if (u && u.dims && u.dims[k] != null) return u.dims[k] * 100;
+  return null;
+}
+
 function renderStrips(){
   const actives = currentTop.filter(id => compareSelected.has(id));
+  console.log('[compare] strips rendering with', actives.length, 'items');
   const dims = [
     ['Research strength','research'],
     ['Teaching quality','teaching'],
@@ -1743,11 +1822,13 @@ function renderStrips(){
     ['Prestige','prestige'],
     ['Selectivity','selectivity']
   ];
-  $('#strips').innerHTML = dims.map(([name, k]) => {
-    // Compute horizontal positions (as %), then cluster-shift labels if overlapping
-    const points = actives.map(id => ({ id, x: byId(id).dims[k] * 100 }))
-                         .sort((a,b)=> a.x - b.x);
-    // Spread labels: assign vertical offset row (0 or 1) to avoid overlap
+  const html = dims.map(([name, k]) => {
+    const points = actives
+      .map(id => { const u = byId(id); const v = _getDimValue(u, k); return v == null ? null : { id, x: v }; })
+      .filter(Boolean)
+      .sort((a,b)=> a.x - b.x);
+    if (points.length === 0) return '';  // hide strip when no uni has data for this dim
+
     let lastX = -Infinity, row = 0;
     points.forEach(p => { if (p.x - lastX < 14) { row = 1 - row; } else { row = 0; } p.row = row; lastX = p.x; });
     return `<div class="strip">
@@ -1764,6 +1845,7 @@ function renderStrips(){
       </div>
     </div>`;
   }).join('');
+  $('#strips').innerHTML = html || '<div style="padding:20px; color:var(--ink-mute); font-size:13px; text-align:center;">Dimensional data not available for these universities.</div>';
 }
 
 /* ---------- Share ---------- */
@@ -1917,9 +1999,25 @@ async function updateScenPreview(animate){
   const list = $('#scenList');
   if (!list) return;
 
-  // Fallback to local mini-card scoring if we haven't wired up yet.
+  // Passive render (boot + tab activation): seed with the student's current
+  // top-5 so the preview is never blank before any slider is touched.
+  if (!animate) {
+    if (window.UNIFER && window.UNIFER.results && window.UNIFER.results.length) {
+      const seed = window.UNIFER.results.slice(0, 5).map(u => ({
+        u,
+        s: (u.scores && typeof u.scores.institution === 'number') ? u.scores.institution : 50
+      }));
+      _renderScenMiniCards(seed, false);
+      return;
+    }
+    // Fallback to local mini-card scoring when shell isn't ready yet.
+    _renderScenMiniCards(UNIS.map(u => ({ u, s: scoreUni(u) })).sort((a,b)=>b.s-a.s).slice(0,5), false);
+    return;
+  }
+
+  // Active render (slider / toggle change): re-query the backend transiently.
   if (!window.UNIFER || typeof window.UNIFER.requeryRecommend !== 'function') {
-    _renderScenMiniCards(UNIS.map(u => ({ u, s: scoreUni(u) })).sort((a,b)=>b.s-a.s).slice(0,5), animate);
+    _renderScenMiniCards(UNIS.map(u => ({ u, s: scoreUni(u) })).sort((a,b)=>b.s-a.s).slice(0,5), true);
     return;
   }
 
@@ -1933,7 +2031,7 @@ async function updateScenPreview(animate){
     u,
     s: (u.scores && typeof u.scores.institution === 'number') ? u.scores.institution : 50
   }));
-  _renderScenMiniCards(scored, animate);
+  _renderScenMiniCards(scored, true);
 }
 
 function _renderScenMiniCards(scored, animate){
