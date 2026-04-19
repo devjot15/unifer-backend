@@ -1286,7 +1286,13 @@ function renderRanked(animateFromFirstRects){
     nextIds.forEach((id, i) => {
       let el = keep.get(id);
       if (!el){
-        el = buildCard(byId(id), i+1);
+        const item = byId(id);
+        if (!item) {
+          console.warn('[unifer] renderRanked: no item found for id', id, '— skipping card');
+          return;
+        }
+        el = buildCard(item, i+1);
+        if (!el) return;
       } else {
         // Update ranking badge
         el.querySelector('.rank').textContent = '#' + (i+1);
@@ -1324,6 +1330,10 @@ function renderRanked(animateFromFirstRects){
 }
 
 function buildCard(u, rank){
+  if (!u || typeof u !== 'object') {
+    console.warn('[unifer] buildCard called with invalid item', u, 'rank', rank);
+    return null;
+  }
   const card = document.createElement('article');
   card.className = 'card';
   card.dataset.uid = u.id;
@@ -1731,12 +1741,13 @@ function rerenderResults(){
     oldPositions.set(name, { top: r.top, left: r.left });
   });
 
-  // ── LAST: rebuild from window.UNIFER.results
-  const items = (window.UNIFER && window.UNIFER.results) || [];
+  // ── LAST: rebuild from window.UNIFER.results (snapshot + filter nullish)
+  const items = ((window.UNIFER && window.UNIFER.results) || []).filter(Boolean).slice();
   wrap.innerHTML = '';
   items.forEach((item, i) => {
     item.id = 'u' + (i + 1);
     const card = buildCard(item, i + 1);
+    if (!card) return;
     card.dataset.universityName = item.name;
     wrap.appendChild(card);
   });
