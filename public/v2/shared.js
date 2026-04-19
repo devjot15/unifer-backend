@@ -22,6 +22,54 @@
 
   const ROOT = document.getElementById('app-root');
 
+  // ----- sessionStorage persistence -----
+  // Keep results + answers across a hard refresh so landing on #/results reuses
+  // the student's last compute instead of falling back to mocks.
+  const STORAGE_KEY = 'unifer_session_v1';
+  const STORAGE_TTL_MS = 3600000;  // 1 hour
+
+  function _persistResults(results) {
+    try {
+      const payload = {
+        results: results,
+        answers: window.UNIFER.answers || {},
+        sessionId: window.UNIFER.sessionId || null,
+        lastCourseCount: window.UNIFER.lastCourseCount || null,
+        tweakCount: window.UNIFER.tweakCount || 0,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.log('[unifer] sessionStorage write failed', e);
+    }
+  }
+  window.UNIFER._persistResults = _persistResults;
+
+  function _hydrateFromStorage() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const payload = JSON.parse(raw);
+      if (!payload || Date.now() - (payload.timestamp || 0) > STORAGE_TTL_MS) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        return false;
+      }
+      if (Array.isArray(payload.results) && payload.results.length > 0) {
+        window.UNIFER.results = payload.results;
+        window.UNIFER.eligiblePool = payload.results;
+        window.UNIFER.answers = payload.answers || {};
+        window.UNIFER.sessionId = payload.sessionId || null;
+        window.UNIFER.lastCourseCount = payload.lastCourseCount || null;
+        window.UNIFER.tweakCount = payload.tweakCount || 0;
+        return true;
+      }
+    } catch (e) {
+      console.log('[unifer] sessionStorage hydrate failed', e);
+    }
+    return false;
+  }
+  _hydrateFromStorage();
+
   // ----- View registry -----
   const VIEWS = {
     'quiz':    '/v2/quiz.html',
@@ -470,8 +518,19 @@
   // Options:
   //   transient: true  → do not mutate window.UNIFER.results/eligiblePool; just return the data
   //                      (used by the scenarios tab for pure exploration)
+  //
+  // In-flight requests are superseded by newer calls via AbortController so we
+  // never render stale results from a request that loses its race.
+  let _activeRecommendController = null;
+
   window.UNIFER.requeryRecommend = async function (overrideAnswers, options) {
     options = options || {};
+    // Cancel any pending /recommend request before starting a new one.
+    if (_activeRecommendController) _activeRecommendController.abort();
+    const controller = new AbortController();
+    _activeRecommendController = controller;
+    const signal = controller.signal;
+
     const a = overrideAnswers || window.UNIFER.answers || {};
     const recommendPayload = buildRecommendPayload(a);
 
@@ -479,15 +538,19 @@
       const res = await fetch('/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(recommendPayload)
+        body: JSON.stringify(recommendPayload),
+        signal: signal
       });
       const data = await res.json();
+      if (signal.aborted) return [];
+
       if (Array.isArray(data)) {
         const transformed = transformRecommendResponse(data);
         if (!options.transient) {
           window.UNIFER.results = transformed;
           window.UNIFER.eligiblePool = transformed;
           window.UNIFER.recommendError = null;
+          _persistResults(transformed);
         }
         return transformed;
       } else {
@@ -497,9 +560,15 @@
         return [];
       }
     } catch (err) {
+      if (err && err.name === 'AbortError') {
+        console.log('[unifer] /recommend request superseded');
+        return [];
+      }
       console.error('[unifer] requeryRecommend failed', err);
       if (!options.transient) window.UNIFER.recommendError = 'Network error';
       return [];
+    } finally {
+      if (_activeRecommendController === controller) _activeRecommendController = null;
     }
   };
 
@@ -554,6 +623,7 @@
         window.UNIFER.results = transformed;
         window.UNIFER.eligiblePool = transformed;  // cache for Stage 5 tweak loop
         window.UNIFER.recommendError = null;
+        _persistResults(transformed);
       }
     } catch (err) {
       console.error('[unifer] /recommend failed', err);
