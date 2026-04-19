@@ -1929,6 +1929,116 @@ app.post("/recommend", async (req, res) => {
   }
 });
 
+app.post("/eligible-count", async (req, res) => {
+  try {
+    const answers = req.body || {};
+
+    // Start with the full courses table
+    let q = supabase.schema("core").from("courses").select("*", { count: "exact", head: true });
+
+    // ── Apply only the filters that are PRESENT in answers. Each is optional.
+
+    // Level
+    if (answers.level) {
+      const dbLevel = answers.level === "PhD" ? "PG" : answers.level;
+      q = q.eq("degree_level", dbLevel);
+    }
+
+    // Field
+    if (answers.field && FIELD_CATEGORY_IDS[answers.field] !== undefined) {
+      q = q.eq("field_category_id", FIELD_CATEGORY_IDS[answers.field]);
+    }
+
+    // Sub-field (only if field also set)
+    if (answers.field && answers.sub_field) {
+      q = q.eq("sub_field", answers.sub_field);
+    }
+
+    // Program type (PhD → doctoral; PG + taught → professional; PG + research → research)
+    if (answers.level === "PhD") {
+      q = q.eq("program_type", "doctoral");
+    } else if (answers.level === "PG" && answers.program_type_preference === "taught") {
+      q = q.eq("program_type", "professional");
+    } else if (answers.level === "PG" && answers.program_type_preference === "research") {
+      q = q.eq("program_type", "research");
+    }
+
+    // Tuition band
+    const tuitionMaxMap = {
+      "Up to $5k": 5000,
+      "Up to $15k": 15000,
+      "Up to $30k": 30000,
+      "Up to $50k": 50000,
+      "No limit": null,
+    };
+    if (answers.tuition_band && tuitionMaxMap[answers.tuition_band] !== undefined) {
+      const maxT = tuitionMaxMap[answers.tuition_band];
+      if (maxT !== null) q = q.lte("tuition_usd", maxT);
+    }
+
+    // Duration
+    const durationBoundsMap = {
+      "1 year or less": { min: 0, max: 1 },
+      "More than 1 year": { min: 1, max: 99 },
+      "3 years or less": { min: 0, max: 3 },
+      "More than 3 years": { min: 3, max: 99 },
+    };
+    if (answers.duration && durationBoundsMap[answers.duration]) {
+      const dB = durationBoundsMap[answers.duration];
+      q = q.gte("duration_years", dB.min).lte("duration_years", dB.max);
+    }
+
+    // Country (filter via universities table to get country's university_ids)
+    if (answers.selected_country) {
+      const { data: countryRow } = await supabase
+        .schema("core")
+        .from("countries")
+        .select("id")
+        .eq("name", answers.selected_country)
+        .single();
+      if (countryRow) {
+        const { data: uniIds } = await supabase
+          .schema("core")
+          .from("universities")
+          .select("id")
+          .eq("country_id", countryRow.id);
+        if (uniIds && uniIds.length > 0) {
+          q = q.in("university_id", uniIds.map(u => u.id));
+        } else {
+          // Country exists but no universities indexed — count is 0
+          return res.json({ count: 0 });
+        }
+      } else {
+        // Country name not found
+        return res.json({ count: 0 });
+      }
+    }
+
+    // GPA
+    if (answers.profile_gpa_percentage) {
+      q = q.or(`min_gpa_percentage.is.null,min_gpa_percentage.lte.${answers.profile_gpa_percentage}`);
+    }
+
+    // Backlogs (if student has any backlogs, exclude courses that explicitly disallow them)
+    if (answers.profile_backlogs && parseInt(answers.profile_backlogs) > 0) {
+      q = q.neq("accepts_backlogs", false);
+    }
+
+    // Run the count query
+    const { count, error } = await q;
+
+    if (error) {
+      console.error("[eligible-count] error:", error.message);
+      return res.status(500).json({ error: "count_failed", count: null });
+    }
+
+    return res.json({ count: count || 0 });
+  } catch (err) {
+    console.error("[eligible-count] caught:", err.message);
+    return res.status(500).json({ error: "count_failed", count: null });
+  }
+});
+
 // --------------------------------------
 // SCRAPE PROGRAM PAGE
 // --------------------------------------
