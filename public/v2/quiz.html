@@ -2147,14 +2147,13 @@ async function advance() {
   await askStep(peek);
 }
 
-/* Small decrement 20–80 after every non-boundary answer. */
+/* Tiny visual tick after every non-boundary answer. The real correction
+   happens at section boundaries via /eligible-count (Stage 5E-B/C). */
 async function microTick(prevStep) {
   if (!prevStep || state.count <= 0) return;
-  const hash = [...(prevStep.id || "")].reduce((a,c)=>a + c.charCodeAt(0), 0);
-  const range = 50;
-  // magnitude: roughly half the range on the low end, up to full range
-  const magnitude = Math.max(8, Math.round(range * 0.4) + (hash % Math.max(6, Math.round(range * 0.7))));
-  const target = Math.max(0, state.count - magnitude);
+  const fakeTickAmount = Math.min(50, Math.floor(state.count * 0.005));
+  if (fakeTickAmount <= 0) return;
+  const target = Math.max(0, state.count - fakeTickAmount);
   await animateCounterTo(target, "micro");
 }
 
@@ -2233,12 +2232,15 @@ async function finish() {
   addUniferMsg(
     `That&rsquo;s it. I have everything I need.`, "section-intro", "All done"
   );
+  const displayCount = (typeof _lastKnownRealCount === "number" && _lastKnownRealCount > 0)
+    ? _lastKnownRealCount
+    : state.count;
   const end = document.createElement("div");
   end.className = "msg u enter";
   end.innerHTML = `
     <div class="avatar small">U</div>
     <div class="end-card">
-      <h3>${formatN(state.count)} courses match your profile.</h3>
+      <h3 class="alldone-text"><span class="alldone-count">${formatN(displayCount)}</span> courses match your profile.</h3>
       <p>I&rsquo;ll rank them by fit, shortlist the top universities, and surface the countries that actually make sense for <em>your</em> priorities.</p>
       <button class="primary-cta" id="seeMatchesBtn">
         Show me my matches
@@ -2249,20 +2251,51 @@ async function finish() {
   stream.appendChild(end);
   scrollToBottom(50);
   composer.innerHTML = "";
-  document.getElementById("seeMatchesBtn").addEventListener("click", async () => {
-    // Stage 5E-B: final count refresh to reflect last section's answers
-    if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
-      const finalCount = await window.UNIFER.fetchEligibleCount(state.answers);
-      if (finalCount != null) {
-        state.count = finalCount;
-        window.UNIFER.lastCourseCount = finalCount;
-      } else {
+
+  // Stage 5E-C: refresh card to truth as soon as it mounts.
+  if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
+    window.UNIFER.fetchEligibleCount(state.answers).then(real => {
+      if (real == null) return;
+      _lastKnownRealCount = real;
+      state.count = real;
+      animateCounterTo(real, "section");
+      const cardCount = end.querySelector(".alldone-count");
+      if (cardCount) cardCount.textContent = formatN(real);
+    });
+  }
+
+  const showMatchesBtn = document.getElementById("seeMatchesBtn");
+  showMatchesBtn.addEventListener("click", async () => {
+    if (showMatchesBtn._loading) return;
+    showMatchesBtn._loading = true;
+    showMatchesBtn.disabled = true;
+    showMatchesBtn.textContent = "Computing...";
+
+    try {
+      if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
+        const finalCount = await window.UNIFER.fetchEligibleCount(state.answers);
+        if (finalCount != null) {
+          _lastKnownRealCount = finalCount;
+          state.count = finalCount;
+          window.UNIFER.lastCourseCount = finalCount;
+          const cardCount = end.querySelector(".alldone-count");
+          if (cardCount) cardCount.textContent = formatN(finalCount);
+          animateCounterTo(finalCount, "section");
+          // Brief pause so the user SEES the corrected number before navigation
+          await new Promise(r => setTimeout(r, 250));
+        } else {
+          window.UNIFER.lastCourseCount = state.count;
+        }
+      } else if (window.UNIFER) {
         window.UNIFER.lastCourseCount = state.count;
       }
-    } else if (window.UNIFER) {
-      window.UNIFER.lastCourseCount = state.count;
+      window.UNIFER.submitQuiz();
+    } catch (e) {
+      console.error("[unifer] final count fetch error", e);
+      if (window.UNIFER) window.UNIFER.lastCourseCount = state.count;
+      window.UNIFER.submitQuiz();
     }
-    window.UNIFER.submitQuiz();
+    // Don't restore button — we're navigating away
   });
 }
 
