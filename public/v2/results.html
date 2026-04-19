@@ -324,7 +324,10 @@
   }
   body[data-preview="true"] .preview-banner{ display: flex; }
   body[data-preview="true"] .stack-ranked{ opacity: 1; }
-  body[data-preview="true"] .stack-ranked .card:not([data-preview-active]){ opacity: 0.38; }
+  /* Preview cards stay at full opacity — the banner itself signals the temporary state.
+     Any legacy dim rule (opacity / saturate / blur) on non-active cards would wash out
+     the actual preview results the student is trying to read. */
+  body[data-preview="true"] .stack-ranked .card{ filter: none; -webkit-filter: none; }
   .preview-banner button{
     padding: 6px 12px; border-radius: 999px;
     background: #fff; color: var(--teal-ink);
@@ -1997,7 +2000,8 @@ function scenToAnswers(){
 let _scenAborted = 0;
 async function updateScenPreview(animate){
   const list = $('#scenList');
-  if (!list) return;
+  if (!list) { console.warn('[scenarios] #scenList not found'); return; }
+  console.log('[scenarios] updateScenPreview animate=', animate, 'results.length=', window.UNIFER && window.UNIFER.results ? window.UNIFER.results.length : 0);
 
   // Passive render (boot + tab activation): seed with the student's current
   // top-5 so the preview is never blank before any slider is touched.
