@@ -2305,8 +2305,9 @@ window.addEventListener("hashchange", function cleanupToast() {
 
 /* Start-over reset — results.html dispatches this event before navigating
    back to the quiz. Clear closure-scoped state and DOM so the returning
-   student lands on the landing page, not the last answered step. */
-window.addEventListener("unifer:reset-quiz", function () {
+   student lands on the landing page, not the last answered step.
+   Dedupe so re-mounts don't stack listeners on window. */
+function resetQuizState() {
   if (typeof state !== "undefined" && state) {
     state.answers = {};
     state.index = 0;
@@ -2331,7 +2332,24 @@ window.addEventListener("unifer:reset-quiz", function () {
   const toastEl = document.getElementById("undoToast");
   if (toastEl) toastEl.remove();
   if (window.UNIFER) window.UNIFER.answers = {};
-});
+}
+if (window._uniferResetListener) {
+  window.removeEventListener("unifer:reset-quiz", window._uniferResetListener);
+}
+window._uniferResetListener = resetQuizState;
+window.addEventListener("unifer:reset-quiz", window._uniferResetListener);
+
+/* Mount-time safety: if the shell's answers were cleared (e.g. Start over
+   fired while the quiz view was unmounted) but this closure's state somehow
+   still carries previous values, fold state back to initial. */
+(function initQuizView() {
+  const shellAnswers = (window.UNIFER && window.UNIFER.answers) || {};
+  const shellEmpty = Object.keys(shellAnswers).length === 0;
+  const stateHasAnswers = typeof state !== "undefined" && state && Object.keys(state.answers).length > 0;
+  if (shellEmpty && stateHasAnswers) {
+    resetQuizState();
+  }
+})();
 
 })();
 </script>
