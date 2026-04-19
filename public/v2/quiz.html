@@ -2222,7 +2222,7 @@ async function startChat() {
 /* ---- finish ---- */
 async function finish() {
   state.finished = true;
-  // Final section-boundary tick for section 5 (big)
+  // Final section-boundary fake tick for section 5 — the real fetch below corrects it.
   const oldCount = state.count;
   const drop = SECTIONS[4].drop;
   const newCount = Math.max(12, oldCount - drop);
@@ -2232,9 +2232,22 @@ async function finish() {
   addUniferMsg(
     `That&rsquo;s it. I have everything I need.`, "section-intro", "All done"
   );
-  const displayCount = (typeof _lastKnownRealCount === "number" && _lastKnownRealCount > 0)
-    ? _lastKnownRealCount
-    : state.count;
+
+  // Stage 5E-D: fetch the final real count BEFORE rendering the card so
+  // state.count is the single source of truth when the card paints.
+  if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
+    try {
+      const real = await window.UNIFER.fetchEligibleCount(state.answers);
+      if (real != null) {
+        _lastKnownRealCount = real;
+        await animateCounterTo(real, "section");
+      }
+    } catch (e) {
+      console.error("[unifer] all-done final fetch failed", e);
+    }
+  }
+
+  const displayCount = state.count;
   const end = document.createElement("div");
   end.className = "msg u enter";
   end.innerHTML = `
@@ -2252,50 +2265,15 @@ async function finish() {
   scrollToBottom(50);
   composer.innerHTML = "";
 
-  // Stage 5E-C: refresh card to truth as soon as it mounts.
-  if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
-    window.UNIFER.fetchEligibleCount(state.answers).then(real => {
-      if (real == null) return;
-      _lastKnownRealCount = real;
-      state.count = real;
-      animateCounterTo(real, "section");
-      const cardCount = end.querySelector(".alldone-count");
-      if (cardCount) cardCount.textContent = formatN(real);
-    });
-  }
-
   const showMatchesBtn = document.getElementById("seeMatchesBtn");
-  showMatchesBtn.addEventListener("click", async () => {
+  showMatchesBtn.addEventListener("click", () => {
     if (showMatchesBtn._loading) return;
     showMatchesBtn._loading = true;
     showMatchesBtn.disabled = true;
     showMatchesBtn.textContent = "Computing...";
 
-    try {
-      if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
-        const finalCount = await window.UNIFER.fetchEligibleCount(state.answers);
-        if (finalCount != null) {
-          _lastKnownRealCount = finalCount;
-          state.count = finalCount;
-          window.UNIFER.lastCourseCount = finalCount;
-          const cardCount = end.querySelector(".alldone-count");
-          if (cardCount) cardCount.textContent = formatN(finalCount);
-          animateCounterTo(finalCount, "section");
-          // Brief pause so the user SEES the corrected number before navigation
-          await new Promise(r => setTimeout(r, 250));
-        } else {
-          window.UNIFER.lastCourseCount = state.count;
-        }
-      } else if (window.UNIFER) {
-        window.UNIFER.lastCourseCount = state.count;
-      }
-      window.UNIFER.submitQuiz();
-    } catch (e) {
-      console.error("[unifer] final count fetch error", e);
-      if (window.UNIFER) window.UNIFER.lastCourseCount = state.count;
-      window.UNIFER.submitQuiz();
-    }
-    // Don't restore button — we're navigating away
+    if (window.UNIFER) window.UNIFER.lastCourseCount = state.count;
+    window.UNIFER.submitQuiz();
   });
 }
 
