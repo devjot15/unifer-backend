@@ -172,6 +172,10 @@
         employ: item.employ || null,
         cost: item.cost || null,
         dims: item.dims || null,
+
+        // Preserve the scoring components so the frontend can re-rank locally
+        // when the student tweaks soft filters (see window.UNIFER.rerank).
+        _components: item._components || null,
       };
     });
   }
@@ -235,6 +239,128 @@
   function titleCaseFromValue(v) {
     // Convert "computer science & data technology" → "Computer Science & Data Technology"
     return String(v).replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ----- Local re-rank: recomputes finalScore per eligible pool item using fresh answers -----
+  // Mirrors the backend's blend: university = alpha*composite + beta*blendedSub, then admit-modulated;
+  // finalScore = w_country*countryScore + w_course*courseScore + w_inst*uniScore.
+  // Only soft-filter answers affect this math (dimension importance, ranking_importance,
+  // subject_ranking_importance, priorities). Hard filters would shrink the eligible pool and
+  // require a real /recommend call — see Stage 5B-3.
+  window.UNIFER.rerank = function (newAnswers) {
+    const pool = window.UNIFER.eligiblePool;
+    if (!pool || !pool.length) return [];
+
+    const reranked = pool.map(item => {
+      const c = item._components;
+      if (!c) {
+        // No components — keep item with existing finalScore. Cannot re-rank.
+        return Object.assign({}, item, { finalScore: item.finalScore || 0 });
+      }
+
+      // Recompute alpha and delta from new answers
+      const alpha = parseFloat(newAnswers.ranking_importance);
+      const alphaEff = isNaN(alpha) ? (c.alpha || 0) : alpha;
+      const beta = 1 - alphaEff;
+      const delta = ({ high: 0.60, medium: 0.35, low: 0.10 })[newAnswers.subject_ranking_importance] || c.delta || 0.10;
+
+      // Recompute subScore from the per-dimension breakdown using new importance answers
+      let newSubScore = c.subScore;
+      if (c.subScoreBreakdown) {
+        const DIM_WEIGHT = { high: 0.25, medium: 0.15, low: 0.05 };
+        const dimImportance = {
+          employability: newAnswers.career_importance || 'low',
+          teaching: newAnswers.teaching_importance || 'low',
+          research: newAnswers.research_importance || 'low',
+          student_experience: newAnswers.teaching_importance || 'low', // derived from teaching
+          international: newAnswers.international_importance || 'low',
+          selectivity: newAnswers.selectivity_importance || 'low',
+          prestige: newAnswers.prestige_importance || 'low',
+        };
+        let num = 0, den = 0;
+        for (const [dim, score] of Object.entries(c.subScoreBreakdown)) {
+          if (score == null) continue;
+          const importance = dimImportance[dim] || 'low';
+          const w = DIM_WEIGHT[importance] || DIM_WEIGHT.low;
+          num += w * score;
+          den += w;
+        }
+        if (den > 0) newSubScore = num / den;
+      }
+
+      // Recompute blended sub-score with new delta
+      const newBlendedSub = (c.subjectSubScore !== null && c.subjectSubScore !== undefined)
+        ? (1 - delta) * newSubScore + delta * c.subjectSubScore
+        : newSubScore;
+
+      // Recompute universityScore with new alpha/beta
+      const newUniRaw = (c.compositeScore !== null && c.compositeScore !== undefined)
+        ? alphaEff * c.compositeScore + beta * newBlendedSub
+        : 0.70 * newBlendedSub;
+
+      // Re-apply admit modulation if it was applied originally
+      const newUniModulated = (c.pAdmit !== null && c.pAdmit !== undefined)
+        ? newUniRaw * (0.25 + 0.75 * c.pAdmit)
+        : newUniRaw;
+
+      // Recompute macro weights from new priority order
+      const newWeights = computeMacroWeightsFromAnswers(newAnswers, c.weights);
+
+      // Recompute finalScore
+      const cs = c.countryScoreRaw;  // null when country pre-selected
+      const cos = c.courseScoreRaw;
+      let newFinal;
+      if (cs === null || cs === undefined) {
+        // 2-entity mode: only course + institution
+        const total = newWeights.course + newWeights.institution || 1;
+        newFinal = (newWeights.course * cos + newWeights.institution * newUniModulated) / total;
+      } else {
+        newFinal = newWeights.country * cs + newWeights.course * cos + newWeights.institution * newUniModulated;
+      }
+
+      return Object.assign({}, item, {
+        finalScore: newFinal,
+        scores: {
+          country: cs != null ? Math.round(cs * 100) : null,
+          course: Math.round(cos * 100),
+          institution: Math.round(newUniModulated * 100),
+        },
+      });
+    });
+
+    // Sort by new finalScore, take top 5
+    reranked.sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
+    return reranked.slice(0, 5);
+  };
+
+  // Helper: recompute macro weights from priorities (matches backend computeMacroWeights)
+  function computeMacroWeightsFromAnswers(answers, fallback) {
+    const p1 = answers.priorities_1 || answers.priority_1;
+    const p2 = answers.priorities_2 || answers.priority_2;
+    const p3 = answers.priorities_3 || answers.priority_3;
+
+    // 2-entity mode (country pre-selected, no priority_3)
+    const is2Entity = !p3 || p3 === '';
+
+    const baseTriple = { 1: 0.50, 2: 0.32, 3: 0.18 };
+    const baseDouble = { 1: 0.50 / 0.82, 2: 0.32 / 0.82 };  // ≈ { 1: 0.6098, 2: 0.3902 }
+    const base = is2Entity ? baseDouble : baseTriple;
+
+    const weights = { country: 0, course: 0, institution: 0 };
+    const map = { Country: 'country', Course: 'course', Institution: 'institution' };
+
+    [p1, p2, p3].forEach((p, i) => {
+      if (!p) return;
+      const key = map[p];
+      if (!key) return;
+      weights[key] = base[i + 1] || 0;
+    });
+
+    // Fallback to provided weights if computation produced all zeros
+    const sum = weights.country + weights.course + weights.institution;
+    if (sum === 0 && fallback) return fallback;
+
+    return weights;
   }
 
   // ----- Computing-state overlay -----
