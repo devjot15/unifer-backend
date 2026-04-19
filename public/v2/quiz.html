@@ -1503,6 +1503,83 @@ function addUniferMsg(html, variant="", lead="") {
   scrollToBottom();
   return el;
 }
+/* Stage 6A-fix-5: actionable warning card. Renders the warning text plus
+   loosen-action buttons. Clicking a button mutates state.answers, refetches the
+   real eligible-count, animates the counter, and updates any rendered All-done
+   card so the displayed total matches the new pool. */
+function addWarningCard(warning) {
+  const card = document.createElement('div');
+  card.className = 'msg u enter';
+
+  const palette = {
+    critical: { bg: '#fff5f0', border: '#f5c0a3', label: '#a83f00', labelText: 'HEADS UP' },
+    warning:  { bg: '#fff7e6', border: '#f5d493', label: '#8b5a00', labelText: 'HEADS UP' },
+    info:     { bg: '#f0f7fa', border: '#b8d4e0', label: '#1d5a73', labelText: 'FYI' },
+  };
+  const p = palette[warning.level] || palette.info;
+
+  const actionsHtml = (warning.actions && warning.actions.length > 0)
+    ? `<div class="warning-actions" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+         ${warning.actions.map((a, i) => `
+           <button type="button" class="warning-action" data-idx="${i}"
+                   style="padding:7px 12px; background:white; border:1px solid ${p.border}; border-radius:999px; font-size:13px; color:var(--ink); cursor:pointer; transition:background 140ms;">
+             ${a.text}
+           </button>
+         `).join('')}
+       </div>`
+    : '';
+
+  card.innerHTML = `
+    <div class="avatar small">U</div>
+    <div class="warning-card" style="background:${p.bg}; border:1px solid ${p.border}; border-radius:14px; padding:14px 16px; max-width:500px;">
+      <div style="font-size:11px; font-weight:600; letter-spacing:0.08em; color:${p.label}; text-transform:uppercase; margin-bottom:6px;">${p.labelText}</div>
+      <div style="font-size:14.5px; color:var(--ink); line-height:1.5;">${warning.text}</div>
+      ${actionsHtml}
+    </div>
+  `;
+
+  stream.appendChild(card);
+  scrollToBottom(50);
+
+  if (warning.actions && warning.actions.length > 0) {
+    card.querySelectorAll('.warning-action').forEach((btn, i) => {
+      btn.addEventListener('mouseenter', () => { if (!btn.disabled) btn.style.background = p.border; });
+      btn.addEventListener('mouseleave', () => { if (!btn.disabled) btn.style.background = 'white'; });
+      btn.addEventListener('click', async () => {
+        const action = warning.actions[i];
+        if (!action) return;
+        action.apply();
+
+        card.querySelectorAll('.warning-action').forEach(b => {
+          b.disabled = true;
+          b.style.opacity = '0.5';
+          b.style.cursor = 'default';
+          b.style.background = 'white';
+        });
+
+        if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === 'function') {
+          const real = await window.UNIFER.fetchEligibleCount(state.answers);
+          if (typeof real === 'number') {
+            _lastKnownRealCount = real;
+            const oldC = state.count;
+            await animateCounterTo(real, 'section');
+            addRibbon(oldC, real);
+            addUniferMsg(`Loosened. ${formatN(real)} courses match now.`);
+
+            // If All-done card is already on screen, keep its count in sync.
+            const alldoneText = document.querySelector('.alldone-text');
+            if (alldoneText) {
+              alldoneText.textContent = `${formatN(real)} courses match your profile.`;
+            }
+          }
+        }
+      });
+    });
+  }
+
+  return card;
+}
+
 /* Callout = softer, italic, no eyebrow; A/B via body class toggled by Tweaks. */
 function addCalloutMsg(html) {
   const el = document.createElement("div");
@@ -1687,19 +1764,97 @@ function maybeFireCallout() {
 }
 
 /* ---- smart suggestions ---- */
+/* Stage 6A-fix-5: structured warning output. Each return value carries a
+   level (info | warning | critical), display text, and optional action buttons
+   the user can click to loosen filters inline. Returns null when nothing's
+   worth surfacing. */
+function buildLoosenOptions(a) {
+  const opts = [];
+
+  if (a.tuition_band && a.tuition_band !== 'No limit') {
+    opts.push({
+      text: 'Remove budget cap',
+      apply: () => { state.answers.tuition_band = 'No limit'; }
+    });
+  }
+  if (a.country_decided === 'Yes' && a.selected_country) {
+    opts.push({
+      text: `Expand beyond ${a.selected_country}`,
+      apply: () => {
+        state.answers.country_decided = 'No';
+        state.answers.selected_country = null;
+      }
+    });
+  }
+  if (a.duration === '1 year or less' || a.duration === '3 years or less') {
+    opts.push({
+      text: 'Allow longer programmes',
+      apply: () => { state.answers.duration = 'More than 1 year'; }
+    });
+  }
+  if (a.sub_field && a.sub_field !== '') {
+    opts.push({
+      text: `Broaden beyond "${a.sub_field}"`,
+      apply: () => { state.answers.sub_field = ''; }
+    });
+  }
+  if (a.level === 'PhD') {
+    opts.push({
+      text: 'Include Masters too',
+      apply: () => { state.answers.level = 'PG'; }
+    });
+  }
+
+  return opts;
+}
+
 function maybeFireSuggestion(oldCount) {
-  if (state.count === 0) {
-    return "Hmm — that combination leaves nothing. Want me to loosen one constraint?";
+  const a = state.answers;
+  const count = state.count;
+
+  if (count === 0) {
+    return {
+      level: 'critical',
+      text: "That combination leaves nothing. Try loosening one:",
+      actions: buildLoosenOptions(a)
+    };
   }
-  if (state.count < 5) {
-    return "Only a handful match. I&rsquo;ll still show them, but widen a preference to see more.";
+
+  if (count < 5) {
+    return {
+      level: 'warning',
+      text: `Only ${count} course${count === 1 ? '' : 's'} match. Widen a preference to see more:`,
+      actions: buildLoosenOptions(a)
+    };
   }
-  if (oldCount > 0 && (oldCount - state.count) / oldCount > 0.7) {
-    return "That just cut the pool by over 70%. Fine — just flagging it.";
+
+  if (oldCount > 0 && (oldCount - count) / oldCount > 0.7) {
+    const dropPct = Math.round((oldCount - count) / oldCount * 100);
+    return {
+      level: 'info',
+      text: `That just cut the pool by ${dropPct}%. Fine — just flagging it.`,
+      actions: null
+    };
   }
-  if (state.answers.selected_country && state.answers.tuition === "5") {
-    return "Single country + $5k ceiling is tight. Scholarships will matter a lot here.";
+
+  if (a.country_decided === 'Yes' && a.selected_country && a.tuition_band === 'Up to $5k') {
+    return {
+      level: 'info',
+      text: `${a.selected_country} + $5k ceiling is tight. Scholarships will matter a lot here.`,
+      actions: null
+    };
   }
+
+  if (a.level === 'PhD' && a.program_type_preference === 'taught') {
+    return {
+      level: 'warning',
+      text: 'PhDs are typically research programmes, not taught. This filter may clash.',
+      actions: [
+        { text: 'Remove taught-only filter', apply: () => { state.answers.program_type_preference = ''; } }
+      ]
+    };
+  }
+
   return null;
 }
 
@@ -2228,10 +2383,14 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   addRibbon(oldCount, newCount);
 
   // smart suggestion if pool collapsed?
-  const sug = maybeFireSuggestion(oldCount);
-  if (sug) {
+  const warning = maybeFireSuggestion(oldCount);
+  if (warning) {
     await showTyping(400);
-    addUniferMsg(sug, "suggest", "Heads up");
+    if (warning.actions && warning.actions.length > 0) {
+      addWarningCard(warning);
+    } else {
+      addUniferMsg(warning.text, "suggest", warning.level === 'info' ? 'FYI' : 'Heads up');
+    }
   }
 
   await showTyping(500);
@@ -2297,6 +2456,19 @@ async function finish() {
   // start and sets it to newCount at the end. Presetting short-circuits animation.
   await animateCounterTo(newCount, "section");
   addRibbon(oldCount, newCount);
+
+  // Stage 6A-fix-5: fire warnings on the final count too. The card lets the
+  // user loosen a filter inline before they ever see the All-done card; the
+  // loosen handler updates .alldone-text in place if it's already on screen.
+  const finalWarning = maybeFireSuggestion(oldCount);
+  if (finalWarning) {
+    await showTyping(400);
+    if (finalWarning.actions && finalWarning.actions.length > 0) {
+      addWarningCard(finalWarning);
+    } else {
+      addUniferMsg(finalWarning.text, "suggest", finalWarning.level === 'info' ? 'FYI' : 'Heads up');
+    }
+  }
 
   await showTyping(500);
   addUniferMsg(
