@@ -18,6 +18,7 @@
   // Stage 3 additions — ML session tracking + form time
   window.UNIFER.sessionId = null;
   window.UNIFER.formStartTime = Date.now();
+  window.UNIFER.lastCourseCount = null;  // populated by the quiz at submit time
 
   const ROOT = document.getElementById('app-root');
 
@@ -370,10 +371,19 @@
     const overlay = document.createElement('div');
     overlay.id = 'unifer-computing-overlay';
     overlay.style.cssText = 'position:fixed; inset:0; background:rgba(255,255,255,0.94); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:20px; font-family:var(--font);';
+
+    const count = window.UNIFER.lastCourseCount;
+    const headline = count
+      ? `Ranking your top matches from ${count.toLocaleString()} courses.`
+      : 'Ranking your top matches.';
+    const subText = count
+      ? `Cross-referencing rankings, acceptance data, and your stated priorities across ${count.toLocaleString()} eligible courses.`
+      : 'Cross-referencing rankings, acceptance data, and your stated priorities.';
+
     overlay.innerHTML = `
       <div style="width:40px; height:40px; border-radius:50%; border:3px solid var(--line); border-top-color:var(--teal); animation:unifer-spin 0.9s linear infinite;"></div>
-      <div style="font-size:16px; color:var(--ink); font-weight:500;">Computing your matches…</div>
-      <div style="font-size:13px; color:var(--ink-3);">Running your profile through 1,068 universities</div>
+      <div style="font-size:18px; color:var(--ink); font-weight:600; max-width:380px; text-align:center; padding:0 24px;">${headline}</div>
+      <div style="font-size:13px; color:var(--ink-3); max-width:420px; text-align:center; line-height:1.5; padding:0 24px;">${subText}</div>
       <style>@keyframes unifer-spin { to { transform: rotate(360deg); } }</style>
     `;
     document.body.appendChild(overlay);

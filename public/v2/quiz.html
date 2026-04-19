@@ -2241,7 +2241,10 @@ async function finish() {
   stream.appendChild(end);
   scrollToBottom(50);
   composer.innerHTML = "";
-  document.getElementById("seeMatchesBtn").addEventListener("click", () => window.UNIFER.submitQuiz());
+  document.getElementById("seeMatchesBtn").addEventListener("click", () => {
+    if (window.UNIFER) window.UNIFER.lastCourseCount = state.count;
+    window.UNIFER.submitQuiz();
+  });
 }
 
 /* ---- computing state → placeholder results ---- */
