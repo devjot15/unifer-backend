@@ -1426,14 +1426,12 @@ const UG_BLOCK_MESSAGE = "We're not quite ready for you yet. UNIFER currently he
 function applyBachelorAutoPG() {
   if (state.answers.profile_degree_completed === "Bachelor's" && !state.answers.level) {
     state.answers.level = "PG";
-    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
   }
 }
 
 /* ---- engine state ---- */
 const POOL_START = 10247;
 const state = {
-  answers: {},
   index: 0,                // index in visible flow
   count: POOL_START,       // starting courses
   calloutsFired: 0,
@@ -1443,6 +1441,15 @@ const state = {
   finished: false,
   insertedCallout: false,
 };
+
+/* Stage 6A-fix-4: single source of truth — `state.answers` is a live view of
+   `window.UNIFER.answers`. Reads and writes go through the same object, so the
+   shell and the quiz can never drift out of sync. */
+Object.defineProperty(state, 'answers', {
+  get() { return window.UNIFER.answers; },
+  set(v) { window.UNIFER.answers = v; },
+  configurable: true,
+});
 
 /* ---- DOM helpers ---- */
 const $ = s => document.querySelector(s);
@@ -1739,7 +1746,6 @@ function submitAnswer(stepId, value, displayLabel) {
     step: FLOW.find(s => s.id === stepId) || null,
   };
   state.answers[stepId] = value;
-  window.UNIFER.answers = { ...state.answers };
   applyBachelorAutoPG();
   const userBubble = addUserMsg(displayLabel);
   userBubble.dataset.stepId = stepId;
@@ -1801,7 +1807,6 @@ function undoTo(snap) {
   }
   // 2. Restore engine state
   state.answers = { ...snap.answers };
-  window.UNIFER.answers = { ...state.answers };
   state.index = snap.index;
   // counter: restore visually
   const counterEl = $("#counter");
@@ -1931,7 +1936,6 @@ function renderSearch(step) {
     state.answers.profile_institution_tier    = item.tier || 3;
     state.answers.profile_institution_name    = item.institution_name;
     state.answers.profile_institution_anabin  = item.anabin_status || "H+";
-    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
     submitAnswer(step.id, item.institution_name, item.institution_name);
   }
 
@@ -1940,7 +1944,6 @@ function renderSearch(step) {
     state.answers.profile_institution_tier    = "3";
     state.answers.profile_institution_name    = "Not listed";
     state.answers.profile_institution_anabin  = "not_checked";
-    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
     submitAnswer(step.id, "Not listed", "My institution isn&rsquo;t listed");
   }
 
@@ -2133,15 +2136,13 @@ function renderRank(step) {
   render();
 
   btn.addEventListener("click", () => {
+    // Stage 6A-fix-4: store priorities as a typed array. Length encodes the mode
+    // (2 = country pre-selected, 3 = no country). Individual fields kept for
+    // backward compat with any reader that still expects priorities_1/2/3.
+    state.answers.priorities = picks.slice();
     state.answers.priorities_1 = picks[0];
     state.answers.priorities_2 = picks[1];
-    if (picks.length >= 3) {
-      state.answers.priorities_3 = picks[2];
-    } else {
-      // 2-entity mode (country pre-selected) — leave priorities_3 explicitly empty
-      state.answers.priorities_3 = "";
-    }
-    if (window.UNIFER) window.UNIFER.answers = { ...state.answers };
+    state.answers.priorities_3 = picks[2] || "";
     const display = picks.length === 3
       ? `1. ${picks[0]}  ·  2. ${picks[1]}  ·  3. ${picks[2]}`
       : `1. ${picks[0]}  ·  2. ${picks[1]}`;
@@ -2313,7 +2314,7 @@ async function finish() {
         Show me my matches
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M12 6l4 4-4 4"/></svg>
       </button>
-      <button class="text-link" onclick="location.reload()">Start over</button>
+      <button class="text-link" id="alldone-start-over">Start over</button>
     </div>`;
   stream.appendChild(end);
   scrollToBottom(50);
@@ -2329,6 +2330,21 @@ async function finish() {
     if (window.UNIFER) window.UNIFER.lastCourseCount = newCount;
     window.UNIFER.submitQuiz();
   });
+
+  // Stage 6A-fix-4: Start Over uses an explicit reset, not a page reload, so we
+  // never carry stale sessionStorage into the next quiz.
+  const soBtn = document.getElementById('alldone-start-over');
+  if (soBtn) {
+    soBtn.addEventListener('click', () => {
+      try { sessionStorage.removeItem('unifer_session_v1'); } catch(e) {}
+      if (window.UNIFER) {
+        window.UNIFER.answers = {};
+        window.UNIFER.results = [];
+        window.UNIFER.eligiblePool = [];
+      }
+      resetQuizState();
+    });
+  }
 }
 
 /* ---- computing state → placeholder results ---- */
@@ -2452,14 +2468,86 @@ if (window._uniferResetListener) {
 window._uniferResetListener = resetQuizState;
 window.addEventListener("unifer:reset-quiz", window._uniferResetListener);
 
-/* Mount-time safety: if the shell's answers were cleared (e.g. Start over
-   fired while the quiz view was unmounted) but this closure's state somehow
-   still carries previous values, fold state back to initial. */
+/* Stage 6A-fix-4: Mount-time hydration logic.
+   - If shell carries prior answers but the quiz closure is fresh (i.e. user
+     hard-refreshed and landed back on /quiz), prompt: resume or start fresh.
+   - If shell is empty but closure carries stale state, just reset.
+   - Otherwise this is a normal first mount; do nothing. */
+function showResumeOrFreshPrompt(previousAnswers) {
+  // Avoid stacking prompts if mount fires twice.
+  if (document.getElementById('resume-prompt')) return;
+
+  const prompt = document.createElement('div');
+  prompt.id = 'resume-prompt';
+  prompt.style.cssText = `
+    position:fixed; inset:0; background:rgba(255,255,255,0.96);
+    display:flex; align-items:center; justify-content:center; z-index:5000;
+    padding:24px; font-family: var(--font);
+  `;
+  prompt.innerHTML = `
+    <div style="max-width:420px; text-align:center; display:flex; flex-direction:column; gap:16px;">
+      <div style="font-size:22px; font-weight:600; color:var(--ink);">Welcome back.</div>
+      <div style="font-size:14.5px; color:var(--ink-2); line-height:1.5;">
+        You have an unfinished quiz from earlier. Want to pick up where you left off, or start fresh?
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+        <button id="resumeBtn" style="padding:12px 20px; background:var(--teal); color:white; border:none; border-radius:999px; font-size:14px; cursor:pointer;">
+          Resume where I left off
+        </button>
+        <button id="freshBtn" style="padding:12px 20px; background:transparent; color:var(--ink-2); border:1px solid var(--line); border-radius:999px; font-size:14px; cursor:pointer;">
+          Start fresh
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(prompt);
+
+  document.getElementById('resumeBtn').addEventListener('click', () => {
+    prompt.remove();
+    // If a previous compute exists, jump straight to results.
+    if (window.UNIFER.results && window.UNIFER.results.length > 0) {
+      if (typeof window.UNIFER.navigate === 'function') {
+        window.UNIFER.navigate('results');
+      } else {
+        window.location.hash = '#/results';
+      }
+      return;
+    }
+    // Otherwise hydrate the closure and resume from the first unanswered step.
+    Object.assign(state.answers, previousAnswers);
+    const firstUnanswered = FLOW.findIndex(s => !state.answers[s.id] && isVisible(s, state.answers));
+    state.index = firstUnanswered >= 0 ? firstUnanswered : 0;
+    const appEl = document.getElementById('app');
+    if (appEl) appEl.classList.add('in-chat');
+    const chatEl = document.getElementById('chat');
+    if (chatEl) chatEl.setAttribute('aria-hidden', 'false');
+    advance();
+  });
+
+  document.getElementById('freshBtn').addEventListener('click', () => {
+    prompt.remove();
+    try { sessionStorage.removeItem('unifer_session_v1'); } catch(e) {}
+    if (window.UNIFER) {
+      window.UNIFER.answers = {};
+      window.UNIFER.results = [];
+      window.UNIFER.eligiblePool = [];
+    }
+    resetQuizState();
+  });
+}
+
 (function initQuizView() {
   const shellAnswers = (window.UNIFER && window.UNIFER.answers) || {};
-  const shellEmpty = Object.keys(shellAnswers).length === 0;
+  // Anything beyond a couple of bootstrap defaults indicates a previous session.
+  const shellHasAnswers = Object.keys(shellAnswers).length > 3;
   const stateHasAnswers = typeof state !== "undefined" && state && Object.keys(state.answers).length > 0;
-  if (shellEmpty && stateHasAnswers) {
+
+  if (shellHasAnswers && !stateHasAnswers && window.UNIFER._currentView === 'quiz') {
+    showResumeOrFreshPrompt({ ...shellAnswers });
+    return;
+  }
+
+  if (!shellHasAnswers && stateHasAnswers) {
     resetQuizState();
   }
 })();

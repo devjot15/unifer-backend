@@ -951,24 +951,40 @@ app.post("/recommend", async (req, res) => {
       subject_ranking_importance,
     } = req.body;
 
+    // Stage 6A-fix-4: normalise priorities — accept array shape OR legacy
+    // priority_1/2/3 fields. Either way, downstream code reads from
+    // req.body.priority_1/2/3, which we write back below.
+    let priorities = [];
+    if (Array.isArray(req.body.priorities)) {
+      priorities = req.body.priorities.filter(p => p && typeof p === 'string');
+    } else {
+      const { priority_1: p1, priority_2: p2, priority_3: p3 } = req.body;
+      if (p1) priorities.push(p1);
+      if (p2) priorities.push(p2);
+      if (p3) priorities.push(p3);
+    }
+
+    const hasPreselectedCountry = !!req.body.selected_country;
+    const expectedCount = hasPreselectedCountry ? 2 : 3;
+
+    if (priorities.length !== expectedCount) {
+      return res.status(400).json({
+        error: `Expected ${expectedCount} priorities ${hasPreselectedCountry ? '(country pre-selected)' : '(no country pre-selected)'} but got ${priorities.length}.`,
+        received: priorities,
+        selected_country: req.body.selected_country
+      });
+    }
+
+    if (new Set(priorities).size !== priorities.length) {
+      return res.status(400).json({ error: 'Priorities must all be different.' });
+    }
+
+    // Write back so downstream destructure / handler code works on both shapes.
+    req.body.priority_1 = priorities[0];
+    req.body.priority_2 = priorities[1];
+    req.body.priority_3 = priorities[2] || '';
+
     const { priority_1, priority_2, priority_3 } = req.body;
-
-    // Validation: priority_1 and priority_2 always required.
-    // priority_3 only required when no country is pre-selected (3-entity mode).
-    const hasPreselectedCountry = !!answers.selected_country;
-
-    if (!priority_1 || !priority_2) {
-      return res.status(400).json({ error: 'Priority 1 and Priority 2 must be provided.' });
-    }
-    if (!hasPreselectedCountry && !priority_3) {
-      return res.status(400).json({ error: 'All three priorities must be provided.' });
-    }
-    if (priority_1 === priority_2) {
-      return res.status(400).json({ error: 'Priorities must all be different. Please select distinct priorities.' });
-    }
-    if (priority_3 && (priority_1 === priority_3 || priority_2 === priority_3)) {
-      return res.status(400).json({ error: 'Priorities must all be different. Please select distinct priorities.' });
-    }
 
     // ─── AUTO-DEFAULTS based on conditional question logic ───
     // PhD students: research is implicit, teaching/student experience are skipped

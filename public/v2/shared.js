@@ -414,9 +414,11 @@
 
   // Helper: recompute macro weights from priorities (matches backend computeMacroWeights)
   function computeMacroWeightsFromAnswers(answers, fallback) {
-    const p1 = answers.priorities_1 || answers.priority_1;
-    const p2 = answers.priorities_2 || answers.priority_2;
-    const p3 = answers.priorities_3 || answers.priority_3;
+    // Stage 6A-fix-4: prefer typed array, fall back to individual fields.
+    const arr = Array.isArray(answers.priorities) ? answers.priorities : null;
+    const p1 = arr ? arr[0] : (answers.priorities_1 || answers.priority_1);
+    const p2 = arr ? arr[1] : (answers.priorities_2 || answers.priority_2);
+    const p3 = arr ? (arr[2] || '') : (answers.priorities_3 || answers.priority_3);
 
     // 2-entity mode (country pre-selected, no priority_3)
     const is2Entity = !p3 || p3 === '';
@@ -547,10 +549,19 @@
   // ----- Build /recommend payload from a UNIFER.answers-shaped object -----
   function buildRecommendPayload(a) {
     a = a || {};
+
+    // Stage 6A-fix-4: prefer the typed `priorities` array when present, fall
+    // back to individual priority_1/2/3 fields for stale sessions and v1.
+    const prioritiesArr = Array.isArray(a.priorities) ? a.priorities : null;
+    const priority_1 = prioritiesArr ? (prioritiesArr[0] || '') : (a.priorities_1 || '');
+    const priority_2 = prioritiesArr ? (prioritiesArr[1] || '') : (a.priorities_2 || '');
+    const priority_3 = prioritiesArr ? (prioritiesArr[2] || '') : (a.priorities_3 || '');
+
     return {
-      priority_1: a.priorities_1 || '',
-      priority_2: a.priorities_2 || '',
-      priority_3: a.priorities_3 || '',
+      priorities: prioritiesArr ? prioritiesArr.slice() : undefined,
+      priority_1: priority_1,
+      priority_2: priority_2,
+      priority_3: priority_3,
 
       work_permit_importance: a.work_permit_importance || '',
       english_preference: a.english_preference || '',
