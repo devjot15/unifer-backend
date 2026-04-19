@@ -1106,26 +1106,96 @@ const _MOCK_UNIS = [
   }
 ];
 
-// If no real results exist (fresh visit, stale/expired session), bounce back
-// to the quiz rather than rendering the mock UNIS from Stage 1B.
-if (!window.UNIFER || !window.UNIFER.results || window.UNIFER.results.length === 0) {
-  console.log('[unifer] no results available; redirecting to quiz');
+/* Shown when a completed quiz returns 0 results — stays on this page rather
+   than bouncing back to quiz, gives the user loosening suggestions. */
+function renderEmptyResultsView(){
   const root = document.getElementById('app-root');
-  if (root) {
-    root.innerHTML = `
-      <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 40px; font-family: var(--font); text-align: center;">
-        <div style="font-size: 18px; font-weight: 600; color: var(--ink);">Let&rsquo;s get you matches.</div>
-        <div style="font-size: 14px; color: var(--ink-2);">Starting your quiz&hellip;</div>
-      </div>
-    `;
+  if (!root) return;
+
+  const a = (window.UNIFER && window.UNIFER.answers) || {};
+  const suggestions = [];
+  if (a.tuition_band && a.tuition_band !== 'No limit') {
+    suggestions.push({ text: 'Raise your budget ceiling', apply: () => { window.UNIFER.answers.tuition_band = 'No limit'; } });
   }
-  setTimeout(() => {
-    if (window.UNIFER && typeof window.UNIFER.navigate === 'function') {
-      window.UNIFER.navigate('quiz');
-    } else {
-      location.hash = '#/quiz';
+  if (a.country_decided === 'Yes' && a.selected_country) {
+    suggestions.push({ text: `Open up beyond ${a.selected_country}`, apply: () => { window.UNIFER.answers.country_decided = 'No'; window.UNIFER.answers.selected_country = null; } });
+  }
+  if (a.duration === '1 year or less' || a.duration === '3 years or less') {
+    suggestions.push({ text: 'Consider longer programmes', apply: () => { window.UNIFER.answers.duration = (a.duration === '1 year or less') ? 'More than 1 year' : 'More than 3 years'; } });
+  }
+  if (a.sub_field) {
+    suggestions.push({ text: `Broaden from "${a.sub_field}" to the full field`, apply: () => { window.UNIFER.answers.sub_field = ''; } });
+  }
+
+  const suggestionsHtml = suggestions.length
+    ? `<div class="low-results-actions" style="margin-top:16px; justify-content:center;">
+        ${suggestions.map((s, i) => `<button type="button" class="low-results-action" data-idx="${i}">${s.text}</button>`).join('')}
+       </div>`
+    : `<div style="margin-top:12px; font-size:13px; color:var(--ink-3);">Try starting over and broadening your filters.</div>`;
+
+  root.innerHTML = `
+    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:0; padding:40px 24px; font-family:var(--font); text-align:center;">
+      <div style="font-size:40px; margin-bottom:16px;">🔍</div>
+      <h1 style="font-size:22px; font-weight:700; color:var(--ink); margin:0 0 10px; letter-spacing:-0.02em;">No programmes matched your filters</h1>
+      <p style="font-size:15px; color:var(--ink-2); max-width:400px; line-height:1.6; margin:0 0 8px;">Your criteria are quite specific. A small change usually opens up options:</p>
+      ${suggestionsHtml}
+      <div style="margin-top:28px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+        <a href="/v2" style="padding:10px 22px; background:var(--teal); color:#fff; border-radius:999px; font-size:14px; font-weight:600; text-decoration:none;">Start over</a>
+      </div>
+    </div>`;
+
+  // Wire suggestion buttons
+  root.querySelectorAll('.low-results-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const s = suggestions[parseInt(btn.dataset.idx, 10)];
+      if (!s) return;
+      s.apply();
+      if (typeof window.UNIFER.requeryRecommend !== 'function') return;
+      btn.disabled = true;
+      btn.textContent = 'Searching…';
+      window.UNIFER.requeryRecommend().then(data => {
+        if (data && data.length) {
+          window.UNIFER.results = data;
+          window.location.reload();
+        } else {
+          btn.disabled = false;
+          btn.textContent = s.text;
+        }
+      });
+    });
+  });
+}
+
+// If no real results exist, decide whether to redirect (fresh visit) or stay
+// on the results page with an empty-state view (just-submitted narrow quiz).
+if (!window.UNIFER || !window.UNIFER.results || window.UNIFER.results.length === 0) {
+  const hasAnswers = window.UNIFER && window.UNIFER.answers
+    && Object.keys(window.UNIFER.answers).length > 3;
+
+  if (!hasAnswers) {
+    console.log('[unifer] no results available; redirecting to quiz');
+    const root = document.getElementById('app-root');
+    if (root) {
+      root.innerHTML = `
+        <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 40px; font-family: var(--font); text-align: center;">
+          <div style="font-size: 18px; font-weight: 600; color: var(--ink);">Let&rsquo;s get you matches.</div>
+          <div style="font-size: 14px; color: var(--ink-2);">Starting your quiz&hellip;</div>
+        </div>
+      `;
     }
-  }, 800);
+    setTimeout(() => {
+      if (window.UNIFER && typeof window.UNIFER.navigate === 'function') {
+        window.UNIFER.navigate('quiz');
+      } else {
+        location.hash = '#/quiz';
+      }
+    }, 800);
+    return;
+  }
+
+  // User submitted a quiz but got 0 results. Stay on results page and show banner.
+  window.UNIFER.results = [];
+  renderEmptyResultsView();
   return;
 }
 let UNIS = window.UNIFER.results;
@@ -1537,8 +1607,12 @@ function pickOption(v){
     showRequeryLoader();
     window.UNIFER.requeryRecommend()
       .then(data => {
-        if (!data || !data.length) return;
+        if (!data || !data.length) {
+          if (typeof renderEmptyResultsView === 'function') renderEmptyResultsView();
+          return;
+        }
         UNIS = data;
+        window.UNIFER.results = data;
         currentTop = data.slice(0, 5).map(u => u.id);
         compareSelected = new Set(currentTop);
         setTimeout(() => { bump(); rerenderResults(); }, 60);
@@ -1758,6 +1832,10 @@ function renderLowResultsBanner(){
   if (existing) existing.remove();
 
   if (count >= 3) return;
+  if (count === 0) {
+    if (typeof renderEmptyResultsView === 'function') renderEmptyResultsView();
+    return;
+  }
 
   const a = (window.UNIFER && window.UNIFER.answers) || {};
   const suggestions = [];
@@ -1794,11 +1872,9 @@ function renderLowResultsBanner(){
     });
   }
 
-  const headline = count === 0
-    ? "No exact matches — but a small tweak opens up options."
-    : count === 1
-      ? "Just one match. Want to see more?"
-      : "Only a few matches. Broaden any filter below.";
+  const headline = count === 1
+    ? "Just one match. Want to see more?"
+    : "Only a few matches. Broaden any filter below.";
 
   const banner = document.createElement('div');
   banner.id = 'low-results-banner';
@@ -1811,7 +1887,7 @@ function renderLowResultsBanner(){
            <div class="low-results-actions">
              ${suggestions.map((s, i) => `<button type="button" class="low-results-action" data-idx="${i}">${s.text}</button>`).join('')}
            </div>`
-        : `<div class="low-results-sub">Try Start over to broaden your filters.</div>`}
+        : `<div class="low-results-sub">Try <a href="/v2" style="color:var(--teal-ink);text-decoration:underline;">starting over</a> and broadening your filters.</div>`}
     </div>`;
 
   container.insertBefore(banner, container.firstChild);
