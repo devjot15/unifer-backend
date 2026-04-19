@@ -2167,8 +2167,6 @@ async function advance() {
   // Section boundary?
   if (peek && nextSection !== prevSection) {
     await handleSectionBoundary(prevSection, nextSection);
-    // Stage 5E-B: fetch the real eligible-count after the fake drop animates.
-    _refreshRealCount();
   }
 
   // In-flight callout (not on section boundary turn)
@@ -2207,12 +2205,25 @@ function peekNext() {
 }
 
 async function handleSectionBoundary(prevSectionId, nextSectionId) {
-  // tick-down: drop courses by the prev section's drop
   const oldCount = state.count;
-  const drop = SECTIONS[prevSectionId - 1].drop;
-  const newCount = Math.max(0, oldCount - drop - Math.floor(Math.random() * 250));
-  await animateCounterTo(newCount);
-  addRibbon(oldCount, state.count);
+
+  // Stage 5E-F: fetch real count BEFORE animating. Fake drop only on network failure.
+  let realCount = null;
+  if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
+    try {
+      realCount = await window.UNIFER.fetchEligibleCount(state.answers);
+    } catch (e) {
+      console.error("[unifer] boundary fetch failed", e);
+    }
+  }
+  const newCount = (typeof realCount === "number")
+    ? realCount
+    : Math.max(0, oldCount - SECTIONS[prevSectionId - 1].drop - Math.floor(Math.random() * 250));
+  if (typeof realCount === "number") _lastKnownRealCount = realCount;
+
+  state.count = newCount;
+  await animateCounterTo(newCount, "section");
+  addRibbon(oldCount, newCount);
 
   // smart suggestion if pool collapsed?
   const sug = maybeFireSuggestion(oldCount);
@@ -2223,7 +2234,7 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 
   await showTyping(500);
   addUniferMsg(
-    `Got your ${SECTIONS[prevSectionId-1].name.toLowerCase()}. ${formatN(state.count)} courses match so far.`
+    `Got your ${SECTIONS[prevSectionId-1].name.toLowerCase()}. ${formatN(newCount)} courses match so far.`
   );
 
   // section intro
@@ -2265,8 +2276,7 @@ async function startChat() {
 async function finish() {
   state.finished = true;
 
-  // Stage 5E-E: fetch the real final count BEFORE anything else paints so the
-  // ribbon, All-done card, header pill and loader all read the SAME number.
+  // Determine the final count deterministically
   const oldCount = state.count;
   let realFinal = null;
   if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
@@ -2281,8 +2291,13 @@ async function finish() {
     : Math.max(12, oldCount - SECTIONS[4].drop);
   if (typeof realFinal === "number") _lastKnownRealCount = realFinal;
 
-  await animateCounterTo(newCount, "section");
-  addRibbon(oldCount, state.count);
+  // CRITICAL: set state.count NOW, before any DOM writes that depend on it.
+  state.count = newCount;
+
+  // Animate the header from oldCount → newCount without blocking the card render.
+  animateCounterTo(newCount, "section");
+  addRibbon(oldCount, newCount);
+
   await showTyping(500);
   addUniferMsg(
     `That&rsquo;s it. I have everything I need.`, "section-intro", "All done"
@@ -2293,7 +2308,7 @@ async function finish() {
   end.innerHTML = `
     <div class="avatar small">U</div>
     <div class="end-card">
-      <h3 class="alldone-text">${formatN(state.count)} courses match your profile.</h3>
+      <h3 class="alldone-text">${formatN(newCount)} courses match your profile.</h3>
       <p>I&rsquo;ll rank them by fit, shortlist the top universities, and surface the countries that actually make sense for <em>your</em> priorities.</p>
       <button class="primary-cta" id="seeMatchesBtn">
         Show me my matches
@@ -2304,7 +2319,6 @@ async function finish() {
   stream.appendChild(end);
   scrollToBottom(50);
   composer.innerHTML = "";
-  _renderCount();
 
   const showMatchesBtn = document.getElementById("seeMatchesBtn");
   showMatchesBtn.addEventListener("click", () => {
@@ -2313,7 +2327,7 @@ async function finish() {
     showMatchesBtn.disabled = true;
     showMatchesBtn.textContent = "Computing...";
 
-    if (window.UNIFER) window.UNIFER.lastCourseCount = state.count;
+    if (window.UNIFER) window.UNIFER.lastCourseCount = newCount;
     window.UNIFER.submitQuiz();
   });
 }
