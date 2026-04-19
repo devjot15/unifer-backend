@@ -813,19 +813,21 @@
   function _loadPdfLibs() {
     if (_pdfLibsPromise) return _pdfLibsPromise;
     _pdfLibsPromise = new Promise((resolve, reject) => {
+      // html-to-image supports oklch() and other modern CSS color functions.
+      // It exposes itself as window.htmlToImage (UMD build).
       const s1 = document.createElement('script');
-      s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s1.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js';
       s1.onload = () => {
         const s2 = document.createElement('script');
         s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
         s2.onload = () => {
-          if (window.html2canvas && (window.jspdf || window.jsPDF)) resolve();
+          if (window.htmlToImage && (window.jspdf || window.jsPDF)) resolve();
           else reject(new Error('PDF libs failed to initialise'));
         };
         s2.onerror = () => reject(new Error('Failed to load jsPDF'));
         document.head.appendChild(s2);
       };
-      s1.onerror = () => reject(new Error('Failed to load html2canvas'));
+      s1.onerror = () => reject(new Error('Failed to load html-to-image'));
       document.head.appendChild(s1);
     });
     return _pdfLibsPromise;
@@ -993,13 +995,18 @@
       setTimeout(resolve, 2000);
     });
 
-    const canvas = await window.html2canvas(wrapper, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
+    // Capture using html-to-image (supports oklch, lab, color() functions).
+    // htmlToImage.toCanvas returns a Promise<HTMLCanvasElement>.
+    const canvas = await window.htmlToImage.toCanvas(wrapper, {
+      pixelRatio: 2,
       backgroundColor: '#ffffff',
-      logging: false,
-      windowWidth: 820
+      cacheBust: true,
+      width: 820,
+      style: {
+        // Ensure the captured wrapper renders at its intended width even though
+        // it's positioned off-screen.
+        transform: 'none'
+      }
     });
 
     wrapper.remove();
