@@ -123,3 +123,52 @@ button { background: none; border: 0; cursor: pointer; padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .unifer-computing-blur { filter: saturate(0.85); }
 }
+
+/* Stage 6A: low-result banner shown at top of matches list when < 3 results. */
+.low-results-banner {
+  background: var(--amber-soft, #fff7e6);
+  border: 1px solid var(--amber-edge, #f5d493);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  animation: unifer-fade-in-down 260ms ease-out;
+}
+.low-results-inner { display: flex; flex-direction: column; gap: 10px; }
+.low-results-headline {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.low-results-sub {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.low-results-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.low-results-action {
+  padding: 8px 14px;
+  background: white;
+  border: 1px solid var(--amber-edge, #f5d493);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease;
+}
+.low-results-action:hover {
+  background: var(--amber-edge, #f5d493);
+  transform: translateY(-1px);
+}
+@keyframes unifer-fade-in-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .low-results-banner { animation: none; }
+  .low-results-action { transition: none; }
+}
