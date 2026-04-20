@@ -124,16 +124,13 @@
       };
       const nameBlock = '<span style="display:inline-block;">' + (u.name || '—') + (u.confidence ? '<span style="display:inline-block;margin-left:6px;color:#0a8a7a;vertical-align:middle;font-size:14px;">✓</span>' : '') + '</span>';
       const uniRankLine = (typeof _rankingsLine === 'function') ? _rankingsLine(u.rankings || {}) : '';
-      const subjRanks = [];
-      if (u.subject) {
-        ['QS','THE','ARWU','CUG','Guardian'].forEach(function(k) {
-          if (u.subject[k] != null) subjRanks.push(k + ' #' + u.subject[k]);
-        });
-      }
-      const subjLine = subjRanks.join(' · ');
+      // Stage 7.6 — subject shape is { name, rank, total } from canonical selection
       const subjName = (u.subject && u.subject.name) ? u.subject.name : '';
+      const subjRank = (u.subject && u.subject.rank != null) ? u.subject.rank : null;
+      const subjTotal = (u.subject && u.subject.total != null) ? u.subject.total : null;
+      const subjLine = subjRank != null ? ('#' + subjRank + (subjTotal ? ' of ' + subjTotal : '')) : '';
       const hasUniRank = uniRankLine && uniRankLine !== '—' && uniRankLine.length > 0;
-      const hasSubjRank = subjLine.length > 0;
+      const hasSubjRank = subjRank != null;
       let rankingsHtml = '';
       if (hasUniRank) {
         rankingsHtml += '<div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:4px;">University rankings</div>';
