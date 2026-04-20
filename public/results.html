@@ -1418,11 +1418,11 @@ function buildCard(u, rank){
       </div>
 
       <div class="scores">
-        ${['country','course','institution'].map(k => `
+        ${['country','course','institution'].filter(k => u.scores[k] != null).map(k => `
           <div class="score">
             <div class="score-label">${k[0].toUpperCase()+k.slice(1)} match</div>
-            <div class="score-track"><div class="score-fill" data-w="${u.scores[k] ?? 0}" style="width:0"></div></div>
-            <div class="score-val">${u.scores[k] ?? '—'}%</div>
+            <div class="score-track"><div class="score-fill" data-w="${u.scores[k]}" style="width:0"></div></div>
+            <div class="score-val">${u.scores[k]}%</div>
           </div>`).join('')}
       </div>
 
