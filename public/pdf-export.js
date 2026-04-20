@@ -246,7 +246,7 @@
         const ct = margin + 23;
         const fa = pdfH - ft - footerH - 4;
         const ca = pdfH - ct - footerH - 4;
-        if (total <= fa * 1.05) return { count: 1, mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
+        if (total <= fa * 1.15) return { count: 1, mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
         return { count: 1 + Math.ceil((total - fa) / ca), mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
       }
       const rPlan = plan(rCanvas, true);
