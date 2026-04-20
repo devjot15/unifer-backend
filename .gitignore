@@ -130,4 +130,5 @@ dist
 .pnp.*
 
 # Replit debugger
-.breakpoints
+.breakpointspublic/v2/shared.js.backup-*
+.DS_Store
