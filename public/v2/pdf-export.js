@@ -115,13 +115,13 @@
       if (u.employ && u.employ.rate) moreRows.push(['Employment rate', u.employ.rate + '%']);
       if (u.employ && u.employ.salary) moreRows.push(['Median starting salary', _fmt$(u.employ.salary)]);
       if (u.cost && u.cost.living) moreRows.push(['Estimated living' + (u.city ? ' (' + u.city + ')' : ''), _fmt$(u.cost.living) + '/yr']);
-      const moreHtml = moreRows.length ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #d5dcdc;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:10.5px;">' + moreRows.map(r => '<div style="display:flex;gap:4px;"><span style="color:#7a8a8a;">' + r[0] + ':</span><span style="color:#1a2a2a;font-weight:500;">' + r[1] + '</span></div>').join('') + '</div>' : '';
+      const moreHtml = moreRows.length ? '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #d5dcdc;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:11px;">' + moreRows.map(r => '<div style="display:flex;gap:4px;"><span style="color:#7a8a8a;">' + r[0] + ':</span><span style="color:#1a2a2a;font-weight:500;">' + r[1] + '</span></div>').join('') + '</div>' : '';
       const scoreRow = (label, key) => {
         const v = sc[key] != null ? sc[key] : 0;
-        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><div style="width:82px;font-size:10.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:6px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:3px;"></div></div><div style="width:34px;text-align:right;font-size:11px;font-weight:600;color:#1a2a2a;">' + v + '%</div></div>';
+        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="width:96px;font-size:12px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:7px;background:#eef2f2;border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:4px;"></div></div><div style="width:40px;text-align:right;font-size:12.5px;font-weight:600;color:#1a2a2a;">' + v + '%</div></div>';
       };
-      const chipHtml = chips.length ? '<div style="margin-left:30px;display:flex;flex-wrap:wrap;gap:4px;">' + chips.map(c => '<span style="font-size:9.5px;color:#4a5a5a;background:#f3f5f5;padding:2px 7px;border-radius:999px;white-space:nowrap;"><span style="color:#7a8a8a;">' + c.k + ':</span> ' + c.v + '</span>').join('') + '</div>' : '';
-      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:18px 24px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="display:flex;gap:12px;align-items:flex-start;"><div style="flex:0 0 240px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><div style="width:22px;height:22px;border-radius:6px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:14px;font-weight:600;color:#1a2a2a;line-height:1.25;">' + (u.name || '—') + (u.confidence ? ' <span style="color:#0a8a7a;">✓</span>' : '') + '</div></div><div style="font-size:11.5px;color:#1a2a2a;margin-left:30px;margin-bottom:4px;">' + (u.course || '—') + '</div><div style="font-size:10.5px;color:#7a8a8a;margin-left:30px;margin-bottom:6px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div>' + chipHtml + '</div><div style="flex:0 0 200px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:9.5px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:4px;">Why this aligns</div><div style="font-size:11px;color:#4a5a5a;line-height:1.45;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
+      const chipHtml = chips.length ? '<div style="margin-left:32px;display:flex;flex-wrap:wrap;gap:5px;">' + chips.map(c => '<span style="font-size:10.5px;color:#4a5a5a;background:#f3f5f5;padding:3px 9px;border-radius:999px;white-space:nowrap;"><span style="color:#7a8a8a;">' + c.k + ':</span> ' + c.v + '</span>').join('') + '</div>' : '';
+      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:20px 26px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:148px;display:flex;flex-direction:column;justify-content:center;"><div style="display:flex;gap:14px;align-items:flex-start;"><div style="flex:0 0 260px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:15px;font-weight:600;color:#1a2a2a;line-height:1.25;">' + (u.name || '—') + (u.confidence ? ' <span style="color:#0a8a7a;">✓</span>' : '') + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:32px;margin-bottom:5px;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:32px;margin-bottom:10px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div>' + chipHtml + '</div><div style="flex:0 0 220px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
     }).join('');
     return '<div>' + cards + '</div>';
   }
@@ -129,7 +129,7 @@
   function _buildCompareHtml(results) {
     const actives = results.slice(0, 5);
     if (!actives.length) return '<div style="padding:20px;color:#7a8a8a;font-size:12px;">No universities to compare.</div>';
-    const headerCols = '<div style="display:flex;gap:8px;margin-bottom:14px;padding:0 4px;">' + actives.map((u, i) => '<div style="flex:1;min-width:0;border-top:3px solid ' + _COLORS[i] + ';padding-top:6px;"><div style="font-size:11px;font-weight:600;color:#1a2a2a;line-height:1.25;overflow:hidden;text-overflow:ellipsis;">' + (u.name || '—') + '</div><div style="font-size:9.5px;color:#7a8a8a;margin-top:2px;line-height:1.2;">' + (u.course || '') + '</div></div>').join('') + '</div>';
+    const headerCols = '<div style="display:flex;gap:10px;margin-bottom:26px;padding:0 4px;">' + actives.map((u, i) => '<div style="flex:1;min-width:0;border-top:3px solid ' + _COLORS[i] + ';padding-top:12px;min-height:48px;"><div style="font-size:12px;font-weight:600;color:#1a2a2a;line-height:1.3;overflow:hidden;text-overflow:ellipsis;">' + (u.name || '—') + '</div><div style="font-size:10.5px;color:#7a8a8a;margin-top:3px;line-height:1.25;">' + (u.course || '') + '</div></div>').join('') + '</div>';
     const tableRows = [
       ['Tuition / yr', u => u && u.tuition != null ? _fmt$(u.tuition) : '—', u => u && u.tuition != null],
       ['Duration', u => u && u.duration ? u.duration : '—', u => u && u.duration],
@@ -142,14 +142,14 @@
       ['Acceptance rate', u => (u && u.stats && u.stats.acceptance) ? u.stats.acceptance + '%' : '—', u => u && u.stats && u.stats.acceptance != null]
     ];
     const vis = tableRows.filter(r => actives.some(u => r[2](u)));
-    const tableHtml = vis.length ? '<div style="margin-bottom:16px;"><div style="font-size:10px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">A · Side-by-side facts</div><table style="width:100%;border-collapse:collapse;font-size:10.5px;">' + vis.map(r => '<tr style="border-bottom:1px solid #eef2f2;"><td style="padding:5px 6px;color:#4a5a5a;width:32%;font-weight:500;">' + r[0] + '</td>' + actives.map(u => '<td style="padding:5px 6px;color:#1a2a2a;">' + r[1](u) + '</td>').join('') + '</tr>').join('') + '</table></div>' : '';
+    const tableHtml = vis.length ? '<div style="margin-bottom:26px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">A · Side-by-side facts</div><table style="width:100%;border-collapse:collapse;font-size:12px;">' + vis.map(r => '<tr style="border-bottom:1px solid #eef2f2;"><td style="padding:10px 10px;color:#4a5a5a;width:32%;font-weight:500;">' + r[0] + '</td>' + actives.map(u => '<td style="padding:10px 10px;color:#1a2a2a;">' + r[1](u) + '</td>').join('') + '</tr>').join('') + '</table></div>' : '';
     const groups = [['Country match', 'country'], ['Course match', 'course'], ['Institution match', 'institution']];
-    const breakdownHtml = '<div style="margin-bottom:16px;"><div style="font-size:10px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">B · Score breakdown</div>' + groups.map(g => {
+    const breakdownHtml = '<div style="margin-bottom:26px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">B · Score breakdown</div>' + groups.map(g => {
       const rows = actives.map((u, i) => {
         const v = (u.scores && u.scores[g[1]] != null) ? u.scores[g[1]] : 0;
-        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><div style="width:32%;font-size:10px;color:#4a5a5a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (u.name || '—') + '</div><div style="flex:1;height:5px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + _COLORS[i] + ';"></div></div><div style="width:26px;text-align:right;font-size:10px;font-weight:600;color:#1a2a2a;">' + v + '</div></div>';
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><div style="width:32%;font-size:11.5px;color:#4a5a5a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (u.name || '—') + '</div><div style="flex:1;height:6px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + _COLORS[i] + ';"></div></div><div style="width:32px;text-align:right;font-size:11.5px;font-weight:600;color:#1a2a2a;">' + v + '</div></div>';
       }).join('');
-      return '<div style="margin-bottom:10px;"><div style="font-size:10.5px;font-weight:600;color:#1a2a2a;margin-bottom:4px;">' + g[0] + '</div>' + rows + '</div>';
+      return '<div style="margin-bottom:20px;"><div style="font-size:12.5px;font-weight:600;color:#1a2a2a;margin-bottom:8px;">' + g[0] + '</div>' + rows + '</div>';
     }).join('') + '</div>';
     const dims = [['Research strength', 'research'], ['Teaching quality', 'teaching'], ['Employability', 'employability'], ['International diversity', 'diversity'], ['Prestige', 'prestige'], ['Selectivity', 'selectivity']];
     function _getDimVal(u, k) {
@@ -164,8 +164,8 @@
       const points = actives.map((u, i) => { const v = _getDimVal(u, d[1]); return v == null ? null : { u: u, i: i, x: v }; }).filter(Boolean);
       return points.length === 0 ? null : { name: d[0], points: points };
     }).filter(Boolean);
-    const stripsHtml = stripsArr.length ? '<div><div style="font-size:10px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:600;color:#1a2a2a;margin-bottom:4px;">' + s.name + '</div><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:9px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">weak</span><div style="flex:1;position:relative;height:18px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:3px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;background:' + _COLORS[p.i] + ';border:1.5px solid white;border-radius:50%;"></div>').join('') + '</div><span style="font-size:9px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">strong</span></div></div>').join('') + '</div>' : '';
-    const hint = '<div style="font-size:10px;color:#7a8a8a;margin-bottom:10px;font-style:italic;">All three visualisations show the same 5 universities. Colors are consistent across sections.</div>';
+    const stripsHtml = stripsArr.length ? '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:600;color:#1a2a2a;margin-bottom:8px;">' + s.name + '</div><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">weak</span><div style="flex:1;position:relative;height:24px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:4px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;background:' + _COLORS[p.i] + ';border:2px solid white;border-radius:50%;"></div>').join('') + '</div><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">strong</span></div></div>').join('') + '</div>' : '';
+    const hint = '<div style="font-size:11px;color:#7a8a8a;margin-bottom:16px;font-style:italic;">All three visualisations show the same 5 universities. Colors are consistent across sections.</div>';
     return hint + headerCols + tableHtml + breakdownHtml + stripsHtml;
   }
 
@@ -180,7 +180,7 @@
 
   async function _captureWrapperAsCanvas(w) {
     await new Promise(r => setTimeout(r, 150));
-    return window.htmlToImage.toCanvas(w, { pixelRatio: 2, backgroundColor: '#ffffff', cacheBust: true, skipFonts: true });
+    return window.htmlToImage.toCanvas(w, { pixelRatio: 1.5, backgroundColor: '#ffffff', cacheBust: true, skipFonts: true });
   }
 
   window.UNIFER.downloadPdf = async function() {
@@ -300,7 +300,7 @@
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, slice.width, slice.height);
           ctx.drawImage(canvas, 0, -placed);
-          pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', margin, top, contentW, h);
+          pdf.addImage(slice.toDataURL('image/jpeg', 0.85), 'JPEG', margin, top, contentW, h);
           placed += px;
         }
       }
