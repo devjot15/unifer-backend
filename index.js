@@ -133,6 +133,87 @@ const SUBJECT_FIELD_MAP = {
   "hospitality, tourism & service industry":   "hospitality, tourism & service industry",
 };
 
+// Stage 7.5 — attaches canonical subject rank to top-5 results (mutates in place).
+// Called after top-5 slice in both primary and fallback paths.
+// University rankings are attached in-loop via universityRankMap.
+async function attachCanonicalSubject(results, answers, supabase) {
+  if (!Array.isArray(results) || results.length === 0) return results;
+
+  const taxonomyField = SUBJECT_FIELD_MAP[answers.field];
+  if (!taxonomyField) return results;
+
+  // 1. Candidate subject_ids for student's field
+  const { data: candidates, error: candErr } = await supabase
+    .from('subject_index')
+    .select('id, sub_field')
+    .eq('field', taxonomyField);
+  if (candErr || !candidates || candidates.length === 0) {
+    console.log('[rankings] no subject_index candidates for', taxonomyField);
+    return results;
+  }
+
+  // 2. Subject ranks for just these 5 unis (not the whole 70k-row view)
+  const uniIds = results.map(r => r._components && r._components.universityId).filter(Boolean);
+  if (uniIds.length === 0) return results;
+
+  const { data: subjRanksData } = await supabase
+    .from('subject_ranks')
+    .select('university_id, subject_id, rank_position, total_ranked')
+    .in('university_id', uniIds);
+
+  const subjRankByKey = {};
+  if (subjRanksData) {
+    for (const r of subjRanksData) {
+      subjRankByKey[`${r.university_id}:${r.subject_id}`] =
+        { rank: r.rank_position, total: r.total_ranked };
+    }
+  }
+
+  // 3. Pick canonical subject_id
+  let canonical = null;
+
+  // 3a. Student picked sub_field → use it directly
+  if (answers.sub_field) {
+    const direct = candidates.find(c => c.sub_field === answers.sub_field);
+    if (direct) canonical = { id: direct.id, sub_field: direct.sub_field };
+  }
+
+  // 3b. Else → pick by coverage across top-5; tie-break by avg total_ranked
+  if (!canonical) {
+    let best = null;
+    for (const c of candidates) {
+      let coverage = 0, totalSum = 0;
+      for (const uid of uniIds) {
+        const data = subjRankByKey[`${uid}:${c.id}`];
+        if (data != null) { coverage++; totalSum += data.total; }
+      }
+      const avgTotal = coverage > 0 ? totalSum / coverage : 0;
+      if (!best || coverage > best.coverage ||
+          (coverage === best.coverage && avgTotal > best.avgTotal)) {
+        best = { id: c.id, sub_field: c.sub_field, coverage, avgTotal };
+      }
+    }
+    if (best && best.coverage > 0) canonical = { id: best.id, sub_field: best.sub_field };
+  }
+
+  if (!canonical) {
+    console.log('[rankings] no canonical subject with coverage');
+    return results;
+  }
+  console.log('[rankings] canonical subject:', canonical.sub_field, '(id=' + canonical.id + ')');
+
+  // 4. Attach subject rank to each result
+  for (const r of results) {
+    const uid = r._components && r._components.universityId;
+    if (!uid) continue;
+    const data = subjRankByKey[`${uid}:${canonical.id}`];
+    if (data) {
+      r.subject = { name: canonical.sub_field, rank: data.rank, total: data.total };
+    }
+  }
+  return results;
+}
+
 const GLOBAL_FW_BASE_WEIGHTS = { QS: 5.25, THE: 4.96, ARWU: 4.97, CUG: 4.86, Guardian: 4.81, GUG: 4.81 };
 
 const GLOBAL_FW_NAME_MAP = {
@@ -1226,6 +1307,19 @@ app.post("/recommend", async (req, res) => {
       });
     }
 
+    // Stage 7.5 — per-framework university rank positions (QS #40, THE #45, ARWU #53, etc)
+    const { data: uniRankData } = await supabase
+      .from('university_ranking_positions')
+      .select('university_id, system_short_name, rank_position');
+
+    const universityRankMap = {};
+    if (uniRankData) {
+      for (const r of uniRankData) {
+        if (!universityRankMap[r.university_id]) universityRankMap[r.university_id] = {};
+        universityRankMap[r.university_id][r.system_short_name] = r.rank_position;
+      }
+    }
+
     const countryMap = {};
     if (countryData) {
       countryData.forEach((c) => {
@@ -1729,6 +1823,8 @@ app.post("/recommend", async (req, res) => {
       return {
         country: country.name,
         university: university.name,
+        rankings: universityRankMap[university.id] || null,
+        subject: null,
         course: course.name,
         duration: course.duration_years ?? null,
         tuition_usd: course.tuition_usd ?? null,
@@ -1742,6 +1838,7 @@ app.post("/recommend", async (req, res) => {
         },
         explanation,
         _components: {
+          universityId: university.id,
           compositeScore: compositeScore,
           subScore: subScore,
           subScoreBreakdown: subScoreBreakdown,
@@ -1783,6 +1880,8 @@ app.post("/recommend", async (req, res) => {
         return true;
       })
       .slice(0, 5);
+
+    await attachCanonicalSubject(primaryTop, answers, supabase);
 
     if (primaryTop.length < 5 && softDurationCourses.length > 0) {
       const excludedUniversities = new Set(primaryTop.map(p => p.university));
@@ -1930,6 +2029,7 @@ app.post("/recommend", async (req, res) => {
         });
 
       const combined = [...primaryTop, ...softDeduped].slice(0, 5);
+      await attachCanonicalSubject(combined, answers, supabase);
       return res.json(combined);
     }
 
