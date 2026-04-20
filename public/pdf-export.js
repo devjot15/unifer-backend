@@ -120,7 +120,7 @@
       const moreHtml = moreRows.length ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e0e6e6;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:10.5px;">' + moreRows.map(r => '<div style="display:flex;gap:5px;"><span style="color:#7a8a8a;">' + r[0] + ':</span><span style="color:#1a2a2a;font-weight:500;">' + r[1] + '</span></div>').join('') + '</div>' : '';
       const scoreRow = (label, key) => {
         const v = sc[key] != null ? sc[key] : 0;
-        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;"><div style="width:108px;font-size:12.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:10px;background:#d5dcdc;border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:5px;"></div></div><div style="width:44px;text-align:right;font-size:13px;font-weight:700;color:#1a2a2a;">' + v + '%</div></div>';
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;"><div style="width:108px;font-size:12.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:10px;background:#d5dcdc;border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:5px;"></div></div><div style="width:44px;text-align:right;font-size:13px;font-weight:700;color:#1a2a2a;">' + v + '%</div></div>';
       };
       // Stage 7.8 — keep tick glued to last word of uni name (prevents drop to next line)
       const _rawName = u.name || '—';
@@ -154,8 +154,8 @@
       if (!hasUniRank && !hasSubjRank) {
         rankingsHtml = '<div style="font-size:11px;color:#7a8a8a;font-style:italic;">Ranking data unavailable</div>';
       }
-      const whyHtml = '<div style="margin-top:6px;padding-top:7px;border-top:1px dashed #e0e6e6;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:5px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;max-height:3.3em;">' + (u.why || '') + '</div></div>';
-      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:10px 20px;margin-bottom:6px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 230px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;">' + rankingsHtml + '</div></div>' + whyHtml + moreHtml + '</div>';
+      const whyHtml = '<div style="margin-top:10px;padding-top:9px;border-top:1px dashed #e0e6e6;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:5px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;max-height:5em;">' + (u.why || '') + '</div></div>';
+      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:14px 22px;margin-bottom:10px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 230px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;">' + rankingsHtml + '</div></div>' + whyHtml + moreHtml + '</div>';
     }).join('');
     const hasAnyConfidence = results.slice(0, 5).some(function(u) { return u.confidence; });
     const confidenceLegend = (showLegend && hasAnyConfidence) ? '<div style="margin-top:10px;font-size:10px;color:#7a8a8a;font-style:italic;text-align:left;"><span style="color:#0a8a7a;font-style:normal;font-weight:600;">✓</span> = appears in all major ranking frameworks</div>' : '';
@@ -273,15 +273,20 @@
       const title = firstName ? firstName + "'s UNIFER shortlist" : 'Your UNIFER shortlist';
       const subtitle = 'Personalised study abroad recommendations · ' + _formatDate(new Date());
 
+      // Stage 7.10 — adaptive scale-to-fit. Always returns count:1 (one page per section).
+      // If content fits naturally at full width: render at full width, natural height.
+      // If content is too tall: scale down by height, center horizontally. Never clipped, never split.
       function plan(canvas, sumFirst) {
-        const mm = contentW / canvas.width;
-        const total = canvas.height * mm;
-        const ft = sumFirst ? margin + 41 : margin + 23;
-        const ct = margin + 23;
-        const fa = pdfH - ft - footerH - 4;
-        const ca = pdfH - ct - footerH - 4;
-        if (total <= fa * 1.30) return { count: 1, mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
-        return { count: 1 + Math.ceil((total - fa) / ca), mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
+        const top = sumFirst ? margin + 41 : margin + 23;
+        const available = pdfH - top - footerH - 4;
+        const scaleByWidth = contentW / canvas.width;
+        const naturalHeight = canvas.height * scaleByWidth;
+        if (naturalHeight <= available) {
+          return { count: 1, x: margin, top: top, width: contentW, height: naturalHeight };
+        }
+        const scaleByHeight = available / canvas.height;
+        const scaledWidth = canvas.width * scaleByHeight;
+        return { count: 1, x: margin + (contentW - scaledWidth) / 2, top: top, width: scaledWidth, height: available };
       }
       const rPlan = plan(rCanvas, true);
       const cAbPlan = plan(cAbCanvas, false);
@@ -338,27 +343,12 @@
         pdf.text('Generated by UNIFER · unifer.app', pdfW - margin, pdfH - footerH + 5, { align: 'right' });
       }
 
+      // Stage 7.10 — simple render, no slicing. plan() guarantees count:1 and proper scale.
       function paged(canvas, p, start, sumFirst) {
-        let placed = 0;
-        for (let i = 0; i < p.count; i++) {
-          const pn = start + i;
-          if (pn > 1) pdf.addPage();
-          const first = (i === 0);
-          chrome(pn, first && sumFirst);
-          const top = first ? p.ft : p.ct;
-          const avail = first ? p.fa : p.ca;
-          const px = Math.min(avail / p.mm, canvas.height - placed);
-          const h = px * p.mm;
-          const slice = document.createElement('canvas');
-          slice.width = canvas.width;
-          slice.height = Math.max(1, Math.floor(px));
-          const ctx = slice.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, slice.width, slice.height);
-          ctx.drawImage(canvas, 0, -placed);
-          pdf.addImage(slice.toDataURL('image/jpeg', 0.80), 'JPEG', margin, top, contentW, h);
-          placed += px;
-        }
+        const pn = start;
+        if (pn > 1) pdf.addPage();
+        chrome(pn, sumFirst);
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', p.x, p.top, p.width, p.height);
       }
 
       paged(rCanvas, rPlan, 1, true);
