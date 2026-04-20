@@ -126,7 +126,7 @@
     return '<div>' + cards + '</div>';
   }
 
-  function _buildCompareHtml(results) {
+  function _buildCompareAB(results) {
     const actives = results.slice(0, 5);
     if (!actives.length) return '<div style="padding:20px;color:#7a8a8a;font-size:12px;">No universities to compare.</div>';
     const headerCols = '<div style="display:flex;gap:10px;margin-bottom:26px;padding:0 4px;">' + actives.map((u, i) => '<div style="flex:1;min-width:0;border-top:3px solid ' + _COLORS[i] + ';padding-top:12px;min-height:48px;"><div style="font-size:12px;font-weight:600;color:#1a2a2a;line-height:1.3;overflow:hidden;text-overflow:ellipsis;">' + (u.name || '—') + '</div><div style="font-size:10.5px;color:#7a8a8a;margin-top:3px;line-height:1.25;">' + (u.course || '') + '</div></div>').join('') + '</div>';
@@ -142,15 +142,23 @@
       ['Acceptance rate', u => (u && u.stats && u.stats.acceptance) ? u.stats.acceptance + '%' : '—', u => u && u.stats && u.stats.acceptance != null]
     ];
     const vis = tableRows.filter(r => actives.some(u => r[2](u)));
-    const tableHtml = vis.length ? '<div style="margin-bottom:26px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">A · Side-by-side facts</div><table style="width:100%;border-collapse:collapse;font-size:12px;">' + vis.map(r => '<tr style="border-bottom:1px solid #eef2f2;"><td style="padding:10px 10px;color:#4a5a5a;width:32%;font-weight:500;">' + r[0] + '</td>' + actives.map(u => '<td style="padding:10px 10px;color:#1a2a2a;">' + r[1](u) + '</td>').join('') + '</tr>').join('') + '</table></div>' : '';
+    const tableHtml = vis.length ? '<div style="margin-bottom:28px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">A · Side-by-side facts</div><table style="width:100%;border-collapse:collapse;font-size:12px;">' + vis.map(r => '<tr style="border-bottom:1px solid #eef2f2;"><td style="padding:11px 10px;color:#4a5a5a;width:32%;font-weight:500;">' + r[0] + '</td>' + actives.map(u => '<td style="padding:11px 10px;color:#1a2a2a;">' + r[1](u) + '</td>').join('') + '</tr>').join('') + '</table></div>' : '';
     const groups = [['Country match', 'country'], ['Course match', 'course'], ['Institution match', 'institution']];
-    const breakdownHtml = '<div style="margin-bottom:26px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">B · Score breakdown</div>' + groups.map(g => {
+    const breakdownHtml = '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">B · Score breakdown</div>' + groups.map(g => {
       const rows = actives.map((u, i) => {
         const v = (u.scores && u.scores[g[1]] != null) ? u.scores[g[1]] : 0;
-        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><div style="width:32%;font-size:11.5px;color:#4a5a5a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (u.name || '—') + '</div><div style="flex:1;height:6px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + _COLORS[i] + ';"></div></div><div style="width:32px;text-align:right;font-size:11.5px;font-weight:600;color:#1a2a2a;">' + v + '</div></div>';
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;"><div style="width:32%;font-size:11.5px;color:#4a5a5a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (u.name || '—') + '</div><div style="flex:1;height:6px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + _COLORS[i] + ';"></div></div><div style="width:32px;text-align:right;font-size:11.5px;font-weight:600;color:#1a2a2a;">' + v + '</div></div>';
       }).join('');
-      return '<div style="margin-bottom:20px;"><div style="font-size:12.5px;font-weight:600;color:#1a2a2a;margin-bottom:8px;">' + g[0] + '</div>' + rows + '</div>';
+      return '<div style="margin-bottom:22px;"><div style="font-size:12.5px;font-weight:600;color:#1a2a2a;margin-bottom:10px;">' + g[0] + '</div>' + rows + '</div>';
     }).join('') + '</div>';
+    const hint = '<div style="font-size:11px;color:#7a8a8a;margin-bottom:18px;font-style:italic;">All three visualisations show the same 5 universities. Colors are consistent across sections.</div>';
+    return hint + headerCols + tableHtml + breakdownHtml;
+  }
+
+  function _buildCompareC(results) {
+    const actives = results.slice(0, 5);
+    if (!actives.length) return '<div style="padding:20px;color:#7a8a8a;font-size:12px;">No universities to compare.</div>';
+    const headerCols = '<div style="display:flex;gap:10px;margin-bottom:26px;padding:0 4px;">' + actives.map((u, i) => '<div style="flex:1;min-width:0;border-top:3px solid ' + _COLORS[i] + ';padding-top:12px;min-height:48px;"><div style="font-size:12px;font-weight:600;color:#1a2a2a;line-height:1.3;overflow:hidden;text-overflow:ellipsis;">' + (u.name || '—') + '</div><div style="font-size:10.5px;color:#7a8a8a;margin-top:3px;line-height:1.25;">' + (u.course || '') + '</div></div>').join('') + '</div>';
     const dims = [['Research strength', 'research'], ['Teaching quality', 'teaching'], ['Employability', 'employability'], ['International diversity', 'diversity'], ['Prestige', 'prestige'], ['Selectivity', 'selectivity']];
     function _getDimVal(u, k) {
       if (!u) return null;
@@ -164,9 +172,13 @@
       const points = actives.map((u, i) => { const v = _getDimVal(u, d[1]); return v == null ? null : { u: u, i: i, x: v }; }).filter(Boolean);
       return points.length === 0 ? null : { name: d[0], points: points };
     }).filter(Boolean);
-    const stripsHtml = stripsArr.length ? '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:600;color:#1a2a2a;margin-bottom:8px;">' + s.name + '</div><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">weak</span><div style="flex:1;position:relative;height:24px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:4px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;background:' + _COLORS[p.i] + ';border:2px solid white;border-radius:50%;"></div>').join('') + '</div><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">strong</span></div></div>').join('') + '</div>' : '';
-    const hint = '<div style="font-size:11px;color:#7a8a8a;margin-bottom:16px;font-style:italic;">All three visualisations show the same 5 universities. Colors are consistent across sections.</div>';
-    return hint + headerCols + tableHtml + breakdownHtml + stripsHtml;
+    const stripsHtml = stripsArr.length ? '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:14px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:24px;"><div style="font-size:12px;font-weight:600;color:#1a2a2a;margin-bottom:10px;">' + s.name + '</div><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">weak</span><div style="flex:1;position:relative;height:26px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:4px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;background:' + _COLORS[p.i] + ';border:2px solid white;border-radius:50%;"></div>').join('') + '</div><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">strong</span></div></div>').join('') + '</div>' : '';
+    const hint = '<div style="font-size:11px;color:#7a8a8a;margin-bottom:18px;font-style:italic;">Each strip plots all 5 universities on one axis from weak to strong. Useful for spotting clusters and outliers at a glance.</div>';
+    return hint + headerCols + stripsHtml;
+  }
+
+  function _buildCompareHtml(results) {
+    return _buildCompareAB(results) + _buildCompareC(results);
   }
 
   function _buildPrintDom(results, pageType) {
