@@ -180,7 +180,7 @@
     ];
     const vis = tableRows.filter(r => actives.some(u => r[2](u)));
     const tableHtml = vis.length ? '<div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:14px;">A · Side-by-side facts</div><table style="width:100%;border-collapse:collapse;font-size:12px;">' + vis.map(r => '<tr style="border-bottom:1px solid #eef2f2;"><td style="padding:18px 12px;color:#4a5a5a;width:32%;font-weight:500;">' + r[0] + '</td>' + actives.map(u => '<td style="padding:18px 12px;color:#1a2a2a;">' + r[1](u) + '</td>').join('') + '</tr>').join('') + '</table></div>' : '';
-    const groups = [['Country match', 'country'], ['Course match', 'course'], ['Institution match', 'institution']];
+    const groups = [['Country match', 'country'], ['Course match', 'course'], ['Institution match', 'institution']].filter(function(g){ return actives.some(function(u){ return u && u.scores && u.scores[g[1]] != null; }); });
     const breakdownHtml = '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">B · Score breakdown</div>' + groups.map(g => {
       const rows = actives.map((u, i) => {
         const v = (u.scores && u.scores[g[1]] != null) ? u.scores[g[1]] : 0;

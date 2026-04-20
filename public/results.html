@@ -2187,7 +2187,7 @@ function renderBreakdown(){
     ['Country match', 'country'],
     ['Course match',  'course'],
     ['Institution match', 'institution']
-  ];
+  ].filter(([, key]) => actives.some(id => { const u = byId(id); return u && u.scores && u.scores[key] != null; }));
   $('#breakdown').innerHTML = groups.map(([label, key]) => `
     <div class="bd-group">
       <div class="bd-title">${label}</div>
