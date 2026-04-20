@@ -123,11 +123,10 @@
       const moreHtml = moreRows.length ? '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #d5dcdc;display:flex;flex-wrap:wrap;gap:5px 18px;font-size:11px;">' + moreRows.map(r => '<div style="display:flex;gap:5px;"><span style="color:#7a8a8a;">' + r[0] + ':</span><span style="color:#1a2a2a;font-weight:500;">' + r[1] + '</span></div>').join('') + '</div>' : '';
       const scoreRow = (label, key) => {
         const v = sc[key] != null ? sc[key] : 0;
-        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;"><div style="width:108px;font-size:12.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:8px;background:#eef2f2;border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:4px;"></div></div><div style="width:44px;text-align:right;font-size:13px;font-weight:600;color:#1a2a2a;">' + v + '%</div></div>';
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;"><div style="width:108px;font-size:12.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:10px;background:#d5dcdc;border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:4px;"></div></div><div style="width:44px;text-align:right;font-size:13px;font-weight:700;color:#1a2a2a;">' + v + '%</div></div>';
       };
-      const chipHtml = chips.length ? '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #eef2f2;display:flex;flex-wrap:wrap;gap:8px;">' + chips.map(c => '<span style="font-size:10.5px;color:#4a5a5a;background:#f3f5f5;padding:3px 11px;border-radius:999px;white-space:nowrap;"><span style="color:#7a8a8a;">' + c.k + ':</span> ' + c.v + '</span>').join('') + '</div>' : '';
       const nameBlock = '<span style="display:inline-block;">' + (u.name || '—') + (u.confidence ? '<span style="display:inline-block;margin-left:6px;color:#0a8a7a;vertical-align:middle;font-size:14px;">✓</span>' : '') + '</span>';
-      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:18px 26px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:128px;"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 270px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + chipHtml + moreHtml + '</div>';
+      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:18px 26px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:128px;"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 270px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
     }).join('');
     const hasAnyConfidence = results.slice(0, 5).some(u => u.confidence);
     const legend = (showLegend && hasAnyConfidence) ? '<div style="margin-top:10px;font-size:10px;color:#7a8a8a;font-style:italic;text-align:left;"><span style="color:#0a8a7a;font-style:normal;font-weight:600;">✓</span> = appears in all major ranking frameworks</div>' : '';
@@ -180,7 +179,7 @@
       const points = actives.map((u, i) => { const v = _getDimVal(u, d[1]); return v == null ? null : { u: u, i: i, x: v }; }).filter(Boolean);
       return points.length === 0 ? null : { name: d[0], points: points };
     }).filter(Boolean);
-    const stripsHtml = stripsArr.length ? '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:14px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:50px;"><div style="font-size:14px;font-weight:600;color:#1a2a2a;margin-bottom:14px;">' + s.name + '</div><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">weak</span><div style="flex:1;position:relative;height:42px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:4px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:18px;height:18px;background:' + _COLORS[p.i] + ';border:2px solid white;border-radius:50%;"></div>').join('') + '</div><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">strong</span></div></div>').join('') + '</div>' : '';
+    const stripsHtml = stripsArr.length ? '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:14px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:50px;"><div style="font-size:14px;font-weight:600;color:#1a2a2a;margin-bottom:14px;">' + s.name + '</div><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">weak</span><div style="flex:1;position:relative;height:34px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:4px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;background:' + _COLORS[p.i] + ';border:2px solid white;border-radius:50%;"></div>').join('') + '</div><span style="font-size:10px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">strong</span></div></div>').join('') + '</div>' : '';
     const hint = '<div style="font-size:11px;color:#7a8a8a;margin-bottom:18px;font-style:italic;">Each strip plots all 5 universities on one axis from weak to strong. Useful for spotting clusters and outliers at a glance.</div>';
     return hint + headerCols + stripsHtml;
   }
@@ -194,8 +193,6 @@
     w.className = 'unifer-pdf-print';
     w.style.cssText = "position:fixed;top:0;left:0;width:780px;background:white;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a2a2a;padding:0;box-sizing:border-box;z-index:-1;pointer-events:none;";
     w.innerHTML = pageType === 'ranked' ? _buildRankedHtml(results, 0, 5, true)
-      : pageType === 'ranked1' ? _buildRankedHtml(results, 0, 3, false)
-      : pageType === 'ranked2' ? _buildRankedHtml(results, 3, 5, true)
       : pageType === 'compareAB' ? _buildCompareAB(results)
       : pageType === 'compareC' ? _buildCompareC(results)
       : _buildCompareHtml(results);
@@ -225,13 +222,9 @@
       const firstName = (answers.first_name || '').trim();
       const filterSummary = _formatFilterSummary(answers);
 
-      const r1Wrap = _buildPrintDom(results, 'ranked1');
-      const r1Canvas = await _captureWrapperAsCanvas(r1Wrap);
-      r1Wrap.remove();
-
-      const r2Wrap = _buildPrintDom(results, 'ranked2');
-      const r2Canvas = await _captureWrapperAsCanvas(r2Wrap);
-      r2Wrap.remove();
+      const rWrap = _buildPrintDom(results, 'ranked');
+      const rCanvas = await _captureWrapperAsCanvas(rWrap);
+      rWrap.remove();
 
       const cAbWrap = _buildPrintDom(results, 'compareAB');
       const cAbCanvas = await _captureWrapperAsCanvas(cAbWrap);
@@ -260,11 +253,10 @@
         if (total <= fa * 1.15) return { count: 1, mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
         return { count: 1 + Math.ceil((total - fa) / ca), mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
       }
-      const r1Plan = plan(r1Canvas, true);
-      const r2Plan = plan(r2Canvas, false);
+      const rPlan = plan(rCanvas, true);
       const cAbPlan = plan(cAbCanvas, false);
       const cCPlan = plan(cCCanvas, false);
-      const totalPages = r1Plan.count + r2Plan.count + cAbPlan.count + cCPlan.count;
+      const totalPages = rPlan.count + cAbPlan.count + cCPlan.count;
 
       function chrome(pn, drawSum) {
         pdf.saveGraphicsState();
@@ -346,10 +338,9 @@
         }
       }
 
-      paged(r1Canvas, r1Plan, 1, true);
-      paged(r2Canvas, r2Plan, r1Plan.count + 1, false);
-      paged(cAbCanvas, cAbPlan, r1Plan.count + r2Plan.count + 1, false);
-      paged(cCCanvas, cCPlan, r1Plan.count + r2Plan.count + cAbPlan.count + 1, false);
+      paged(rCanvas, rPlan, 1, true);
+      paged(cAbCanvas, cAbPlan, rPlan.count + 1, false);
+      paged(cCCanvas, cCPlan, rPlan.count + cAbPlan.count + 1, false);
       pdf.save('unifer-shortlist-' + _slugify(firstName) + '-' + _isoDate(new Date()) + '.pdf');
     } catch (err) {
       console.error('[unifer] downloadPdf failed', err);
