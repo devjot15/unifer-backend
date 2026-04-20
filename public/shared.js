@@ -72,8 +72,8 @@
 
   // ----- View registry -----
   const VIEWS = {
-    'quiz':    '/v2/quiz.html',
-    'results': '/v2/results.html',
+    'quiz':    '/quiz.html',
+    'results': '/results.html',
   };
 
   // ----- Routing -----
