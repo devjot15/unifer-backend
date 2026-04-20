@@ -110,25 +110,46 @@
       const rank = globalIdx + 1;
       const color = _COLORS[globalIdx] || '#0a8a7a';
       const sc = u.scores || {};
-      const chips = Array.isArray(u.chips) ? u.chips : [];
       const moreRows = [];
-      if (u.rankings) moreRows.push(['University rankings', _rankingsLine(u.rankings)]);
-      if (u.subject && u.subject.name) moreRows.push(['Subject (' + u.subject.name + ')', u.subject.QS != null ? 'QS #' + u.subject.QS : '—']);
       if (u.stats && u.stats.medianGPA) moreRows.push(['Median admitted GPA', String(u.stats.medianGPA)]);
       if (u.stats && u.stats.gre) moreRows.push(['GRE (Q) typical', String(u.stats.gre)]);
       if (u.stats && u.stats.acceptance) moreRows.push(['Acceptance rate', u.stats.acceptance + '%']);
       if (u.employ && u.employ.rate) moreRows.push(['Employment rate', u.employ.rate + '%']);
       if (u.employ && u.employ.salary) moreRows.push(['Median starting salary', _fmt$(u.employ.salary)]);
       if (u.cost && u.cost.living) moreRows.push(['Estimated living' + (u.city ? ' (' + u.city + ')' : ''), _fmt$(u.cost.living) + '/yr']);
-      const moreHtml = moreRows.length ? '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #d5dcdc;display:flex;flex-wrap:wrap;gap:5px 18px;font-size:11px;">' + moreRows.map(r => '<div style="display:flex;gap:5px;"><span style="color:#7a8a8a;">' + r[0] + ':</span><span style="color:#1a2a2a;font-weight:500;">' + r[1] + '</span></div>').join('') + '</div>' : '';
+      const moreHtml = moreRows.length ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e0e6e6;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:10.5px;">' + moreRows.map(r => '<div style="display:flex;gap:5px;"><span style="color:#7a8a8a;">' + r[0] + ':</span><span style="color:#1a2a2a;font-weight:500;">' + r[1] + '</span></div>').join('') + '</div>' : '';
       const scoreRow = (label, key) => {
         const v = sc[key] != null ? sc[key] : 0;
-        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;"><div style="width:108px;font-size:12.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:10px;background:#d5dcdc;border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:4px;"></div></div><div style="width:44px;text-align:right;font-size:13px;font-weight:700;color:#1a2a2a;">' + v + '%</div></div>';
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;"><div style="width:108px;font-size:12.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:10px;background:#d5dcdc;border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:5px;"></div></div><div style="width:44px;text-align:right;font-size:13px;font-weight:700;color:#1a2a2a;">' + v + '%</div></div>';
       };
       const nameBlock = '<span style="display:inline-block;">' + (u.name || '—') + (u.confidence ? '<span style="display:inline-block;margin-left:6px;color:#0a8a7a;vertical-align:middle;font-size:14px;">✓</span>' : '') + '</span>';
-      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:18px 26px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:128px;"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 270px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
+      const uniRankLine = (typeof _rankingsLine === 'function') ? _rankingsLine(u.rankings || {}) : '';
+      const subjRanks = [];
+      if (u.subject) {
+        ['QS','THE','ARWU','CUG','Guardian'].forEach(function(k) {
+          if (u.subject[k] != null) subjRanks.push(k + ' #' + u.subject[k]);
+        });
+      }
+      const subjLine = subjRanks.join(' · ');
+      const subjName = (u.subject && u.subject.name) ? u.subject.name : '';
+      const hasUniRank = uniRankLine && uniRankLine !== '—' && uniRankLine.length > 0;
+      const hasSubjRank = subjLine.length > 0;
+      let rankingsHtml = '';
+      if (hasUniRank) {
+        rankingsHtml += '<div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:4px;">University rankings</div>';
+        rankingsHtml += '<div style="font-size:11.5px;color:#1a2a2a;line-height:1.5;' + (hasSubjRank ? 'margin-bottom:10px;' : '') + '">' + uniRankLine + '</div>';
+      }
+      if (hasSubjRank) {
+        rankingsHtml += '<div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:4px;">Subject' + (subjName ? ' · ' + subjName : '') + '</div>';
+        rankingsHtml += '<div style="font-size:11.5px;color:#1a2a2a;line-height:1.5;">' + subjLine + '</div>';
+      }
+      if (!hasUniRank && !hasSubjRank) {
+        rankingsHtml = '<div style="font-size:11px;color:#7a8a8a;font-style:italic;">Ranking data unavailable</div>';
+      }
+      const whyHtml = '<div style="margin-top:10px;padding-top:9px;border-top:1px dashed #e0e6e6;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:5px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;max-height:5em;">' + (u.why || '') + '</div></div>';
+      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:14px 22px;margin-bottom:10px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 230px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;">' + rankingsHtml + '</div></div>' + whyHtml + moreHtml + '</div>';
     }).join('');
-    const hasAnyConfidence = results.slice(0, 5).some(u => u.confidence);
+    const hasAnyConfidence = results.slice(0, 5).some(function(u) { return u.confidence; });
     const legend = (showLegend && hasAnyConfidence) ? '<div style="margin-top:10px;font-size:10px;color:#7a8a8a;font-style:italic;text-align:left;"><span style="color:#0a8a7a;font-style:normal;font-weight:600;">✓</span> = appears in all major ranking frameworks</div>' : '';
     return '<div>' + cards + legend + '</div>';
   }
@@ -250,7 +271,7 @@
         const ct = margin + 23;
         const fa = pdfH - ft - footerH - 4;
         const ca = pdfH - ct - footerH - 4;
-        if (total <= fa * 1.15) return { count: 1, mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
+        if (total <= fa * 1.30) return { count: 1, mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
         return { count: 1 + Math.ceil((total - fa) / ca), mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
       }
       const rPlan = plan(rCanvas, true);
@@ -259,13 +280,6 @@
       const totalPages = rPlan.count + cAbPlan.count + cCPlan.count;
 
       function chrome(pn, drawSum) {
-        pdf.saveGraphicsState();
-        pdf.setGState(new pdf.GState({ opacity: 0.05 }));
-        pdf.setTextColor(10, 138, 122);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(140);
-        pdf.text('unifer', pdfW / 2, pdfH / 2, { align: 'center', baseline: 'middle', angle: 20 });
-        pdf.restoreGraphicsState();
 
         if (logoDataUrl) {
           pdf.addImage(logoDataUrl, 'PNG', margin, margin, 27, 6);
