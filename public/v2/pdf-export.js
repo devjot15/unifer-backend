@@ -121,7 +121,7 @@
         return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="width:96px;font-size:12px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:7px;background:#eef2f2;border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:4px;"></div></div><div style="width:40px;text-align:right;font-size:12.5px;font-weight:600;color:#1a2a2a;">' + v + '%</div></div>';
       };
       const chipHtml = chips.length ? '<div style="margin-left:32px;display:flex;flex-wrap:wrap;gap:5px;">' + chips.map(c => '<span style="font-size:10.5px;color:#4a5a5a;background:#f3f5f5;padding:3px 9px;border-radius:999px;white-space:nowrap;"><span style="color:#7a8a8a;">' + c.k + ':</span> ' + c.v + '</span>').join('') + '</div>' : '';
-      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:20px 26px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:148px;display:flex;flex-direction:column;justify-content:center;"><div style="display:flex;gap:14px;align-items:flex-start;"><div style="flex:0 0 260px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:15px;font-weight:600;color:#1a2a2a;line-height:1.25;">' + (u.name || '—') + (u.confidence ? ' <span style="color:#0a8a7a;">✓</span>' : '') + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:32px;margin-bottom:5px;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:32px;margin-bottom:10px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div>' + chipHtml + '</div><div style="flex:0 0 220px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
+      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:20px 26px;margin-bottom:10px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:130px;display:flex;flex-direction:column;justify-content:center;"><div style="display:flex;gap:14px;align-items:flex-start;"><div style="flex:0 0 260px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:15px;font-weight:600;color:#1a2a2a;line-height:1.25;">' + (u.name || '—') + (u.confidence ? ' <span style="color:#0a8a7a;">✓</span>' : '') + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:32px;margin-bottom:5px;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:32px;margin-bottom:10px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div>' + chipHtml + '</div><div style="flex:0 0 220px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
     }).join('');
     return '<div>' + cards + '</div>';
   }
@@ -173,7 +173,10 @@
     const w = document.createElement('div');
     w.className = 'unifer-pdf-print';
     w.style.cssText = "position:fixed;top:0;left:0;width:780px;background:white;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a2a2a;padding:0;box-sizing:border-box;z-index:-1;pointer-events:none;";
-    w.innerHTML = pageType === 'ranked' ? _buildRankedHtml(results) : _buildCompareHtml(results);
+    w.innerHTML = pageType === 'ranked' ? _buildRankedHtml(results)
+      : pageType === 'compareAB' ? _buildCompareAB(results)
+      : pageType === 'compareC' ? _buildCompareC(results)
+      : _buildCompareHtml(results);
     document.body.appendChild(w);
     return w;
   }
@@ -204,9 +207,13 @@
       const rCanvas = await _captureWrapperAsCanvas(rWrap);
       rWrap.remove();
 
-      const cWrap = _buildPrintDom(results, 'compare');
-      const cCanvas = await _captureWrapperAsCanvas(cWrap);
-      cWrap.remove();
+      const cAbWrap = _buildPrintDom(results, 'compareAB');
+      const cAbCanvas = await _captureWrapperAsCanvas(cAbWrap);
+      cAbWrap.remove();
+
+      const cCWrap = _buildPrintDom(results, 'compareC');
+      const cCCanvas = await _captureWrapperAsCanvas(cCWrap);
+      cCWrap.remove();
 
       const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
       if (!jsPDFCtor) throw new Error('jsPDF not found');
@@ -220,7 +227,7 @@
       function plan(canvas, sumFirst) {
         const mm = contentW / canvas.width;
         const total = canvas.height * mm;
-        const ft = sumFirst ? margin + 30 : margin + 23;
+        const ft = sumFirst ? margin + 41 : margin + 23;
         const ct = margin + 23;
         const fa = pdfH - ft - footerH - 4;
         const ca = pdfH - ct - footerH - 4;
@@ -228,8 +235,9 @@
         return { count: 1 + Math.ceil((total - fa) / ca), mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
       }
       const rPlan = plan(rCanvas, true);
-      const cPlan = plan(cCanvas, false);
-      const totalPages = rPlan.count + cPlan.count;
+      const cAbPlan = plan(cAbCanvas, false);
+      const cCPlan = plan(cCCanvas, false);
+      const totalPages = rPlan.count + cAbPlan.count + cCPlan.count;
 
       function chrome(pn, drawSum) {
         pdf.saveGraphicsState();
@@ -261,19 +269,25 @@
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(9.5);
         pdf.text(subtitle, margin, margin + 18);
-        pdf.setDrawColor(224, 230, 230);
-        pdf.setLineWidth(0.2);
-        pdf.line(margin, margin + 20, pdfW - margin, margin + 20);
         if (drawSum && filterSummary) {
           pdf.setTextColor(122, 138, 138);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(8);
-          pdf.text('PREFERENCE SUMMARY', margin, margin + 25);
+          pdf.text('PREFERENCE SUMMARY', margin, margin + 23);
           pdf.setTextColor(74, 90, 90);
           pdf.setFont('helvetica', 'italic');
           pdf.setFontSize(9);
-          pdf.text(pdf.splitTextToSize(filterSummary, contentW), margin, margin + 30);
+          pdf.text(pdf.splitTextToSize(filterSummary, contentW), margin, margin + 28);
+          pdf.setDrawColor(224, 230, 230);
+          pdf.setLineWidth(0.2);
+          pdf.line(margin, margin + 37, pdfW - margin, margin + 37);
+        } else {
+          pdf.setDrawColor(224, 230, 230);
+          pdf.setLineWidth(0.2);
+          pdf.line(margin, margin + 20, pdfW - margin, margin + 20);
         }
+        pdf.setDrawColor(224, 230, 230);
+        pdf.setLineWidth(0.2);
         pdf.line(margin, pdfH - footerH, pdfW - margin, pdfH - footerH);
         pdf.setTextColor(122, 138, 138);
         pdf.setFont('helvetica', 'normal');
@@ -300,13 +314,14 @@
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, slice.width, slice.height);
           ctx.drawImage(canvas, 0, -placed);
-          pdf.addImage(slice.toDataURL('image/jpeg', 0.85), 'JPEG', margin, top, contentW, h);
+          pdf.addImage(slice.toDataURL('image/jpeg', 0.80), 'JPEG', margin, top, contentW, h);
           placed += px;
         }
       }
 
       paged(rCanvas, rPlan, 1, true);
-      paged(cCanvas, cPlan, rPlan.count + 1, false);
+      paged(cAbCanvas, cAbPlan, rPlan.count + 1, false);
+      paged(cCCanvas, cCPlan, rPlan.count + cAbPlan.count + 1, false);
       pdf.save('unifer-shortlist-' + _slugify(firstName) + '-' + _isoDate(new Date()) + '.pdf');
     } catch (err) {
       console.error('[unifer] downloadPdf failed', err);
