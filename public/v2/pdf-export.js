@@ -28,6 +28,34 @@
     });
     return _pdfLibsPromise;
   }
+  let _logoDataUrl = null;
+  let _logoPromise = null;
+  function _loadLogo() {
+    if (_logoDataUrl) return Promise.resolve(_logoDataUrl);
+    if (_logoPromise) return _logoPromise;
+    _logoPromise = new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          _logoDataUrl = canvas.toDataURL('image/png');
+          resolve(_logoDataUrl);
+        } catch (e) {
+          console.warn('[unifer] logo conversion failed', e);
+          resolve(null);
+        }
+      };
+      img.onerror = () => { console.warn('[unifer] logo fetch failed'); resolve(null); };
+      img.src = '/logo-new.png';
+    });
+    return _logoPromise;
+  }
+
 
   function _formatFilterSummary(a) {
     a = a || {};
@@ -93,7 +121,7 @@
         return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><div style="width:82px;font-size:10.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:6px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:3px;"></div></div><div style="width:34px;text-align:right;font-size:11px;font-weight:600;color:#1a2a2a;">' + v + '%</div></div>';
       };
       const chipHtml = chips.length ? '<div style="margin-left:30px;display:flex;flex-wrap:wrap;gap:4px;">' + chips.map(c => '<span style="font-size:9.5px;color:#4a5a5a;background:#f3f5f5;padding:2px 7px;border-radius:999px;white-space:nowrap;"><span style="color:#7a8a8a;">' + c.k + ':</span> ' + c.v + '</span>').join('') + '</div>' : '';
-      return '<div style="border:1px solid #e0e6e6;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:white;page-break-inside:avoid;"><div style="display:flex;gap:12px;align-items:flex-start;"><div style="flex:0 0 240px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><div style="width:22px;height:22px;border-radius:6px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:14px;font-weight:600;color:#1a2a2a;line-height:1.25;">' + (u.name || '—') + (u.confidence ? ' <span style="color:#0a8a7a;">✓</span>' : '') + '</div></div><div style="font-size:11.5px;color:#1a2a2a;margin-left:30px;margin-bottom:4px;">' + (u.course || '—') + '</div><div style="font-size:10.5px;color:#7a8a8a;margin-left:30px;margin-bottom:6px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div>' + chipHtml + '</div><div style="flex:0 0 200px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:9.5px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:4px;">Why this aligns</div><div style="font-size:11px;color:#4a5a5a;line-height:1.45;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
+      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:18px 24px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="display:flex;gap:12px;align-items:flex-start;"><div style="flex:0 0 240px;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;"><div style="width:22px;height:22px;border-radius:6px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:14px;font-weight:600;color:#1a2a2a;line-height:1.25;">' + (u.name || '—') + (u.confidence ? ' <span style="color:#0a8a7a;">✓</span>' : '') + '</div></div><div style="font-size:11.5px;color:#1a2a2a;margin-left:30px;margin-bottom:4px;">' + (u.course || '—') + '</div><div style="font-size:10.5px;color:#7a8a8a;margin-left:30px;margin-bottom:6px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div>' + chipHtml + '</div><div style="flex:0 0 200px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:9.5px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:4px;">Why this aligns</div><div style="font-size:11px;color:#4a5a5a;line-height:1.45;">' + (u.why || '') + '</div></div></div>' + moreHtml + '</div>';
     }).join('');
     return '<div>' + cards + '</div>';
   }
@@ -136,7 +164,7 @@
       const points = actives.map((u, i) => { const v = _getDimVal(u, d[1]); return v == null ? null : { u: u, i: i, x: v }; }).filter(Boolean);
       return points.length === 0 ? null : { name: d[0], points: points };
     }).filter(Boolean);
-    const stripsHtml = stripsArr.length ? '<div><div style="font-size:10px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:10px;color:#4a5a5a;margin-bottom:4px;"><span style="font-weight:600;color:#1a2a2a;">' + s.name + '</span><span style="font-style:italic;color:#7a8a8a;">weak → strong</span></div><div style="position:relative;height:18px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:3px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;background:' + _COLORS[p.i] + ';border:1.5px solid white;border-radius:50%;"></div>').join('') + '</div></div>').join('') + '</div>' : '';
+    const stripsHtml = stripsArr.length ? '<div><div style="font-size:10px;font-weight:600;letter-spacing:0.06em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">C · Dimensional strips</div>' + stripsArr.map(s => '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:600;color:#1a2a2a;margin-bottom:4px;">' + s.name + '</div><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:9px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">weak</span><div style="flex:1;position:relative;height:18px;background:linear-gradient(to right,#f3f5f5,#e0e6e6);border-radius:3px;">' + s.points.map(p => '<div style="position:absolute;left:' + Math.max(0, Math.min(100, p.x)) + '%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;background:' + _COLORS[p.i] + ';border:1.5px solid white;border-radius:50%;"></div>').join('') + '</div><span style="font-size:9px;color:#7a8a8a;font-style:italic;flex:0 0 auto;">strong</span></div></div>').join('') + '</div>' : '';
     const hint = '<div style="font-size:10px;color:#7a8a8a;margin-bottom:10px;font-style:italic;">All three visualisations show the same 5 universities. Colors are consistent across sections.</div>';
     return hint + headerCols + tableHtml + breakdownHtml + stripsHtml;
   }
@@ -167,6 +195,7 @@
 
     try {
       await _loadPdfLibs();
+      const logoDataUrl = await _loadLogo();
       const answers = window.UNIFER.answers || {};
       const firstName = (answers.first_name || '').trim();
       const filterSummary = _formatFilterSummary(answers);
@@ -211,15 +240,19 @@
         pdf.text('unifer', pdfW / 2, pdfH / 2, { align: 'center', baseline: 'middle', angle: 20 });
         pdf.restoreGraphicsState();
 
-        pdf.setFillColor(10, 138, 122);
-        pdf.roundedRect(margin, margin, 7, 7, 1.5, 1.5, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(11);
-        pdf.text('U', margin + 3.5, margin + 4.8, { align: 'center' });
-        pdf.setTextColor(10, 138, 122);
-        pdf.setFontSize(14);
-        pdf.text('unifer', margin + 9, margin + 5.5);
+        if (logoDataUrl) {
+          pdf.addImage(logoDataUrl, 'PNG', margin, margin, 27, 6);
+        } else {
+          pdf.setFillColor(10, 138, 122);
+          pdf.roundedRect(margin, margin, 7, 7, 1.5, 1.5, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(11);
+          pdf.text('U', margin + 3.5, margin + 4.8, { align: 'center' });
+          pdf.setTextColor(10, 138, 122);
+          pdf.setFontSize(14);
+          pdf.text('unifer', margin + 9, margin + 5.5);
+        }
         pdf.setTextColor(30, 42, 42);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(15);
@@ -232,10 +265,14 @@
         pdf.setLineWidth(0.2);
         pdf.line(margin, margin + 20, pdfW - margin, margin + 20);
         if (drawSum && filterSummary) {
+          pdf.setTextColor(122, 138, 138);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(8);
+          pdf.text('PREFERENCE SUMMARY', margin, margin + 25);
           pdf.setTextColor(74, 90, 90);
           pdf.setFont('helvetica', 'italic');
           pdf.setFontSize(9);
-          pdf.text(pdf.splitTextToSize(filterSummary, contentW), margin, margin + 25);
+          pdf.text(pdf.splitTextToSize(filterSummary, contentW), margin, margin + 30);
         }
         pdf.line(margin, pdfH - footerH, pdfW - margin, pdfH - footerH);
         pdf.setTextColor(122, 138, 138);
