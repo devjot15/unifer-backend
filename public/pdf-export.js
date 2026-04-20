@@ -122,7 +122,14 @@
         const v = sc[key] != null ? sc[key] : 0;
         return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;"><div style="width:108px;font-size:12.5px;color:#4a5a5a;">' + label + '</div><div style="flex:1;height:10px;background:#d5dcdc;border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + color + ';border-radius:5px;"></div></div><div style="width:44px;text-align:right;font-size:13px;font-weight:700;color:#1a2a2a;">' + v + '%</div></div>';
       };
-      const nameBlock = '<span style="display:inline-block;">' + (u.name || '—') + (u.confidence ? '<span style="display:inline-block;margin-left:6px;color:#0a8a7a;vertical-align:middle;font-size:14px;">✓</span>' : '') + '</span>';
+      // Stage 7.8 — keep tick glued to last word of uni name (prevents drop to next line)
+      const _rawName = u.name || '—';
+      const _lastSpaceIdx = _rawName.lastIndexOf(' ');
+      const _leading = _lastSpaceIdx > 0 ? _rawName.slice(0, _lastSpaceIdx + 1) : '';
+      const _lastWord = _lastSpaceIdx > 0 ? _rawName.slice(_lastSpaceIdx + 1) : _rawName;
+      const nameBlock = u.confidence
+        ? _leading + '<span style="white-space:nowrap;">' + _lastWord + '\u00A0<span style="color:#0a8a7a;font-size:14px;font-weight:600;">✓</span></span>'
+        : _rawName;
       const uniRankLine = (typeof _rankingsLine === 'function') ? _rankingsLine(u.rankings || {}) : '';
       // Stage 7.7 — subject shape is { name, QS?, ARWU?, CUG?, Guardian? } with real published ranks
       const subjName = (u.subject && u.subject.name) ? u.subject.name : '';
@@ -172,14 +179,14 @@
       ['Acceptance rate', u => (u && u.stats && u.stats.acceptance) ? u.stats.acceptance + '%' : '—', u => u && u.stats && u.stats.acceptance != null]
     ];
     const vis = tableRows.filter(r => actives.some(u => r[2](u)));
-    const tableHtml = vis.length ? '<div style="margin-bottom:36px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:14px;">A · Side-by-side facts</div><table style="width:100%;border-collapse:collapse;font-size:12px;">' + vis.map(r => '<tr style="border-bottom:1px solid #eef2f2;"><td style="padding:18px 12px;color:#4a5a5a;width:32%;font-weight:500;">' + r[0] + '</td>' + actives.map(u => '<td style="padding:18px 12px;color:#1a2a2a;">' + r[1](u) + '</td>').join('') + '</tr>').join('') + '</table></div>' : '';
+    const tableHtml = vis.length ? '<div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:14px;">A · Side-by-side facts</div><table style="width:100%;border-collapse:collapse;font-size:12px;">' + vis.map(r => '<tr style="border-bottom:1px solid #eef2f2;"><td style="padding:18px 12px;color:#4a5a5a;width:32%;font-weight:500;">' + r[0] + '</td>' + actives.map(u => '<td style="padding:18px 12px;color:#1a2a2a;">' + r[1](u) + '</td>').join('') + '</tr>').join('') + '</table></div>' : '';
     const groups = [['Country match', 'country'], ['Course match', 'course'], ['Institution match', 'institution']];
     const breakdownHtml = '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:#7a8a8a;text-transform:uppercase;margin-bottom:12px;">B · Score breakdown</div>' + groups.map(g => {
       const rows = actives.map((u, i) => {
         const v = (u.scores && u.scores[g[1]] != null) ? u.scores[g[1]] : 0;
-        return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;"><div style="width:32%;font-size:12.5px;color:#4a5a5a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (u.name || '—') + '</div><div style="flex:1;height:6px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + _COLORS[i] + ';"></div></div><div style="width:32px;text-align:right;font-size:11.5px;font-weight:600;color:#1a2a2a;">' + v + '</div></div>';
+        return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;"><div style="width:32%;font-size:12.5px;color:#4a5a5a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (u.name || '—') + '</div><div style="flex:1;height:6px;background:#eef2f2;border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + v + '%;background:' + _COLORS[i] + ';"></div></div><div style="width:32px;text-align:right;font-size:11.5px;font-weight:600;color:#1a2a2a;">' + v + '</div></div>';
       }).join('');
-      return '<div style="margin-bottom:44px;"><div style="font-size:13.5px;font-weight:600;color:#1a2a2a;margin-bottom:16px;">' + g[0] + '</div>' + rows + '</div>';
+      return '<div style="margin-bottom:28px;"><div style="font-size:13.5px;font-weight:600;color:#1a2a2a;margin-bottom:16px;">' + g[0] + '</div>' + rows + '</div>';
     }).join('') + '</div>';
     const hint = '<div style="font-size:11px;color:#7a8a8a;margin-bottom:18px;font-style:italic;">All three visualisations show the same 5 universities. Colors are consistent across sections.</div>';
     return hint + headerCols + tableHtml + breakdownHtml;
