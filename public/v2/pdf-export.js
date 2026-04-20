@@ -144,7 +144,7 @@
   function _buildPrintDom(results, pageType) {
     const w = document.createElement('div');
     w.className = 'unifer-pdf-print';
-    w.style.cssText = "position:fixed;left:-9999px;top:0;width:780px;background:white;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a2a2a;padding:0;box-sizing:border-box;";
+    w.style.cssText = "position:fixed;top:0;left:0;width:780px;background:white;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a2a2a;padding:0;box-sizing:border-box;z-index:-1;opacity:0.01;pointer-events:none;";
     w.innerHTML = pageType === 'ranked' ? _buildRankedHtml(results) : _buildCompareHtml(results);
     document.body.appendChild(w);
     return w;
