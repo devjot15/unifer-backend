@@ -124,13 +124,17 @@
       };
       const nameBlock = '<span style="display:inline-block;">' + (u.name || '—') + (u.confidence ? '<span style="display:inline-block;margin-left:6px;color:#0a8a7a;vertical-align:middle;font-size:14px;">✓</span>' : '') + '</span>';
       const uniRankLine = (typeof _rankingsLine === 'function') ? _rankingsLine(u.rankings || {}) : '';
-      // Stage 7.6 — subject shape is { name, rank, total } from canonical selection
+      // Stage 7.7 — subject shape is { name, QS?, ARWU?, CUG?, Guardian? } with real published ranks
       const subjName = (u.subject && u.subject.name) ? u.subject.name : '';
-      const subjRank = (u.subject && u.subject.rank != null) ? u.subject.rank : null;
-      const subjTotal = (u.subject && u.subject.total != null) ? u.subject.total : null;
-      const subjLine = subjRank != null ? ('#' + subjRank + (subjTotal ? ' of ' + subjTotal : '')) : '';
+      const subjRanks = [];
+      if (u.subject) {
+        ['QS','THE','ARWU','CUG','Guardian'].forEach(function(k) {
+          if (u.subject[k] != null) subjRanks.push(k + ' #' + u.subject[k]);
+        });
+      }
+      const subjLine = subjRanks.join(' · ');
       const hasUniRank = uniRankLine && uniRankLine !== '—' && uniRankLine.length > 0;
-      const hasSubjRank = subjRank != null;
+      const hasSubjRank = subjRanks.length > 0;
       let rankingsHtml = '';
       if (hasUniRank) {
         rankingsHtml += '<div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:4px;">University rankings</div>';
@@ -147,8 +151,9 @@
       return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:14px 22px;margin-bottom:10px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 230px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;">' + rankingsHtml + '</div></div>' + whyHtml + moreHtml + '</div>';
     }).join('');
     const hasAnyConfidence = results.slice(0, 5).some(function(u) { return u.confidence; });
-    const legend = (showLegend && hasAnyConfidence) ? '<div style="margin-top:10px;font-size:10px;color:#7a8a8a;font-style:italic;text-align:left;"><span style="color:#0a8a7a;font-style:normal;font-weight:600;">✓</span> = appears in all major ranking frameworks</div>' : '';
-    return '<div>' + cards + legend + '</div>';
+    const confidenceLegend = (showLegend && hasAnyConfidence) ? '<div style="margin-top:10px;font-size:10px;color:#7a8a8a;font-style:italic;text-align:left;"><span style="color:#0a8a7a;font-style:normal;font-weight:600;">✓</span> = appears in all major ranking frameworks</div>' : '';
+    const frameworkLegend = showLegend ? '<div style="margin-top:8px;font-size:9px;color:#7a8a8a;line-height:1.6;">QS = QS World University Rankings &nbsp;·&nbsp; THE = Times Higher Education &nbsp;·&nbsp; ARWU = Academic Ranking of World Universities &nbsp;·&nbsp; CUG = Complete University Guide &nbsp;·&nbsp; Guardian = Guardian University Guide</div>' : '';
+    return '<div>' + cards + confidenceLegend + frameworkLegend + '</div>';
   }
 
   function _buildCompareAB(results) {

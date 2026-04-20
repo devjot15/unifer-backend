@@ -133,84 +133,93 @@ const SUBJECT_FIELD_MAP = {
   "hospitality, tourism & service industry":   "hospitality, tourism & service industry",
 };
 
-// Stage 7.5 — attaches canonical subject rank to top-5 results (mutates in place).
-// Called after top-5 slice in both primary and fallback paths.
-// University rankings are attached in-loop via universityRankMap.
+// Stage 7.7 — per-framework subject rankings from published data (QS, ARWU, CUG, Guardian).
+// Uses public.subject_ranks_by_framework view with real published subject ranks.
+// Takes best (lowest) rank per framework when multiple subject names map to student's sub_field.
+// THE is omitted — no subject ranking data ingested for THE framework yet.
 async function attachCanonicalSubject(results, answers, supabase) {
   if (!Array.isArray(results) || results.length === 0) return results;
+  if (!answers.sub_field || !answers.field) return results;
 
   const taxonomyField = SUBJECT_FIELD_MAP[answers.field];
   if (!taxonomyField) return results;
 
-  // 1. Candidate subject_ids for student's field
-  const { data: candidates, error: candErr } = await supabase
-    .from('subject_index')
-    .select('id, sub_field')
-    .eq('field', taxonomyField);
-  if (candErr || !candidates || candidates.length === 0) {
-    console.log('[rankings] no subject_index candidates for', taxonomyField);
+  // 1. Get framework → [subject_names] mapping via existing RPC
+  const { data: taxRows, error: taxErr } = await supabase
+    .rpc('get_subject_taxonomy', {
+      p_field: taxonomyField,
+      p_sub_field: answers.sub_field
+    });
+  if (taxErr || !taxRows || taxRows.length === 0) {
+    console.log('[rankings] no taxonomy mapping for', taxonomyField, answers.sub_field);
     return results;
   }
 
-  // 2. Subject ranks for just these 5 unis (not the whole 70k-row view)
+  const subjectByFw = {};
+  for (const r of taxRows) {
+    if (!subjectByFw[r.framework]) subjectByFw[r.framework] = [];
+    subjectByFw[r.framework].push(r.subject_name);
+  }
+  const allSubjectNames = [...new Set(Object.values(subjectByFw).flat())];
+
+  // 2. Collect top-5 uni IDs
   const uniIds = results.map(r => r._components && r._components.universityId).filter(Boolean);
   if (uniIds.length === 0) return results;
 
-  const { data: subjRanksData } = await supabase
-    .from('subject_ranks')
-    .select('university_id, subject_id, rank_position, total_ranked')
-    .in('university_id', uniIds);
+  // 3. Query subject ranks from the unified per-framework view
+  const { data: rankRows, error: rankErr } = await supabase
+    .from('subject_ranks_by_framework')
+    .select('university_id, framework, subject, rank_position')
+    .in('university_id', uniIds)
+    .in('subject', allSubjectNames);
 
-  const subjRankByKey = {};
-  if (subjRanksData) {
-    for (const r of subjRanksData) {
-      subjRankByKey[`${r.university_id}:${r.subject_id}`] =
-        { rank: r.rank_position, total: r.total_ranked };
-    }
-  }
-
-  // 3. Pick canonical subject_id
-  let canonical = null;
-
-  // 3a. Student picked sub_field → use it directly
-  if (answers.sub_field) {
-    const direct = candidates.find(c => c.sub_field === answers.sub_field);
-    if (direct) canonical = { id: direct.id, sub_field: direct.sub_field };
-  }
-
-  // 3b. Else → pick by coverage across top-5; tie-break by avg total_ranked
-  if (!canonical) {
-    let best = null;
-    for (const c of candidates) {
-      let coverage = 0, totalSum = 0;
-      for (const uid of uniIds) {
-        const data = subjRankByKey[`${uid}:${c.id}`];
-        if (data != null) { coverage++; totalSum += data.total; }
-      }
-      const avgTotal = coverage > 0 ? totalSum / coverage : 0;
-      if (!best || coverage > best.coverage ||
-          (coverage === best.coverage && avgTotal > best.avgTotal)) {
-        best = { id: c.id, sub_field: c.sub_field, coverage, avgTotal };
-      }
-    }
-    if (best && best.coverage > 0) canonical = { id: best.id, sub_field: best.sub_field };
-  }
-
-  if (!canonical) {
-    console.log('[rankings] no canonical subject with coverage');
+  if (rankErr) {
+    console.log('[rankings] subject_ranks_by_framework query error:', rankErr.message);
     return results;
   }
-  console.log('[rankings] canonical subject:', canonical.sub_field, '(id=' + canonical.id + ')');
 
-  // 4. Attach subject rank to each result
+  // 4. Build lookup: uniId:framework → { subject_name: rank }
+  const rankLookup = {};
+  if (rankRows) {
+    for (const row of rankRows) {
+      const key = row.university_id + ':' + row.framework;
+      if (!rankLookup[key]) rankLookup[key] = {};
+      rankLookup[key][row.subject] = row.rank_position;
+    }
+  }
+
+  // 5. For each uni, assemble subject = { name, QS?, ARWU?, CUG?, Guardian? }
+  let attachedCount = 0;
   for (const r of results) {
     const uid = r._components && r._components.universityId;
     if (!uid) continue;
-    const data = subjRankByKey[`${uid}:${canonical.id}`];
-    if (data) {
-      r.subject = { name: canonical.sub_field, rank: data.rank, total: data.total };
+
+    const subjectObj = { name: answers.sub_field };
+    let anyFwMatch = false;
+
+    for (const fw of Object.keys(subjectByFw)) {
+      const uniFwRanks = rankLookup[uid + ':' + fw] || {};
+      const subjectNames = subjectByFw[fw];
+      let bestRank = null;
+      for (const sn of subjectNames) {
+        const rank = uniFwRanks[sn];
+        if (rank != null && (bestRank === null || rank < bestRank)) {
+          bestRank = rank;
+        }
+      }
+      if (bestRank !== null) {
+        subjectObj[fw] = bestRank;
+        anyFwMatch = true;
+      }
+    }
+
+    if (anyFwMatch) {
+      r.subject = subjectObj;
+      attachedCount++;
     }
   }
+
+  console.log('[rankings] per-framework subject ranks attached for', attachedCount, 'of', results.length, 'unis');
   return results;
 }
 
