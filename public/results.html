@@ -1854,13 +1854,17 @@ function renderLowResultsBanner(count){
     const items = (window.UNIFER && window.UNIFER.results) || [];
     count = items.length;
   }
+
+  // Always remove any existing banner first, regardless of count.
+  // This ensures the banner clears when result count recovers (e.g., after returnFromPreview).
+  const existing = document.getElementById('low-results-banner');
+  if (existing) existing.remove();
+
+  // Only render a new banner when results are sparse (<3).
   if (count >= 3) return;
 
   const container = document.querySelector('.matches-wrap, [data-tab-content="matches"], .matches-list');
   if (!container) return;
-
-  const existing = document.getElementById('low-results-banner');
-  if (existing) existing.remove();
 
   const a = (window.UNIFER && window.UNIFER.answers) || {};
   const suggestions = [];
