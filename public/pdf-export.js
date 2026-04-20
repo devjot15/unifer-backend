@@ -100,10 +100,15 @@
 
   const _COLORS = ['#0a8a7a', '#d97706', '#6366f1', '#db2777', '#059669'];
 
-  function _buildRankedHtml(results) {
-    const cards = results.slice(0, 5).map((u, i) => {
-      const rank = i + 1;
-      const color = _COLORS[i] || '#0a8a7a';
+  function _buildRankedHtml(results, startIdx, endIdx, showLegend) {
+    startIdx = startIdx != null ? startIdx : 0;
+    endIdx = endIdx != null ? endIdx : 5;
+    showLegend = showLegend !== false;
+    const slice = results.slice(startIdx, endIdx);
+    const cards = slice.map((u, localIdx) => {
+      const globalIdx = startIdx + localIdx;
+      const rank = globalIdx + 1;
+      const color = _COLORS[globalIdx] || '#0a8a7a';
       const sc = u.scores || {};
       const chips = Array.isArray(u.chips) ? u.chips : [];
       const moreRows = [];
@@ -122,10 +127,10 @@
       };
       const chipHtml = chips.length ? '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #eef2f2;display:flex;flex-wrap:wrap;gap:8px;">' + chips.map(c => '<span style="font-size:10.5px;color:#4a5a5a;background:#f3f5f5;padding:3px 11px;border-radius:999px;white-space:nowrap;"><span style="color:#7a8a8a;">' + c.k + ':</span> ' + c.v + '</span>').join('') + '</div>' : '';
       const nameBlock = '<span style="display:inline-block;">' + (u.name || '—') + (u.confidence ? '<span style="display:inline-block;margin-left:6px;color:#0a8a7a;vertical-align:middle;font-size:14px;">✓</span>' : '') + '</span>';
-      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:16px 24px;margin-bottom:10px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:128px;"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 270px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + chipHtml + moreHtml + '</div>';
+      return '<div style="border:1px solid #e0e6e6;border-radius:12px;padding:18px 26px;margin-bottom:14px;background:white;page-break-inside:avoid;box-shadow:0 1px 3px rgba(0,0,0,0.04);min-height:128px;"><div style="display:flex;gap:18px;align-items:flex-start;"><div style="flex:0 0 270px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><div style="width:26px;height:26px;border-radius:7px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;">#' + rank + '</div><div style="font-size:16px;font-weight:600;color:#1a2a2a;line-height:1.2;">' + nameBlock + '</div></div><div style="font-size:12.5px;color:#1a2a2a;margin-left:36px;margin-bottom:3px;line-height:1.3;">' + (u.course || '—') + '</div><div style="font-size:11px;color:#7a8a8a;margin-left:36px;">' + (u.country || '—') + ' · ' + (u.duration || '—') + ' · ' + _fmt$(u.tuition) + '/yr</div></div><div style="flex:0 0 260px;">' + scoreRow('Country match', 'country') + scoreRow('Course match', 'course') + scoreRow('Institution match', 'institution') + '</div><div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:600;letter-spacing:0.07em;color:#7a8a8a;text-transform:uppercase;margin-bottom:6px;">Why this aligns</div><div style="font-size:12px;color:#4a5a5a;line-height:1.55;">' + (u.why || '') + '</div></div></div>' + chipHtml + moreHtml + '</div>';
     }).join('');
     const hasAnyConfidence = results.slice(0, 5).some(u => u.confidence);
-    const legend = hasAnyConfidence ? '<div style="margin-top:10px;font-size:10px;color:#7a8a8a;font-style:italic;text-align:left;"><span style="color:#0a8a7a;font-style:normal;font-weight:600;">✓</span> = appears in all major ranking frameworks</div>' : '';
+    const legend = (showLegend && hasAnyConfidence) ? '<div style="margin-top:10px;font-size:10px;color:#7a8a8a;font-style:italic;text-align:left;"><span style="color:#0a8a7a;font-style:normal;font-weight:600;">✓</span> = appears in all major ranking frameworks</div>' : '';
     return '<div>' + cards + legend + '</div>';
   }
 
@@ -188,7 +193,9 @@
     const w = document.createElement('div');
     w.className = 'unifer-pdf-print';
     w.style.cssText = "position:fixed;top:0;left:0;width:780px;background:white;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a2a2a;padding:0;box-sizing:border-box;z-index:-1;pointer-events:none;";
-    w.innerHTML = pageType === 'ranked' ? _buildRankedHtml(results)
+    w.innerHTML = pageType === 'ranked' ? _buildRankedHtml(results, 0, 5, true)
+      : pageType === 'ranked1' ? _buildRankedHtml(results, 0, 3, false)
+      : pageType === 'ranked2' ? _buildRankedHtml(results, 3, 5, true)
       : pageType === 'compareAB' ? _buildCompareAB(results)
       : pageType === 'compareC' ? _buildCompareC(results)
       : _buildCompareHtml(results);
@@ -218,9 +225,13 @@
       const firstName = (answers.first_name || '').trim();
       const filterSummary = _formatFilterSummary(answers);
 
-      const rWrap = _buildPrintDom(results, 'ranked');
-      const rCanvas = await _captureWrapperAsCanvas(rWrap);
-      rWrap.remove();
+      const r1Wrap = _buildPrintDom(results, 'ranked1');
+      const r1Canvas = await _captureWrapperAsCanvas(r1Wrap);
+      r1Wrap.remove();
+
+      const r2Wrap = _buildPrintDom(results, 'ranked2');
+      const r2Canvas = await _captureWrapperAsCanvas(r2Wrap);
+      r2Wrap.remove();
 
       const cAbWrap = _buildPrintDom(results, 'compareAB');
       const cAbCanvas = await _captureWrapperAsCanvas(cAbWrap);
@@ -249,10 +260,11 @@
         if (total <= fa * 1.15) return { count: 1, mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
         return { count: 1 + Math.ceil((total - fa) / ca), mm: mm, ft: ft, ct: ct, fa: fa, ca: ca };
       }
-      const rPlan = plan(rCanvas, true);
+      const r1Plan = plan(r1Canvas, true);
+      const r2Plan = plan(r2Canvas, false);
       const cAbPlan = plan(cAbCanvas, false);
       const cCPlan = plan(cCCanvas, false);
-      const totalPages = rPlan.count + cAbPlan.count + cCPlan.count;
+      const totalPages = r1Plan.count + r2Plan.count + cAbPlan.count + cCPlan.count;
 
       function chrome(pn, drawSum) {
         pdf.saveGraphicsState();
@@ -334,9 +346,10 @@
         }
       }
 
-      paged(rCanvas, rPlan, 1, true);
-      paged(cAbCanvas, cAbPlan, rPlan.count + 1, false);
-      paged(cCCanvas, cCPlan, rPlan.count + cAbPlan.count + 1, false);
+      paged(r1Canvas, r1Plan, 1, true);
+      paged(r2Canvas, r2Plan, r1Plan.count + 1, false);
+      paged(cAbCanvas, cAbPlan, r1Plan.count + r2Plan.count + 1, false);
+      paged(cCCanvas, cCPlan, r1Plan.count + r2Plan.count + cAbPlan.count + 1, false);
       pdf.save('unifer-shortlist-' + _slugify(firstName) + '-' + _isoDate(new Date()) + '.pdf');
     } catch (err) {
       console.error('[unifer] downloadPdf failed', err);
