@@ -17,24 +17,25 @@
   padding: 0;
   text-align: left;
 }
-.landing-topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 22px 0;
-}
-.landing-topbar .wordmark-img { height: 24px; width: auto; display: block; }
-.landing-topbar .login-link {
-  font-size: 13px; color: var(--ink-3); text-decoration: none;
-  font-weight: 500; letter-spacing: -0.005em;
-}
 .landing-hero {
-  padding: 56px 26px; text-align: center;
-  display: flex; flex-direction: column; align-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(40px, 8vh, 80px) 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+  gap: clamp(20px, 4vh, 40px);
+}
+.landing-hero .hero-logo {
+  height: clamp(36px, 6vh, 48px); width: auto; display: block;
 }
 .landing-hero h1 {
-  font-size: clamp(34px, 9vw, 40px);
-  line-height: 1.16; font-weight: 600; margin: 0;
-  color: var(--ink); letter-spacing: -0.015em;
-  text-wrap: balance;
+  font-size: clamp(28px, 8vw, 36px);
+  line-height: 1.22; font-weight: 700; margin: 0;
+  color: var(--ink); letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 .landing-hero h1 em {
   font-style: normal; color: var(--teal-ink); display: block;
@@ -42,10 +43,10 @@
 .landing-hero .cta-outline {
   background: transparent; color: var(--teal-ink);
   border: 2px solid var(--teal-ink);
-  padding: 15px 34px; border-radius: 999px;
+  padding: 14px 32px; border-radius: 999px;
   font-size: 15px; font-weight: 600;
   font-family: inherit; cursor: pointer;
-  margin-top: 32px; display: inline-flex; align-items: center; gap: 10px;
+  display: inline-flex; align-items: center; gap: 10px;
   transition: background-color 160ms var(--ease), color 160ms var(--ease), border-color 160ms var(--ease), transform 120ms var(--ease);
 }
 .landing-hero .cta-outline:hover,
@@ -58,38 +59,37 @@
 .landing-hero .cta-outline:active,
 .landing-close .cta-outline:active { transform: scale(0.98); }
 .landing-hero .cta-outline .arrow,
-.landing-close .cta-outline .arrow { width: 14px; height: 14px; }
+.landing-close .cta-outline .arrow { width: 15px; height: 15px; }
 .landing-hero .trust {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 12px; color: var(--ink-2);
-  margin: 32px 0 0; letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 12px; color: var(--ink);
+  margin: 0; letter-spacing: 0.05em;
+  text-transform: uppercase; font-weight: 500;
+  white-space: nowrap;
 }
-.landing-stats {
-  padding: 36px 24px;
+.landing-hero .stats-row {
+  width: 100%;
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: 24px 16px;
-  border-top: 0.5px solid oklch(56% 0.07 185 / 0.14);
-  border-bottom: 0.5px solid oklch(56% 0.07 185 / 0.14);
-  margin: 0 18px;
+  gap: clamp(20px, 4vh, 40px) 24px;
 }
-.landing-stats .stat { text-align: center; }
-.landing-stats .stat .n {
-  font-size: 30px; font-weight: 600; color: var(--teal-ink);
-  letter-spacing: -0.015em;
+.landing-hero .stat { text-align: center; }
+.landing-hero .stat .n {
+  font-size: clamp(26px, 7vw, 34px); font-weight: 700;
+  color: var(--teal-ink); letter-spacing: -0.02em; line-height: 1.05;
 }
-.landing-stats .stat .l {
-  font-size: 11px; letter-spacing: 0.08em; font-weight: 500;
+.landing-hero .stat .l {
+  font-size: 10px; letter-spacing: 0.08em; font-weight: 600;
   color: var(--ink); text-transform: uppercase; margin-top: 8px;
+  white-space: nowrap;
 }
-.landing-compare { padding: 52px 22px 36px; }
+.landing-compare { padding: 48px 18px 28px; }
 .landing-compare h2 {
-  font-size: clamp(26px, 7vw, 30px); font-weight: 600;
-  text-align: center; color: var(--ink); line-height: 1.2;
-  margin: 0 0 32px; letter-spacing: -0.015em; text-wrap: balance;
+  font-size: clamp(22px, 6vw, 26px); font-weight: 700;
+  text-align: center; color: var(--ink); line-height: 1.35;
+  margin: 0 0 28px; letter-spacing: -0.015em; text-wrap: balance;
 }
 .landing-compare h2 em {
-  font-style: normal; color: var(--teal-ink); display: block; margin-top: 4px;
+  font-style: normal; color: var(--teal-ink); display: block;
 }
 .landing-card {
   background: #fff; border-radius: 14px;
@@ -98,47 +98,47 @@
 .landing-card.dark { background: var(--teal-ink); color: #fff; margin-bottom: 0; }
 .landing-card .card-label {
   display: flex; align-items: center; gap: 12px;
-  font-size: 17px; font-weight: 600; margin-bottom: 14px;
+  font-size: 17px; font-weight: 700; margin-bottom: 14px;
 }
 .landing-card.light .card-label { color: var(--ink); }
 .landing-card.dark .card-label { color: #fff; }
 .landing-card .icon {
-  width: 20px; height: 20px; border-radius: 50%;
+  width: 24px; height: 24px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; flex-shrink: 0; font-weight: 500;
+  font-size: 13px; flex-shrink: 0; font-weight: 700;
 }
 .landing-card .icon.bad { background: #f4e1de; color: #993c1d; }
 .landing-card .icon.good { background: rgba(255,255,255,0.22); color: #fff; }
 .landing-card .card-body {
-  font-size: 14px; line-height: 1.55; color: var(--ink-2); margin-bottom: 16px;
+  font-size: 15px; line-height: 1.5; color: var(--ink-2); margin-bottom: 16px;
 }
 .landing-card.dark .card-body { color: rgba(255,255,255,0.9); }
 .landing-card .bullets {
   list-style: none; padding: 0; margin: 0;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: 9px;
 }
 .landing-card .bullets li {
-  font-size: 14px; padding-left: 24px; position: relative; line-height: 1.45;
+  font-size: 15px; padding-left: 26px; position: relative; line-height: 1.4;
 }
 .landing-card.light .bullets li::before {
-  content: "×"; position: absolute; left: 0; color: #c0876f; font-weight: 600; font-size: 15px;
+  content: "×"; position: absolute; left: 0; color: #c0876f; font-weight: 700; font-size: 17px; top: -1px;
 }
 .landing-card.dark .bullets li::before {
-  content: "✓"; position: absolute; left: 0; color: #9FE1CB; font-weight: 600; font-size: 15px;
+  content: "✓"; position: absolute; left: 0; color: #9FE1CB; font-weight: 700; font-size: 17px; top: -1px;
 }
 .landing-card.light .bullets li { color: var(--ink-2); }
 .landing-card.dark .bullets li { color: rgba(255,255,255,0.96); }
-.landing-close { padding: 28px 26px 44px; text-align: center; }
+.landing-close { padding: 0 26px 28px; text-align: center; }
 .landing-close h2 {
-  font-size: clamp(26px, 7vw, 30px); line-height: 1.2;
-  font-weight: 600; color: var(--ink); margin: 0 0 32px;
-  text-wrap: balance; letter-spacing: -0.015em;
+  font-size: clamp(22px, 6vw, 26px); line-height: 1.3;
+  font-weight: 700; color: var(--ink); margin: 0 0 28px;
+  text-wrap: balance; letter-spacing: -0.02em;
 }
 .landing-close h2 em { font-style: normal; color: var(--teal-ink); }
 .landing-close .cta-outline {
   background: transparent; color: var(--teal-ink);
   border: 2px solid var(--teal-ink);
-  padding: 15px 34px; border-radius: 999px;
+  padding: 14px 32px; border-radius: 999px;
   font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
   display: inline-flex; align-items: center; gap: 10px;
   transition: background-color 160ms var(--ease), color 160ms var(--ease), border-color 160ms var(--ease), transform 120ms var(--ease);
@@ -147,12 +147,9 @@
   background: var(--teal-ink); padding: 14px 22px;
   text-align: center; color: #fff;
 }
-.landing-foot-bar .mark {
-  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
-  margin-bottom: 3px; color: #fff;
-}
 .landing-foot-bar .domain {
-  font-size: 11px; color: rgba(255,255,255,0.85); letter-spacing: 0.03em;
+  font-size: 14px; color: #fff; letter-spacing: 0.04em;
+  font-weight: 500;
 }
 .wordmark-img { height: 44px; width: auto; display: block; }
 @media (min-width: 720px) { .wordmark-img { height: 52px; } }
@@ -861,29 +858,26 @@ body.call-B .bubble.callout::before { content: none; }
 
   <!-- ——— Landing ————————————————————————————— -->
   <section class="landing" id="landing">
-    <div class="landing-topbar">
-      <img src="/logo-new.png" alt="UNIFER" class="wordmark-img" />
-      <a href="#" class="login-link">Log in</a>
-    </div>
-
     <div class="landing-hero">
+      <img src="/logo-new.png" alt="UNIFER" class="hero-logo" />
       <h1>20 days of research.<em>20 seconds.</em></h1>
       <button class="cta-outline" id="startBtn">
         Build my shortlist
         <svg class="arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M12 6l4 4-4 4"/></svg>
       </button>
       <p class="trust">No bias &middot; No agenda &middot; No commissions</p>
-    </div>
-
-    <div class="landing-stats">
-      <div class="stat"><div class="n">1,068</div><div class="l">Universities</div></div>
-      <div class="stat"><div class="n">12,047</div><div class="l">Courses</div></div>
-      <div class="stat"><div class="n">15</div><div class="l">Academic fields</div></div>
-      <div class="stat"><div class="n">6</div><div class="l">Ranking frameworks</div></div>
+      <div class="stats-row">
+        <div class="stat"><div class="n">1,068</div><div class="l">Universities</div></div>
+        <div class="stat"><div class="n">12,047</div><div class="l">Courses</div></div>
+      </div>
+      <div class="stats-row">
+        <div class="stat"><div class="n">15</div><div class="l">Academic fields</div></div>
+        <div class="stat"><div class="n">6</div><div class="l">Ranking frameworks</div></div>
+      </div>
     </div>
 
     <div class="landing-compare">
-      <h2>Choose the best university for you,<em>not your consultant.</em></h2>
+      <h2>Choose the best university<br>for you,<em>not your consultant.</em></h2>
 
       <div class="landing-card light">
         <div class="card-label"><span class="icon bad">&times;</span>The consultant way</div>
@@ -897,7 +891,7 @@ body.call-B .bubble.callout::before { content: none; }
 
       <div class="landing-card dark">
         <div class="card-label"><span class="icon good">&check;</span>The UNIFER way</div>
-        <div class="card-body">We don&rsquo;t take a dime from universities. The engine ranks purely based on what you tell us matters.</div>
+        <div class="card-body">We don&rsquo;t take a dime from universities. The engine ranks on what you tell us matters.</div>
         <ul class="bullets">
           <li>100% free from commissions</li>
           <li>Transparent math and data scoring</li>
@@ -915,7 +909,6 @@ body.call-B .bubble.callout::before { content: none; }
     </div>
 
     <div class="landing-foot-bar">
-      <div class="mark">UNIFER</div>
       <div class="domain">uniferedu.com</div>
     </div>
   </section>
