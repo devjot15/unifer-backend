@@ -21,9 +21,9 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px 0;
 }
-.landing-topbar .wordmark-img { height: 22px; width: auto; display: block; }
+.landing-topbar .wordmark-img { height: 24px; width: auto; display: block; }
 .landing-topbar .login-link {
-  font-size: 12px; color: var(--ink-3); text-decoration: none;
+  font-size: 13px; color: var(--ink-3); text-decoration: none;
   font-weight: 500; letter-spacing: -0.005em;
 }
 .landing-hero {
@@ -31,9 +31,9 @@
   display: flex; flex-direction: column; align-items: center;
 }
 .landing-hero h1 {
-  font-size: clamp(28px, 8vw, 34px);
-  line-height: 1.18; font-weight: 500; margin: 0;
-  color: var(--ink); letter-spacing: -0.01em;
+  font-size: clamp(34px, 9vw, 40px);
+  line-height: 1.16; font-weight: 600; margin: 0;
+  color: var(--ink); letter-spacing: -0.015em;
   text-wrap: balance;
 }
 .landing-hero h1 em {
@@ -42,10 +42,10 @@
 .landing-hero .cta-outline {
   background: transparent; color: var(--teal-ink);
   border: 2px solid var(--teal-ink);
-  padding: 13px 30px; border-radius: 999px;
-  font-size: 14px; font-weight: 500;
+  padding: 15px 34px; border-radius: 999px;
+  font-size: 15px; font-weight: 600;
   font-family: inherit; cursor: pointer;
-  margin-top: 28px; display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 32px; display: inline-flex; align-items: center; gap: 10px;
   transition: background-color 160ms var(--ease), color 160ms var(--ease), border-color 160ms var(--ease), transform 120ms var(--ease);
 }
 .landing-hero .cta-outline:hover,
@@ -61,8 +61,8 @@
 .landing-close .cta-outline .arrow { width: 14px; height: 14px; }
 .landing-hero .trust {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 11px; color: var(--ink-2);
-  margin: 28px 0 0; letter-spacing: 0.08em;
+  font-size: 12px; color: var(--ink-2);
+  margin: 32px 0 0; letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .landing-stats {
@@ -75,18 +75,18 @@
 }
 .landing-stats .stat { text-align: center; }
 .landing-stats .stat .n {
-  font-size: 24px; font-weight: 500; color: var(--teal-ink);
-  letter-spacing: -0.01em;
+  font-size: 30px; font-weight: 600; color: var(--teal-ink);
+  letter-spacing: -0.015em;
 }
 .landing-stats .stat .l {
-  font-size: 10px; letter-spacing: 0.06em;
-  color: var(--ink); text-transform: uppercase; margin-top: 6px;
+  font-size: 11px; letter-spacing: 0.08em; font-weight: 500;
+  color: var(--ink); text-transform: uppercase; margin-top: 8px;
 }
 .landing-compare { padding: 52px 22px 36px; }
 .landing-compare h2 {
-  font-size: clamp(22px, 6vw, 26px); font-weight: 500;
-  text-align: center; color: var(--ink); line-height: 1.25;
-  margin: 0 0 28px; letter-spacing: -0.01em; text-wrap: balance;
+  font-size: clamp(26px, 7vw, 30px); font-weight: 600;
+  text-align: center; color: var(--ink); line-height: 1.2;
+  margin: 0 0 32px; letter-spacing: -0.015em; text-wrap: balance;
 }
 .landing-compare h2 em {
   font-style: normal; color: var(--teal-ink); display: block; margin-top: 4px;
@@ -97,8 +97,8 @@
 }
 .landing-card.dark { background: var(--teal-ink); color: #fff; margin-bottom: 0; }
 .landing-card .card-label {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 15px; font-weight: 500; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 17px; font-weight: 600; margin-bottom: 14px;
 }
 .landing-card.light .card-label { color: var(--ink); }
 .landing-card.dark .card-label { color: #fff; }
@@ -110,7 +110,7 @@
 .landing-card .icon.bad { background: #f4e1de; color: #993c1d; }
 .landing-card .icon.good { background: rgba(255,255,255,0.22); color: #fff; }
 .landing-card .card-body {
-  font-size: 13px; line-height: 1.55; color: var(--ink-2); margin-bottom: 14px;
+  font-size: 14px; line-height: 1.55; color: var(--ink-2); margin-bottom: 16px;
 }
 .landing-card.dark .card-body { color: rgba(255,255,255,0.9); }
 .landing-card .bullets {
@@ -118,29 +118,29 @@
   display: flex; flex-direction: column; gap: 8px;
 }
 .landing-card .bullets li {
-  font-size: 13px; padding-left: 22px; position: relative; line-height: 1.4;
+  font-size: 14px; padding-left: 24px; position: relative; line-height: 1.45;
 }
 .landing-card.light .bullets li::before {
-  content: '¹5'; position: absolute; left: 0; color: #c0876f; font-weight: 500;
+  content: "×"; position: absolute; left: 0; color: #c0876f; font-weight: 600; font-size: 15px;
 }
 .landing-card.dark .bullets li::before {
-  content: '¹3'; position: absolute; left: 0; color: #9FE1CB; font-weight: 500;
+  content: "✓"; position: absolute; left: 0; color: #9FE1CB; font-weight: 600; font-size: 15px;
 }
 .landing-card.light .bullets li { color: var(--ink-2); }
 .landing-card.dark .bullets li { color: rgba(255,255,255,0.96); }
 .landing-close { padding: 28px 26px 44px; text-align: center; }
 .landing-close h2 {
-  font-size: clamp(22px, 6vw, 26px); line-height: 1.25;
-  font-weight: 500; color: var(--ink); margin: 0 0 28px;
-  text-wrap: balance;
+  font-size: clamp(26px, 7vw, 30px); line-height: 1.2;
+  font-weight: 600; color: var(--ink); margin: 0 0 32px;
+  text-wrap: balance; letter-spacing: -0.015em;
 }
 .landing-close h2 em { font-style: normal; color: var(--teal-ink); }
 .landing-close .cta-outline {
   background: transparent; color: var(--teal-ink);
   border: 2px solid var(--teal-ink);
-  padding: 13px 30px; border-radius: 999px;
-  font-size: 14px; font-weight: 500; font-family: inherit; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px;
+  padding: 15px 34px; border-radius: 999px;
+  font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 10px;
   transition: background-color 160ms var(--ease), color 160ms var(--ease), border-color 160ms var(--ease), transform 120ms var(--ease);
 }
 .landing-foot-bar {
@@ -148,11 +148,11 @@
   text-align: center; color: #fff;
 }
 .landing-foot-bar .mark {
-  font-size: 13px; font-weight: 500; letter-spacing: -0.01em;
-  margin-bottom: 2px; color: #fff;
+  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  margin-bottom: 3px; color: #fff;
 }
 .landing-foot-bar .domain {
-  font-size: 10px; color: rgba(255,255,255,0.82); letter-spacing: 0.02em;
+  font-size: 11px; color: rgba(255,255,255,0.85); letter-spacing: 0.03em;
 }
 .wordmark-img { height: 44px; width: auto; display: block; }
 @media (min-width: 720px) { .wordmark-img { height: 52px; } }
