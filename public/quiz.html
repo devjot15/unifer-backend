@@ -262,8 +262,8 @@ html, body { height: 100%; overflow: hidden; }
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 20px 0;
-  scroll-behavior: smooth;
-  /* Content grows upward from bottom via column-reverse on .stream; newest stays pinned above composer without JS. */
+  /* Scroll is instant (no smooth) to prevent multiple scroll-to-bottom calls during composer resize from causing jitter. */
+  /* Column-reverse on .stream pins newest bubble visually at the bottom; JS sets scrollTop=scrollHeight via observers. */
 }
 .stream {
   max-width: 720px;
