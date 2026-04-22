@@ -242,6 +242,7 @@
   font-variant-numeric: tabular-nums;
 }
 .section-pill .dots { display: inline-flex; gap: 3px; }
+.section-pill .section-label { opacity: 0.85; white-space: nowrap; }
 .section-pill .d { width: 5px; height: 5px; border-radius: 50%; background: var(--line-2); }
 .section-pill .d.on { background: var(--teal); }
 .section-pill .d.done { background: var(--teal); opacity: .35; }
@@ -944,7 +945,7 @@ body.call-B .bubble.callout::before { content: none; }
         </div>
         <div class="section-pill" id="sectionPill">
           <span id="sectionNumber">S1</span>
-          <span class="dots" id="sectionDots"></span>
+          <span class="section-label" id="sectionLabel"></span>
         </div>
       </div>
       <div class="track"><div class="fill" id="trackFill"></div></div>
@@ -1573,7 +1574,7 @@ const composer = $("#composerInner");
 const counterNum = $("#counterNum");
 const trackFill = $("#trackFill");
 const sectionNumberEl = $("#sectionNumber");
-const sectionDotsEl = $("#sectionDots");
+const sectionLabelEl = $("#sectionLabel");
 
 /* ---- messages ---- */
 function esc(s){ return String(s).replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" })[c]); }
@@ -1846,14 +1847,11 @@ function updateProgress() {
   const answered = Object.keys(state.answers).filter(k => FLOW.some(s => s.id === k)).length;
   trackFill.style.width = (answered / totalVisible * 100) + "%";
 
-  // section dots 1..5
+  // section label (S1 · PROFILE, etc.)
   const cur = (FLOW[state.index] || FLOW[FLOW.length-1]).section;
+  const SECTION_LABELS = ["PROFILE", "PRIORITIES", "COUNTRY", "COURSE", "UNIVERSITY"];
   sectionNumberEl.textContent = "S" + cur;
-  const dots = SECTIONS.map(s => {
-    const cls = s.id < cur ? "d done" : s.id === cur ? "d on" : "d";
-    return `<span class="${cls}"></span>`;
-  }).join("");
-  sectionDotsEl.innerHTML = dots;
+  sectionLabelEl.textContent = " · " + SECTION_LABELS[cur - 1];
 }
 
 /* ---- callouts ---- */
@@ -2531,6 +2529,9 @@ async function advance() {
    happens at section boundaries via /eligible-count (Stage 5E-B/C). */
 async function microTick(prevStep) {
   if (!prevStep || state.count <= 0) return;
+  // Counter stays hidden until profile_degree_completed answer; suppress micro-tick reveal.
+  const counterEl = document.getElementById("counter");
+  if (counterEl && counterEl.classList.contains("hidden")) return;
   const fakeTickAmount = Math.min(50, Math.floor(state.count * 0.005));
   if (fakeTickAmount <= 0) return;
   const target = Math.max(0, state.count - fakeTickAmount);
