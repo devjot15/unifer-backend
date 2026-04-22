@@ -243,6 +243,12 @@
 }
 .section-pill .dots { display: inline-flex; gap: 3px; }
 .section-pill .section-label { opacity: 0.85; white-space: nowrap; }
+.section-pill.hidden {
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity 320ms var(--ease), transform 320ms var(--ease);
+}
 .section-pill .d { width: 5px; height: 5px; border-radius: 50%; background: var(--line-2); }
 .section-pill .d.on { background: var(--teal); }
 .section-pill .d.done { background: var(--teal); opacity: .35; }
@@ -943,7 +949,7 @@ body.call-B .bubble.callout::before { content: none; }
           <span class="label">courses match</span>
           <span class="pool-bar" aria-hidden="true"><span class="pool-fill" id="poolFill" style="width:100%"></span></span>
         </div>
-        <div class="section-pill" id="sectionPill">
+        <div class="section-pill hidden" id="sectionPill">
           <span id="sectionNumber">S1</span>
           <span class="section-label" id="sectionLabel"></span>
         </div>
@@ -2053,6 +2059,7 @@ function submitAnswer(stepId, value, displayLabel) {
     (async () => {
       await showTyping(700);
       addUniferMsg(personalizedIntro, "section-intro", `Section 1 · ${SECTIONS[0].name}`);
+      document.getElementById("sectionPill").classList.remove("hidden");
       await new Promise(r => setTimeout(r, 1500));
       advance();
     })();
