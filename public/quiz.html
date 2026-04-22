@@ -258,10 +258,8 @@
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 0 20px;
+  padding: 16px 0 180px;
   scroll-behavior: smooth;
-  display: flex;
-  flex-direction: column-reverse;
 }
 .stream {
   max-width: 720px;
@@ -1602,11 +1600,32 @@ const scrollState = { follow: true };
 // Force scroll to bottom of BOTH streamWrap AND window.
 // On iOS Safari, the body sometimes scrolls instead of streamWrap, so we cover both.
 // Sticky composer overlays content if scroll isn't pushed past it — use generous padding too.
-// Column-reverse on .stream-wrap handles "pin to bottom" via CSS/browser scroll anchoring.
-// No JS scroll machinery needed. Reset any inline padding-bottom left by previous fixes.
-(() => {
+// Scroll to bottom of streamWrap. Uses direct scrollTop — browser honors CSS scroll-behavior:smooth
+// for smooth animation without the flakiness of scrollTo({behavior:smooth}) on iOS Safari.
+function _hardScrollBottom() {
+  const composerEl = document.getElementById("composer");
+  // Guard: bail when chat is hidden (landing page) — prevents landing auto-scroll.
+  if (!composerEl || composerEl.offsetParent === null) return;
   const w = document.getElementById("streamWrap");
-  if (w) w.style.paddingBottom = "";
+  if (!w) return;
+  // Dynamic padding so bottom content has room above the composer
+  w.style.paddingBottom = (composerEl.offsetHeight + 40) + "px";
+  // Direct scrollTop — browser applies CSS scroll-behavior: smooth
+  w.scrollTop = w.scrollHeight;
+}
+// Composer resize observer: re-scroll when composer grows/shrinks (e.g. chip->text question change)
+(() => {
+  const composerEl = document.getElementById("composer");
+  if (!composerEl || !window.ResizeObserver) return;
+  let pending = false;
+  new ResizeObserver(() => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      if (scrollState.follow) _hardScrollBottom();
+    });
+  }).observe(composerEl);
 })();
 function scrollToBottom(delay = 20) {
   setTimeout(() => {
@@ -2615,7 +2634,9 @@ async function askStep(step) {
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
   addUniferMsg(prompt);
   renderComposer(step);
-  // No scroll needed — column-reverse on .stream-wrap keeps newest pinned to bottom.
+  // Force scroll after composer renders (composer size can change → streamWrap shrinks → need re-scroll)
+  scrollState.follow = true;
+  requestAnimationFrame(() => _hardScrollBottom());
 }
 
 async function startChat() {
