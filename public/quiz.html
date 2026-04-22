@@ -1615,18 +1615,21 @@ function _hardScrollBottom() {
   if (!composerEl || composerEl.offsetParent === null) return;
   const w = document.getElementById("streamWrap");
   if (!w) return;
+  // Idempotency guard: skip if already at bottom (prevents phantom scroll ping-pong
+  // when MutationObserver and ResizeObserver both fire in a burst)
+  const max = w.scrollHeight - w.clientHeight;
+  if (Math.abs(w.scrollTop - max) < 2) return;
   w.scrollTop = w.scrollHeight;
 }
-let _scrollScheduled = false;
+// Coalesce rapid MO + RO bursts into a single scroll call (typing indicator toggle,
+// composer transition animation frames, iOS URL bar resize events all fire together)
+let _scrollTimer = null;
 function _scheduleScroll() {
-  if (_scrollScheduled) return;
-  _scrollScheduled = true;
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      _scrollScheduled = false;
-      _hardScrollBottom();
-    });
-  });
+  if (_scrollTimer) return;
+  _scrollTimer = setTimeout(() => {
+    _scrollTimer = null;
+    requestAnimationFrame(_hardScrollBottom);
+  }, 120);
 }
 (() => {
   const s = document.getElementById("stream");
