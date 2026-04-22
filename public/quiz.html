@@ -833,8 +833,20 @@ body.call-B .bubble.callout::before { content: none; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Editable user bubble (last answer) --- */
-.msg.me .bubble { position: relative; transition: transform 120ms var(--ease), box-shadow 160ms var(--ease); }
+/* --- User bubble interaction states --- */
+.msg.me .bubble {
+  position: relative;
+  transition: transform 120ms var(--ease), box-shadow 160ms var(--ease);
+  -webkit-touch-callout: none; /* suppress iOS long-press context menu */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Press-in feedback during the 500ms hold window — color-neutral, just a soft press + ring */
+.msg.me.long-pressing .bubble {
+  transform: scale(0.96);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.2);
+}
 .msg.me.editable .bubble { cursor: pointer; }
 .msg.me.editable .bubble:hover { box-shadow: 0 4px 10px -4px rgba(0,0,0,0.18); transform: translateY(-1px); }
 .msg.me .bubble .edit-hint {
@@ -1720,15 +1732,54 @@ function addUserMsg(html) {
   const el = document.createElement("div");
   el.className = "msg me enter";
   el.innerHTML = `
-    <div class="bubble" role="button" tabindex="0" title="Edit (undo last answer)">
+    <div class="bubble" role="button" tabindex="0" title="Long-press to edit">
       <span class="edit-hint" aria-hidden="true">
         <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13.5V16h2.5l9-9-2.5-2.5-9 9z"/></svg>
       </span>
       ${html}
     </div>`;
   stream.insertBefore(el, stream.firstChild);
-  // clicking an editable (most-recent) bubble triggers the same undo
+
+  // ----- Long-press gesture detection (Cmd 2b instrumentation; wires to edit mode in Cmd 2c) -----
+  // 500ms hold, cancels on >8px movement or pointer up/leave/cancel. Works with mouse, pen, and touch.
+  let pressTimer = null;
+  let startX = 0, startY = 0;
+  const LONG_PRESS_MS = 500;
+  const MOVE_THRESHOLD = 8;
+  const cancelPress = () => {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    el.classList.remove("long-pressing");
+  };
+  el.addEventListener("pointerdown", (e) => {
+    if (!e.isPrimary) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return; // only left mouse button
+    startX = e.clientX; startY = e.clientY;
+    el._longPressFired = false;
+    el.classList.add("long-pressing");
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      el.classList.remove("long-pressing");
+      el._longPressFired = true;
+      if (navigator.vibrate) navigator.vibrate(20); // no-op on iOS, works on Android
+      const sid = el.dataset.stepId || "(no stepId)";
+      console.log("[long-press] edit intent for stepId:", sid);
+      // Cmd 2c will replace this console.log with: enterEditMode(sid)
+    }, LONG_PRESS_MS);
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!pressTimer) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (dx * dx + dy * dy > MOVE_THRESHOLD * MOVE_THRESHOLD) cancelPress();
+  });
+  el.addEventListener("pointerup", cancelPress);
+  el.addEventListener("pointercancel", cancelPress);
+  el.addEventListener("pointerleave", cancelPress);
+
+  // ----- Legacy click-to-undo (on last bubble with .editable class) -----
+  // Still active as safety net during 2b. Removed in 2c when long-press replaces it.
+  // Suppressed if long-press just fired to avoid double-trigger.
   el.addEventListener("click", (e) => {
+    if (el._longPressFired) { el._longPressFired = false; return; }
     if (!el.classList.contains("editable")) return;
     if (lastSnapshot) { undoTo(lastSnapshot); }
   });
@@ -1737,6 +1788,7 @@ function addUserMsg(html) {
       undoTo(lastSnapshot);
     }
   });
+
   scrollToBottom();
   return el;
 }
