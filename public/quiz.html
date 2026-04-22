@@ -1643,19 +1643,9 @@ function _scheduleScroll() {
   }
 })();
 function scrollToBottom(delay = 20) {
-  setTimeout(() => {
-    if (!scrollState.follow) return;
-    const w = document.getElementById("streamWrap");
-    const last = stream && stream.lastElementChild;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (last && last.scrollIntoView) {
-      last.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
-    } else {
-      const target = w.scrollHeight - w.clientHeight;
-      if (reduce) w.scrollTop = target;
-      else w.scrollTo({ top: target, behavior: "smooth" });
-    }
-  }, delay);
+  /* No-op. Legacy function. scroll-to-bottom handled by MutationObserver on #stream
+     and ResizeObserver on #composer with debounce (see _scheduleScroll / _hardScrollBottom).
+     Keeping the signature so existing callers do not error. */
 }
 
 function addUniferMsg(html, variant="", lead="") {
