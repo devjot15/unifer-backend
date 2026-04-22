@@ -260,11 +260,13 @@ html, body { height: 100%; overflow: hidden; }
 .stream-wrap {
   flex: 1;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   padding: 20px 0;
-  /* Scroll is instant (no smooth) to prevent multiple scroll-to-bottom calls during composer resize from causing jitter. */
-  /* Column-reverse on .stream pins newest bubble visually at the bottom; JS sets scrollTop=scrollHeight via observers. */
+  /* overflow-anchor:none disables browser scroll-preservation that caused visible up-then-back jitter
+     when new bubbles were prepended to column-reverse .stream. */
+  overflow-anchor: none;
+  /* -webkit-overflow-scrolling:touch removed — it was causing momentum-style residue during programmatic scrollTop assignments. */
 }
+.stream { overflow-anchor: none; }
 .stream {
   max-width: 720px;
   margin: 0 auto;
