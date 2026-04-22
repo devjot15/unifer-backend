@@ -980,7 +980,18 @@ body.coach-on .composer { pointer-events: none; }
   color: #fff;
   box-shadow: 0 4px 14px -4px rgba(207, 78, 68, 0.5);
 }
-/* "Just edited" marker — reserved for replacement style (coming in follow-up commit). */
+/* Just-edited marker — thin amber left-edge accent bar, persists until next answer commits. */
+.msg.me.just-edited .bubble::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--amber-edge, #d9a441);
+  box-shadow: 0 0 6px rgba(217, 164, 65, 0.4);
+}
 
 </style>
 
