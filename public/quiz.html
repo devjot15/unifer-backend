@@ -1601,14 +1601,28 @@ const scrollState = { follow: true };
 // Force scroll to bottom of BOTH streamWrap AND window.
 // On iOS Safari, the body sometimes scrolls instead of streamWrap, so we cover both.
 // Sticky composer overlays content if scroll isn't pushed past it — use generous padding too.
-// WhatsApp-style chat: .stream has flex-direction: column-reverse + DOM prepend.
-// Newest bubble lands at visual bottom (near composer) via CSS — zero JS scroll needed.
-// Reset any inline padding-bottom left by previous implementations.
+// WhatsApp-style chat: .stream has column-reverse + DOM prepend so newest lands at visual bottom.
+// However stream-wrap scroll position doesn't auto-pin — we still need scrollTop = scrollHeight
+// after DOM changes so the user sees the newest bubble. Minimal, single function. CSS scroll-behavior: smooth
+// handles the animation.
 (() => {
   const w = document.getElementById("streamWrap");
   if (w) w.style.paddingBottom = "";
 })();
-function _hardScrollBottom() { /* no-op — CSS handles pinning */ }
+function _hardScrollBottom() {
+  const composerEl = document.getElementById("composer");
+  // Guard: bail when chat is hidden (landing page)
+  if (!composerEl || composerEl.offsetParent === null) return;
+  const w = document.getElementById("streamWrap");
+  if (!w) return;
+  w.scrollTop = w.scrollHeight;
+}
+// Call _hardScrollBottom whenever a new bubble is added (i.e. stream DOM mutates)
+(() => {
+  const s = document.getElementById("stream");
+  if (!s || !window.MutationObserver) return;
+  new MutationObserver(() => _hardScrollBottom()).observe(s, { childList: true });
+})();
 function scrollToBottom(delay = 20) {
   setTimeout(() => {
     if (!scrollState.follow) return;
@@ -2616,7 +2630,8 @@ async function askStep(step) {
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
   addUniferMsg(prompt);
   renderComposer(step);
-  // No scroll needed — column-reverse keeps newest at visual bottom
+  // Scroll after composer renders (composer can grow, shrinking streamWrap viewport)
+  requestAnimationFrame(() => _hardScrollBottom());
 }
 
 async function startChat() {
