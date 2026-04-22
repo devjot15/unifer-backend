@@ -1606,9 +1606,11 @@ function _hardScrollBottom() {
     // Generous bottom padding so content can sit above composer-overlap zone
     w.style.paddingBottom = (composerEl.offsetHeight + 40) + "px";
   }
-  if (w) w.scrollTop = w.scrollHeight;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const behavior = reduce ? "auto" : "smooth";
+  if (w) w.scrollTo({ top: w.scrollHeight, behavior });
   // Window/body scroll fallback (iOS Safari)
-  window.scrollTo(0, document.documentElement.scrollHeight);
+  window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
 }
 // Composer resize observer — re-scroll whenever composer grows/shrinks
 (() => {
