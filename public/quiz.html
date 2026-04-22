@@ -258,14 +258,15 @@
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 0 180px;
+  padding: 20px 0;
   scroll-behavior: smooth;
+  /* Content grows upward from bottom via column-reverse on .stream; newest stays pinned above composer without JS. */
 }
 .stream {
   max-width: 720px;
   margin: 0 auto;
   padding: 0 16px;
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex; flex-direction: column-reverse; gap: 12px;
 }
 .msg { display: flex; gap: 10px; max-width: 100%; }
 .msg.enter { animation: msg-in 380ms var(--ease) both; }
@@ -1600,33 +1601,14 @@ const scrollState = { follow: true };
 // Force scroll to bottom of BOTH streamWrap AND window.
 // On iOS Safari, the body sometimes scrolls instead of streamWrap, so we cover both.
 // Sticky composer overlays content if scroll isn't pushed past it — use generous padding too.
-// Scroll to bottom of streamWrap. Uses direct scrollTop — browser honors CSS scroll-behavior:smooth
-// for smooth animation without the flakiness of scrollTo({behavior:smooth}) on iOS Safari.
-function _hardScrollBottom() {
-  const composerEl = document.getElementById("composer");
-  // Guard: bail when chat is hidden (landing page) — prevents landing auto-scroll.
-  if (!composerEl || composerEl.offsetParent === null) return;
-  const w = document.getElementById("streamWrap");
-  if (!w) return;
-  // Dynamic padding so bottom content has room above the composer
-  w.style.paddingBottom = (composerEl.offsetHeight + 40) + "px";
-  // Direct scrollTop — browser applies CSS scroll-behavior: smooth
-  w.scrollTop = w.scrollHeight;
-}
-// Composer resize observer: re-scroll when composer grows/shrinks (e.g. chip->text question change)
+// WhatsApp-style chat: .stream has flex-direction: column-reverse + DOM prepend.
+// Newest bubble lands at visual bottom (near composer) via CSS — zero JS scroll needed.
+// Reset any inline padding-bottom left by previous implementations.
 (() => {
-  const composerEl = document.getElementById("composer");
-  if (!composerEl || !window.ResizeObserver) return;
-  let pending = false;
-  new ResizeObserver(() => {
-    if (pending) return;
-    pending = true;
-    requestAnimationFrame(() => {
-      pending = false;
-      if (scrollState.follow) _hardScrollBottom();
-    });
-  }).observe(composerEl);
+  const w = document.getElementById("streamWrap");
+  if (w) w.style.paddingBottom = "";
 })();
+function _hardScrollBottom() { /* no-op — CSS handles pinning */ }
 function scrollToBottom(delay = 20) {
   setTimeout(() => {
     if (!scrollState.follow) return;
@@ -1652,7 +1634,7 @@ function addUniferMsg(html, variant="", lead="") {
       ${lead ? `<span class="lead">${lead}</span>` : ""}
       <span class="txt">${html}</span>
     </div>`;
-  stream.appendChild(el);
+  stream.insertBefore(el, stream.firstChild);
   scrollToBottom();
   return el;
 }
@@ -1691,7 +1673,7 @@ function addWarningCard(warning) {
     </div>
   `;
 
-  stream.appendChild(card);
+  stream.insertBefore(card, stream.firstChild);
   scrollToBottom(50);
 
   if (warning.actions && warning.actions.length > 0) {
@@ -1738,7 +1720,7 @@ function addCalloutMsg(html) {
   const el = document.createElement("div");
   el.className = "msg u callout-wrap";
   el.innerHTML = `<div class="avatar small">U</div><div class="bubble callout"><span class="txt">${html}</span></div>`;
-  stream.appendChild(el);
+  stream.insertBefore(el, stream.firstChild);
   scrollToBottom();
   return el;
 }
@@ -1752,7 +1734,7 @@ function addUserMsg(html) {
       </span>
       ${html}
     </div>`;
-  stream.appendChild(el);
+  stream.insertBefore(el, stream.firstChild);
   // clicking an editable (most-recent) bubble triggers the same undo
   el.addEventListener("click", (e) => {
     if (!el.classList.contains("editable")) return;
@@ -1770,7 +1752,7 @@ function showTyping(delay=650) {
   const el = document.createElement("div");
   el.className = "msg u enter";
   el.innerHTML = `<div class="avatar small">U</div><div class="typing"><span></span><span></span><span></span></div>`;
-  stream.appendChild(el);
+  stream.insertBefore(el, stream.firstChild);
   scrollToBottom();
   return new Promise(r => setTimeout(() => { el.remove(); r(); }, delay));
 }
@@ -1844,7 +1826,7 @@ function addRibbon(oldN, newN) {
       </div>
       <div class="rib-sub">${subText}</div>
     </div>`;
-  stream.appendChild(el);
+  stream.insertBefore(el, stream.firstChild);
   scrollToBottom();
   // kick off the sheen sweep (variant A; no-op in variant B via CSS)
   requestAnimationFrame(() => el.classList.add("sweep-run"));
@@ -2060,9 +2042,9 @@ function submitAnswer(stepId, value, displayLabel) {
     answers: { ...state.answers },
     count: state.count,
     index: state.index,
-    // anchor = the last DOM node before we append the user's answer;
-    // on undo we remove everything after this node.
-    anchor: stream.lastElementChild,
+    // anchor = the first DOM node before we prepend the user's answer (first-in-DOM = newest);
+    // on undo we remove everything before this node (everything newer than anchor).
+    anchor: stream.firstElementChild,
     step: FLOW.find(s => s.id === stepId) || null,
   };
   state.answers[stepId] = value;
@@ -2136,8 +2118,8 @@ function hideUndoToast() {
 function undoTo(snap) {
   // 1. Remove all DOM added after the anchor
   const anchor = snap.anchor;
-  while (stream.lastElementChild && stream.lastElementChild !== anchor) {
-    stream.removeChild(stream.lastElementChild);
+  while (stream.firstElementChild && stream.firstElementChild !== anchor) {
+    stream.removeChild(stream.firstElementChild);
   }
   // 2. Restore engine state
   state.answers = { ...snap.answers };
@@ -2634,9 +2616,7 @@ async function askStep(step) {
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
   addUniferMsg(prompt);
   renderComposer(step);
-  // Force scroll after composer renders (composer size can change → streamWrap shrinks → need re-scroll)
-  scrollState.follow = true;
-  requestAnimationFrame(() => _hardScrollBottom());
+  // No scroll needed — column-reverse keeps newest at visual bottom
 }
 
 async function startChat() {
@@ -2707,7 +2687,7 @@ async function finish() {
       </button>
       <button class="text-link" id="alldone-start-over">Start over</button>
     </div>`;
-  stream.appendChild(end);
+  stream.insertBefore(end, stream.firstChild);
   scrollToBottom(50);
   composer.innerHTML = "";
 
