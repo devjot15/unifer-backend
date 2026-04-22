@@ -877,55 +877,58 @@ body.call-B .bubble.callout::before { content: none; }
   color: var(--amber-ink, #6b4a14);
 }
 
-/* Coachmark — first-answer onboarding tip; shown once per browser via localStorage flag */
+/* Coachmark — minimal contextual pointer bubble above the user's first answer.
+   Red-on-teal contrast is intentional; blur is very light so the underlying bubble stays clearly visible. */
 .coachmark-overlay {
   position: fixed; inset: 0;
-  background: rgba(20, 30, 30, 0.45);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
+  background: rgba(20, 30, 30, 0.18);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: 9999;
   opacity: 0;
   animation: coach-fade 260ms var(--ease) forwards;
 }
 @keyframes coach-fade { to { opacity: 1; } }
-.coachmark-card {
-  width: 100%; max-width: 320px;
-  background: #fff;
-  border: 2px solid var(--amber-edge, #d9a441);
-  border-radius: 18px;
-  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.35);
-  padding: 24px 22px 18px;
-  text-align: center;
-  transform: scale(0.94);
-  animation: coach-scale 320ms var(--ease) forwards;
-}
-@keyframes coach-scale { to { transform: scale(1); } }
-.coachmark-icon {
-  width: 48px; height: 48px; border-radius: 50%;
-  background: var(--amber-soft, #fff4de);
-  color: var(--amber-ink, #6b4a14);
-  display: inline-flex; align-items: center; justify-content: center;
-  margin-bottom: 14px;
-}
-.coachmark-title {
-  font-size: 15px; font-weight: 600; color: var(--ink, #1a2828);
-  letter-spacing: -0.01em; line-height: 1.45;
-  margin: 0 0 18px;
-}
-.coachmark-ok {
-  width: 100%;
-  padding: 11px 16px;
-  background: var(--teal, #0e6b6b);
+.coachmark-pointer {
+  position: absolute;
+  max-width: 280px;
+  background: rgba(207, 78, 68, 0.96);
   color: #fff;
-  border: 0; border-radius: 999px;
-  font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
-  cursor: pointer;
-  transition: background 150ms var(--ease), transform 120ms var(--ease);
+  padding: 12px 14px 12px;
+  border-radius: 12px;
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.32);
+  font-size: 13.5px;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  transform: translateY(8px);
+  animation: coach-slide 280ms var(--ease) forwards;
 }
-.coachmark-ok:hover { background: oklch(48% 0.075 185); }
-.coachmark-ok:active { transform: scale(0.97); }
+@keyframes coach-slide { to { transform: translateY(0); } }
+.coachmark-pointer::after {
+  content: "";
+  position: absolute;
+  width: 12px; height: 12px;
+  background: rgba(207, 78, 68, 0.96);
+  transform: rotate(45deg);
+}
+.coachmark-pointer.arrow-down::after { bottom: -5px; right: 28px; }
+.coachmark-pointer.arrow-up::after { top: -5px; right: 28px; }
+.coachmark-line { display: block; }
+.coachmark-line + .coachmark-line { margin-top: 6px; }
+.coachmark-ok {
+  display: block;
+  margin: 10px 0 0 auto;
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms var(--ease);
+}
+.coachmark-ok:hover { background: rgba(255, 255, 255, 0.28); }
+.coachmark-ok:active { background: rgba(255, 255, 255, 0.12); }
 
 /* Cascade banner — appears when edit wipes downstream answers */
 .cascade-banner {
@@ -2854,21 +2857,50 @@ document.body.classList.add("pill-A", "trans-A", "call-A", "ribbon-soft");
 
 function showCoachmark() {
   if (document.querySelector(".coachmark-overlay")) return; // already showing
+  // Find the user's first-answered bubble to position the pointer near it.
+  // After prepend-based insertion, the most recent user bubble is the first-in-DOM.
+  const userBubble = document.querySelector("#stream .msg.me");
+  if (!userBubble) return; // nothing to point at; skip (bubble should exist by the 600ms timeout)
+
   const overlay = document.createElement("div");
   overlay.className = "coachmark-overlay";
-  overlay.innerHTML = `
-    <div class="coachmark-card" role="dialog" aria-modal="true" aria-labelledby="coachTitle">
-      <div class="coachmark-icon" aria-hidden="true">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-        </svg>
-      </div>
-      <p class="coachmark-title" id="coachTitle">Long-press any answer to edit it. Tap &#x2715; to cancel edit.</p>
-      <button class="coachmark-ok" type="button">OK</button>
-    </div>`;
+
+  const bubbleRect = userBubble.getBoundingClientRect();
+  // Place pointer ABOVE the bubble if room (>180px of space above), else BELOW.
+  const placeAbove = bubbleRect.top > 200;
+
+  const pointer = document.createElement("div");
+  pointer.className = "coachmark-pointer " + (placeAbove ? "arrow-down" : "arrow-up");
+  pointer.setAttribute("role", "dialog");
+  pointer.setAttribute("aria-modal", "true");
+  pointer.innerHTML = `
+    <span class="coachmark-line">Long-press any answer to edit it.</span>
+    <span class="coachmark-line">Tap &#x2715; to cancel edit.</span>
+    <button class="coachmark-ok" type="button">OK</button>`;
+  overlay.appendChild(pointer);
+  const host = document.getElementById("app-root") || document.body;
+  host.appendChild(overlay);
+
+  // After layout settles, measure the pointer and position it relative to the user bubble.
+  requestAnimationFrame(() => {
+    const pw = pointer.offsetWidth;
+    const ph = pointer.offsetHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    // Horizontal: align pointer right edge near bubble right edge (with 8px inset) — keeps arrow near bubble.
+    let left = bubbleRect.right - pw + 8;
+    left = Math.max(12, Math.min(left, vw - pw - 12));
+    // Vertical: above with 14px gap, or below
+    let top = placeAbove
+      ? bubbleRect.top - ph - 14
+      : bubbleRect.bottom + 14;
+    top = Math.max(12, Math.min(top, vh - ph - 12));
+    pointer.style.left = left + "px";
+    pointer.style.top = top + "px";
+  });
+
   const dismiss = () => {
-    overlay.style.animation = "coach-fade 220ms var(--ease) reverse";
-    setTimeout(() => overlay.remove(), 200);
+    overlay.style.animation = "coach-fade 200ms var(--ease) reverse";
+    setTimeout(() => overlay.remove(), 180);
     try { localStorage.setItem("unifer_coachmark_seen", "1"); } catch (e) {}
     document.removeEventListener("keydown", coachKey);
   };
@@ -2878,14 +2910,12 @@ function showCoachmark() {
       dismiss();
     }
   };
-  overlay.querySelector(".coachmark-ok").addEventListener("click", dismiss);
-  // Tap outside the card also dismisses
+  pointer.querySelector(".coachmark-ok").addEventListener("click", dismiss);
+  // Tap on overlay (outside pointer) also dismisses
   overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
   document.addEventListener("keydown", coachKey);
-  const host = document.getElementById("app-root") || document.body;
-  host.appendChild(overlay);
-  // Auto-focus the OK button so keyboard users can Enter-to-dismiss
-  requestAnimationFrame(() => overlay.querySelector(".coachmark-ok").focus());
+  // Focus OK so keyboard users can Enter-to-dismiss
+  requestAnimationFrame(() => pointer.querySelector(".coachmark-ok").focus());
 }
 
 /* ============================================================
