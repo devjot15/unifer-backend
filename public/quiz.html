@@ -1599,25 +1599,48 @@ const scrollState = { follow: true };
 // Force scroll to bottom of BOTH streamWrap AND window.
 // On iOS Safari, the body sometimes scrolls instead of streamWrap, so we cover both.
 // Sticky composer overlays content if scroll isn't pushed past it — use generous padding too.
+// Custom rAF smooth scroll — reliable on iOS Safari (scrollTo({behavior:smooth}) is flaky there).
+// Writes scrollTop directly each frame using easeInOutQuad easing.
+function _smoothScrollTo(target, scrollTop, duration) {
+  const isWindow = target === window;
+  const start = isWindow ? (window.scrollY || window.pageYOffset) : target.scrollTop;
+  const change = scrollTop - start;
+  if (Math.abs(change) < 2) return;
+  const startTime = performance.now();
+  const ease = t => t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const pos = start + change * ease(progress);
+    if (isWindow) window.scrollTo(0, pos);
+    else target.scrollTop = pos;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
 function _hardScrollBottom() {
   const w = document.getElementById("streamWrap");
-  const composerEl = document.getElementById("composer");
-  if (w && composerEl) {
-    // Generous bottom padding so content can sit above composer-overlap zone
-    w.style.paddingBottom = (composerEl.offsetHeight + 40) + "px";
-  }
+  if (!w) return;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const behavior = reduce ? "auto" : "smooth";
-  if (w) w.scrollTo({ top: w.scrollHeight, behavior });
-  // Window/body scroll fallback (iOS Safari)
-  window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+  const wTarget = Math.max(0, w.scrollHeight - w.clientHeight);
+  const winTarget = document.documentElement.scrollHeight;
+  if (reduce) {
+    w.scrollTop = wTarget;
+    window.scrollTo(0, winTarget);
+  } else {
+    _smoothScrollTo(w, wTarget, 380);
+    _smoothScrollTo(window, winTarget, 380);
+  }
 }
-// Composer resize observer — re-scroll whenever composer grows/shrinks
+// Composer resize observer — keeps padding-bottom in sync (so there is room to scroll past composer)
+// and re-triggers scroll when composer grows. Padding update is separate from scroll so smooth scroll has a real delta to animate.
 (() => {
   const composerEl = document.getElementById("composer");
   if (!composerEl || !window.ResizeObserver) return;
   let pending = false;
   new ResizeObserver(() => {
+    const w = document.getElementById("streamWrap");
+    if (w) w.style.paddingBottom = (composerEl.offsetHeight + 40) + "px";
     if (pending) return;
     pending = true;
     requestAnimationFrame(() => {
