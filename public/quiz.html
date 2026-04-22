@@ -1596,6 +1596,19 @@ const scrollState = { follow: true };
     scrollState.follow = distFromBottom < 200;
   }, { passive: true });
 })();
+function syncComposerPadding() {
+  const composerEl = document.getElementById("composer");
+  const streamWrap = document.getElementById("streamWrap");
+  if (!composerEl || !streamWrap) return;
+  streamWrap.style.paddingBottom = (composerEl.offsetHeight + 24) + "px";
+  if (scrollState.follow) scrollToBottom(0);
+}
+(() => {
+  const composerEl = document.getElementById("composer");
+  if (composerEl && window.ResizeObserver) {
+    new ResizeObserver(syncComposerPadding).observe(composerEl);
+  }
+})();
 function scrollToBottom(delay = 20) {
   setTimeout(() => {
     if (!scrollState.follow) return;
