@@ -1049,8 +1049,9 @@ body.coach-on .composer { pointer-events: none; }
 .summary-row-value {
   font-size: 13.5px; font-weight: 500; color: #1a2828;
   max-width: 60%;
-  text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
   text-align: right;
+  line-height: 1.5;
+  /* Wraps onto multiple lines when needed (e.g. ranking row). Short values still fit on one line. */
 }
 .summary-hint {
   padding: 8px 16px 4px;
@@ -3079,7 +3080,10 @@ const SUMMARY_LABELS = {
   // ---- Section 2: Priorities ----
   "country_decided":           { label: "Country decided",  valueFn: (v, step) => _getChipLabel(step, v) },
   "selected_country":          { label: "Country",          valueFn: () => "Selected" },
-  "priorities":                { label: "Priorities",       valueFn: () => "Ranked" },
+  "priorities":                { label: "Ranking",          valueFn: (v) => {
+    if (!Array.isArray(v) || v.length === 0) return "Ranked";
+    return v.slice(0, 3).map((item, i) => `${i + 1}. ${item}`).join("  ");
+  }},
   // ---- Section 3: Country preferences ----
   "work_permit_importance":    { label: "Work permit",      valueFn: (v, step) => _getChipLabel(step, v) },
   "english_preference":        { label: "English",          valueFn: (v, step) => _getChipLabel(step, v) },
