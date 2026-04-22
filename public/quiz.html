@@ -959,16 +959,23 @@ body.coach-on .composer { pointer-events: none; }
 .coachmark-ok:hover { background: rgba(255, 255, 255, 0.3); }
 .coachmark-ok:active { background: rgba(255, 255, 255, 0.12); }
 
-/* Cascade banner — appears when edit wipes downstream answers */
+/* Cascade banner — red to match coachmark (high-salience consequence announcement). Distinct from
+   amber edit-chrome (ongoing state) — visual grammar: amber=state, red=announcement. */
 .cascade-banner {
   max-width: 720px; margin: 0 auto;
-  padding: 10px 14px;
-  background: var(--amber-soft, #fff4de);
-  border: 1px solid var(--amber-edge, #d9a441);
+  padding: 12px 16px;
+  background: rgba(207, 78, 68, 0.96);
+  border: 1px solid rgba(207, 78, 68, 0.96);
   border-radius: 10px;
-  color: var(--amber-ink, #6b4a14);
-  font-size: 13px; letter-spacing: -0.005em;
+  color: #fff;
+  font-size: 13.5px; letter-spacing: -0.005em; line-height: 1.45;
+  box-shadow: 0 6px 16px -6px rgba(207, 78, 68, 0.45);
   animation: msg-in 380ms var(--ease);
+}
+
+/* Blue ring on the user bubble the user just edited — cleared when they answer the next question. */
+.msg.me.just-edited .bubble {
+  box-shadow: 0 0 0 2px #3b82f6, 0 4px 10px -4px rgba(59, 130, 246, 0.35);
 }
 
 </style>
@@ -2193,6 +2200,8 @@ function submitAnswer(stepId, value, displayLabel) {
   applyBachelorAutoPG();
   const userBubble = addUserMsg(displayLabel);
   userBubble.dataset.stepId = stepId;
+  // Clear any blue "just-edited" rings from previous edits — next answer has been committed, acknowledgment is complete
+  stream.querySelectorAll(".msg.me.just-edited").forEach(el => el.classList.remove("just-edited"));
   // High School → halt the quiz with a blocking message instead of advancing.
   if (stepId === "profile_degree_completed" && isUGBlocked()) {
     composer.innerHTML = "";
@@ -3059,6 +3068,12 @@ function commitEdit(stepId, value, displayLabel) {
   state.answers[stepId] = value;
   applyBachelorAutoPG();
 
+  // Capture suspendedIdx BEFORE we clear state (otherwise null defaults it to FLOW.length → count is wrong by ~10×)
+  const editedIdx = FLOW.findIndex(s => s.id === stepId);
+  const suspendedIdx = state.suspendedStep
+    ? FLOW.findIndex(s => s.id === state.suspendedStep.id)
+    : FLOW.length;
+
   // Update user bubble text in place
   const userBubbleEl = stream.querySelector(`.msg.me[data-step-id="${stepId}"]`);
   if (userBubbleEl) {
@@ -3069,6 +3084,10 @@ function commitEdit(stepId, value, displayLabel) {
   // Run cascade — find and wipe downstream answers that are no longer valid
   const wiped = cascadeFrom(stepId);
 
+  // Mark the edited bubble with a blue ring — cleared when user answers the next question (see submitAnswer).
+  stream.querySelectorAll(".msg.me.just-edited").forEach(el => el.classList.remove("just-edited"));
+  if (userBubbleEl) userBubbleEl.classList.add("just-edited");
+
   // Clear edit state
   state.editingStepId = null;
   state.suspendedStep = null;
@@ -3078,13 +3097,8 @@ function commitEdit(stepId, value, displayLabel) {
   // Refresh counter (answers changed)
   if (typeof _refreshRealCount === "function") _refreshRealCount();
 
-  // Count total questions the user will face before resuming: newly-revealed + wiped-and-still-visible questions.
-  // A wiped question that is NOW hidden (its skipIf turned true after the edit) is NOT counted — user won't answer it.
-  // A previously-hidden question that is now visible IS counted — user will answer it.
-  const editedIdx = FLOW.findIndex(s => s.id === stepId);
-  const suspendedIdx = state.suspendedStep
-    ? FLOW.findIndex(s => s.id === state.suspendedStep.id)
-    : FLOW.length;
+  // Count total questions the user will face before resuming: newly-revealed + wiped-and-still-visible questions
+  // between the edit and where the user was (suspendedIdx captured above before state clearing).
   let pendingCount = 0;
   for (let i = editedIdx + 1; i < suspendedIdx; i++) {
     const s = FLOW[i];
