@@ -1596,18 +1596,27 @@ const scrollState = { follow: true };
     scrollState.follow = distFromBottom < 200;
   }, { passive: true });
 })();
-function syncComposerPadding() {
-  const composerEl = document.getElementById("composer");
-  const streamWrap = document.getElementById("streamWrap");
-  if (!composerEl || !streamWrap) return;
-  streamWrap.style.paddingBottom = (composerEl.offsetHeight + 24) + "px";
-  if (scrollState.follow) scrollToBottom(0);
-}
+// On composer resize, re-scroll streamWrap to bottom.
+// Composer is sibling to streamWrap; when composer grows (e.g. chip question
+// renders multiple rows), streamWrap shrinks via flex:1, pushing the
+// previously-visible bottom content out of view. Re-scrolling restores it.
 (() => {
   const composerEl = document.getElementById("composer");
-  if (composerEl && window.ResizeObserver) {
-    new ResizeObserver(syncComposerPadding).observe(composerEl);
-  }
+  const streamWrapEl = document.getElementById("streamWrap");
+  // Reset any inline padding-bottom set by previous (broken) implementation
+  if (streamWrapEl) streamWrapEl.style.paddingBottom = "";
+  if (!composerEl || !window.ResizeObserver) return;
+  let pending = null;
+  new ResizeObserver(() => {
+    if (!scrollState.follow || pending) return;
+    pending = requestAnimationFrame(() => {
+      pending = null;
+      const w = document.getElementById("streamWrap");
+      if (!w) return;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      w.scrollTo({ top: w.scrollHeight, behavior: reduce ? "auto" : "smooth" });
+    });
+  }).observe(composerEl);
 })();
 function scrollToBottom(delay = 20) {
   setTimeout(() => {
@@ -2616,6 +2625,14 @@ async function askStep(step) {
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
   addUniferMsg(prompt);
   renderComposer(step);
+  // Composer may grow significantly (chip/grid/rank); re-scroll to keep prompt visible
+  requestAnimationFrame(() => {
+    const w = document.getElementById("streamWrap");
+    if (w && scrollState.follow) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      w.scrollTo({ top: w.scrollHeight, behavior: reduce ? "auto" : "smooth" });
+    }
+  });
 }
 
 async function startChat() {
