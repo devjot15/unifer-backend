@@ -877,6 +877,56 @@ body.call-B .bubble.callout::before { content: none; }
   color: var(--amber-ink, #6b4a14);
 }
 
+/* Coachmark — first-answer onboarding tip; shown once per browser via localStorage flag */
+.coachmark-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 30, 30, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  z-index: 9999;
+  opacity: 0;
+  animation: coach-fade 260ms var(--ease) forwards;
+}
+@keyframes coach-fade { to { opacity: 1; } }
+.coachmark-card {
+  width: 100%; max-width: 320px;
+  background: #fff;
+  border: 2px solid var(--amber-edge, #d9a441);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.35);
+  padding: 24px 22px 18px;
+  text-align: center;
+  transform: scale(0.94);
+  animation: coach-scale 320ms var(--ease) forwards;
+}
+@keyframes coach-scale { to { transform: scale(1); } }
+.coachmark-icon {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--amber-soft, #fff4de);
+  color: var(--amber-ink, #6b4a14);
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+.coachmark-title {
+  font-size: 15px; font-weight: 600; color: var(--ink, #1a2828);
+  letter-spacing: -0.01em; line-height: 1.45;
+  margin: 0 0 18px;
+}
+.coachmark-ok {
+  width: 100%;
+  padding: 11px 16px;
+  background: var(--teal, #0e6b6b);
+  color: #fff;
+  border: 0; border-radius: 999px;
+  font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 150ms var(--ease), transform 120ms var(--ease);
+}
+.coachmark-ok:hover { background: oklch(48% 0.075 185); }
+.coachmark-ok:active { transform: scale(0.97); }
+
 /* Cascade banner — appears when edit wipes downstream answers */
 .cascade-banner {
   max-width: 720px; margin: 0 auto;
@@ -2111,6 +2161,12 @@ function submitAnswer(stepId, value, displayLabel) {
   applyBachelorAutoPG();
   const userBubble = addUserMsg(displayLabel);
   userBubble.dataset.stepId = stepId;
+  // Coachmark: show once on the very first answer of the user's lifetime in this browser.
+  try {
+    if (!localStorage.getItem("unifer_coachmark_seen")) {
+      setTimeout(showCoachmark, 600);
+    }
+  } catch (e) { /* localStorage blocked (private mode); silently skip */ }
   // High School → halt the quiz with a blocking message instead of advancing.
   if (stepId === "profile_degree_completed" && isUGBlocked()) {
     composer.innerHTML = "";
@@ -2791,6 +2847,46 @@ document.querySelectorAll("#startBtn, #startBtn2").forEach(btn => btn.addEventLi
 document.body.classList.add("pill-A", "trans-A", "call-A", "ribbon-soft");
 
 
+
+/* ============================================================
+   COACHMARK — first-answer onboarding tip (one-time via localStorage)
+   ============================================================ */
+
+function showCoachmark() {
+  if (document.querySelector(".coachmark-overlay")) return; // already showing
+  const overlay = document.createElement("div");
+  overlay.className = "coachmark-overlay";
+  overlay.innerHTML = `
+    <div class="coachmark-card" role="dialog" aria-modal="true" aria-labelledby="coachTitle">
+      <div class="coachmark-icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+      </div>
+      <p class="coachmark-title" id="coachTitle">Long-press any answer to edit it. Tap &#x2715; to cancel edit.</p>
+      <button class="coachmark-ok" type="button">OK</button>
+    </div>`;
+  const dismiss = () => {
+    overlay.style.animation = "coach-fade 220ms var(--ease) reverse";
+    setTimeout(() => overlay.remove(), 200);
+    try { localStorage.setItem("unifer_coachmark_seen", "1"); } catch (e) {}
+    document.removeEventListener("keydown", coachKey);
+  };
+  const coachKey = (e) => {
+    if (e.key === "Enter" || e.key === "Escape" || e.key === " ") {
+      e.preventDefault();
+      dismiss();
+    }
+  };
+  overlay.querySelector(".coachmark-ok").addEventListener("click", dismiss);
+  // Tap outside the card also dismisses
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
+  document.addEventListener("keydown", coachKey);
+  const host = document.getElementById("app-root") || document.body;
+  host.appendChild(overlay);
+  // Auto-focus the OK button so keyboard users can Enter-to-dismiss
+  requestAnimationFrame(() => overlay.querySelector(".coachmark-ok").focus());
+}
 
 /* ============================================================
    EDIT MODE (Cmd 2c) — long-press → edit past answer → cascade
