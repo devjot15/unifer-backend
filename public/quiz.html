@@ -1619,6 +1619,10 @@ function _smoothScrollTo(target, scrollTop, duration) {
   requestAnimationFrame(step);
 }
 function _hardScrollBottom() {
+  const composerEl = document.getElementById("composer");
+  // Guard: don't scroll when chat is hidden (landing page). offsetParent is null for
+  // elements inside display:none ancestors — this covers landing-page ResizeObserver fires.
+  if (!composerEl || composerEl.offsetParent === null) return;
   const w = document.getElementById("streamWrap");
   if (!w) return;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
