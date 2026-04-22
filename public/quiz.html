@@ -833,37 +833,6 @@ body.call-B .bubble.callout::before { content: none; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Undo toast --- */
-.undo-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--composer-height, 128px) + 16px + var(--safe-bottom));
-  transform: translate(-50%, 12px);
-  display: inline-flex; align-items: center; gap: 12px;
-  padding: 8px 10px 8px 14px;
-  background: rgba(33, 48, 46, 0.95);
-  color: #fff;
-  border-radius: 999px;
-  font-size: 13px;
-  box-shadow: 0 8px 24px -8px rgba(0,0,0,0.3);
-  opacity: 0; pointer-events: none;
-  transition: opacity 220ms var(--ease), transform 260ms var(--ease);
-  z-index: 9500;
-}
-.undo-toast.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
-.undo-toast .undo-txt { opacity: 0.75; }
-.undo-toast .undo-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px 5px 10px;
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-  border: 0; border-radius: 999px;
-  font-size: 12.5px; font-weight: 600;
-  cursor: pointer;
-  transition: background 150ms var(--ease);
-}
-.undo-toast .undo-btn:hover { background: rgba(255,255,255,0.16); }
-
 /* --- Editable user bubble (last answer) --- */
 .msg.me .bubble { position: relative; transition: transform 120ms var(--ease), box-shadow 160ms var(--ease); }
 .msg.me.editable .bubble { cursor: pointer; }
@@ -1761,11 +1730,11 @@ function addUserMsg(html) {
   // clicking an editable (most-recent) bubble triggers the same undo
   el.addEventListener("click", (e) => {
     if (!el.classList.contains("editable")) return;
-    if (lastSnapshot) { undoTo(lastSnapshot); hideUndoToast(); }
+    if (lastSnapshot) { undoTo(lastSnapshot); }
   });
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && el.classList.contains("editable") && lastSnapshot) {
-      undoTo(lastSnapshot); hideUndoToast();
+      undoTo(lastSnapshot);
     }
   });
   scrollToBottom();
@@ -2077,9 +2046,8 @@ function submitAnswer(stepId, value, displayLabel) {
   // mark previous user bubbles as non-editable (we only allow undo of the last)
   stream.querySelectorAll(".msg.me.editable").forEach(el => el.classList.remove("editable"));
   userBubble.classList.add("editable");
-  // Remember snapshot so the last bubble AND the toast both point to it
+  // Remember snapshot so the last bubble's click-to-undo works (toast dropped — long-press edit coming in Cmd 2c)
   lastSnapshot = snap;
-  showUndoToast(snap);
   // High School → halt the quiz with a blocking message instead of advancing.
   if (stepId === "profile_degree_completed" && isUGBlocked()) {
     composer.innerHTML = "";
@@ -2106,37 +2074,6 @@ function submitAnswer(stepId, value, displayLabel) {
 }
 
 let lastSnapshot = null;
-let undoToastTimer = null;
-
-function showUndoToast(snap) {
-  // reuse toast element if present
-  let toast = document.getElementById("undoToast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "undoToast";
-    toast.className = "undo-toast";
-    toast.innerHTML = `
-      <span class="undo-txt">Answer saved</span>
-      <button class="undo-btn" type="button">
-        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 4 9l5 5M4 9h9a5 5 0 0 1 0 10h-3"/></svg>
-        Undo
-      </button>`;
-    // Attach to #app-root (not body) so the view swap clears the toast automatically.
-    const host = document.getElementById("app-root") || document.body;
-    host.appendChild(toast);
-    toast.querySelector(".undo-btn").addEventListener("click", () => {
-      if (lastSnapshot) undoTo(lastSnapshot);
-      hideUndoToast();
-    });
-  }
-  clearTimeout(undoToastTimer);
-  toast.classList.add("on");
-  undoToastTimer = setTimeout(hideUndoToast, 3500);
-}
-function hideUndoToast() {
-  const toast = document.getElementById("undoToast");
-  if (toast) toast.classList.remove("on");
-}
 
 function undoTo(snap) {
   // 1. Remove all DOM added after the anchor
@@ -2819,13 +2756,6 @@ document.querySelectorAll("#startBtn, #startBtn2").forEach(btn => btn.addEventLi
 /* Apply default visual variants once (Tweaks debug panel removed). */
 document.body.classList.add("pill-A", "trans-A", "call-A", "ribbon-soft");
 
-/* Safety: if the quiz view is torn down via hash navigation while an undo
-   toast is visible, make sure the toast doesn't leak onto the next view. */
-window.addEventListener("hashchange", function cleanupToast() {
-  const t = document.getElementById("undoToast");
-  if (t) t.remove();
-}, { once: true });
-
 /* Start-over reset — results.html dispatches this event before navigating
    back to the quiz. Clear closure-scoped state and DOM so the returning
    student lands on the landing page, not the last answered step.
@@ -2853,8 +2783,6 @@ function resetQuizState() {
   if (chatEl) chatEl.setAttribute("aria-hidden", "true");
   const counterEl = document.getElementById("counter");
   if (counterEl) counterEl.classList.add("hidden");
-  const toastEl = document.getElementById("undoToast");
-  if (toastEl) toastEl.remove();
   if (window.UNIFER) window.UNIFER.answers = {};
 }
 if (window._uniferResetListener) {
