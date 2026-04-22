@@ -842,10 +842,12 @@ body.call-B .bubble.callout::before { content: none; }
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-/* Press-in feedback during the 500ms hold window — color-neutral, just a soft press + ring */
+/* Press-in feedback during the 500ms hold window — highly visible so user can tell press is registering */
+.msg.me .bubble { touch-action: manipulation; }
 .msg.me.long-pressing .bubble {
-  transform: scale(0.96);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.2);
+  transform: scale(0.93);
+  box-shadow: 0 0 0 4px var(--amber-edge, #d9a441), 0 6px 14px -4px rgba(0, 0, 0, 0.3);
+  opacity: 0.85;
 }
 .msg.me.editable .bubble { cursor: pointer; }
 .msg.me.editable .bubble:hover { box-shadow: 0 4px 10px -4px rgba(0,0,0,0.18); transform: translateY(-1px); }
@@ -1775,20 +1777,6 @@ function addUserMsg(html) {
   el.addEventListener("pointercancel", cancelPress);
   el.addEventListener("pointerleave", cancelPress);
 
-  // ----- Legacy click-to-undo (on last bubble with .editable class) -----
-  // Still active as safety net during 2b. Removed in 2c when long-press replaces it.
-  // Suppressed if long-press just fired to avoid double-trigger.
-  el.addEventListener("click", (e) => {
-    if (el._longPressFired) { el._longPressFired = false; return; }
-    if (!el.classList.contains("editable")) return;
-    if (lastSnapshot) { undoTo(lastSnapshot); }
-  });
-  el.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && el.classList.contains("editable") && lastSnapshot) {
-      undoTo(lastSnapshot);
-    }
-  });
-
   scrollToBottom();
   return el;
 }
@@ -2095,10 +2083,7 @@ function submitAnswer(stepId, value, displayLabel) {
   applyBachelorAutoPG();
   const userBubble = addUserMsg(displayLabel);
   userBubble.dataset.stepId = stepId;
-  // mark previous user bubbles as non-editable (we only allow undo of the last)
-  stream.querySelectorAll(".msg.me.editable").forEach(el => el.classList.remove("editable"));
-  userBubble.classList.add("editable");
-  // Remember snapshot so the last bubble's click-to-undo works (toast dropped — long-press edit coming in Cmd 2c)
+  // lastSnapshot kept temporarily — will be replaced by per-question snapshots when edit mode wires up in Cmd 2c.
   lastSnapshot = snap;
   // High School → halt the quiz with a blocking message instead of advancing.
   if (stepId === "profile_degree_completed" && isUGBlocked()) {
