@@ -836,34 +836,57 @@ body.call-B .bubble.callout::before { content: none; }
 /* --- User bubble interaction states --- */
 .msg.me .bubble {
   position: relative;
+  cursor: pointer;
   transition: transform 120ms var(--ease), box-shadow 160ms var(--ease);
   -webkit-touch-callout: none; /* suppress iOS long-press context menu */
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-/* Press-in feedback during the 500ms hold window — highly visible so user can tell press is registering */
-.msg.me .bubble { touch-action: manipulation; }
+/* Press-in feedback during the 500ms hold window (amber ring = visible enough to register as intentional) */
 .msg.me.long-pressing .bubble {
   transform: scale(0.93);
   box-shadow: 0 0 0 4px var(--amber-edge, #d9a441), 0 6px 14px -4px rgba(0, 0, 0, 0.3);
   opacity: 0.85;
 }
-.msg.me.editable .bubble { cursor: pointer; }
-.msg.me.editable .bubble:hover { box-shadow: 0 4px 10px -4px rgba(0,0,0,0.18); transform: translateY(-1px); }
-.msg.me .bubble .edit-hint {
-  display: none;
-  position: absolute; top: -8px; right: -8px;
-  width: 22px; height: 22px; border-radius: 50%;
-  background: #fff; color: var(--teal-ink);
-  border: 1px solid var(--teal-edge);
-  align-items: center; justify-content: center;
-  box-shadow: 0 2px 6px -2px rgba(0,0,0,0.2);
+
+/* --- Edit mode chrome — amber header above composer --- */
+.edit-chrome {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--amber-soft, #fff4de);
+  border-bottom: 1px solid var(--amber-edge, #d9a441);
+  color: var(--amber-ink, #6b4a14);
+  font-size: 13px; font-weight: 600; letter-spacing: -0.005em;
 }
-.msg.me.editable .bubble:hover .edit-hint,
-@media (hover: none) {
-  /* touch: always show hint on the editable bubble */
-  .msg.me.editable .bubble .edit-hint { display: inline-flex; }
+.edit-chrome-cancel {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,0.04); color: var(--amber-ink, #6b4a14);
+  border: 0; display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 150ms var(--ease), transform 120ms var(--ease);
+}
+.edit-chrome-cancel:hover { background: rgba(0,0,0,0.1); }
+.edit-chrome-cancel:active { transform: scale(0.92); }
+
+/* Pre-selected chip (matches user's current answer) during edit mode */
+.chip.current {
+  border-color: var(--amber-edge, #d9a441);
+  background: var(--amber-soft, #fff4de);
+  color: var(--amber-ink, #6b4a14);
+}
+
+/* Cascade banner — appears when edit wipes downstream answers */
+.cascade-banner {
+  max-width: 720px; margin: 0 auto;
+  padding: 10px 14px;
+  background: var(--amber-soft, #fff4de);
+  border: 1px solid var(--amber-edge, #d9a441);
+  border-radius: 10px;
+  color: var(--amber-ink, #6b4a14);
+  font-size: 13px; letter-spacing: -0.005em;
+  animation: msg-in 380ms var(--ease);
 }
 
 </style>
@@ -1551,6 +1574,8 @@ const state = {
   pendingSection: null,    // when we need to emit a section intro
   finished: false,
   insertedCallout: false,
+  editingStepId: null,     // stepId currently being edited (null = normal flow)
+  suspendedStep: null,     // step that was being asked when edit mode entered (restored on cancel)
 };
 
 /* Stage 6A-fix-4: single source of truth — `state.answers` is a live view of
@@ -1595,6 +1620,7 @@ const scrollState = { follow: true };
   if (w) w.style.paddingBottom = "";
 })();
 function _hardScrollBottom() {
+  if (state && state.editingStepId) return; // don't auto-scroll while inspecting a past question in edit mode
   const composerEl = document.getElementById("composer");
   if (!composerEl || composerEl.offsetParent === null) return;
   const w = document.getElementById("streamWrap");
@@ -1631,7 +1657,7 @@ function scrollToBottom(delay = 20) {
      Keeping the signature so existing callers do not error. */
 }
 
-function addUniferMsg(html, variant="", lead="") {
+function addUniferMsg(html, variant="", lead="", stepId=null) {
   const el = document.createElement("div");
   el.className = "msg u enter";
   el.innerHTML = `
@@ -1640,6 +1666,7 @@ function addUniferMsg(html, variant="", lead="") {
       ${lead ? `<span class="lead">${lead}</span>` : ""}
       <span class="txt">${html}</span>
     </div>`;
+    if (stepId) el.dataset.stepId = stepId;
   stream.insertBefore(el, stream.firstChild);
   scrollToBottom();
   return el;
@@ -1735,9 +1762,6 @@ function addUserMsg(html) {
   el.className = "msg me enter";
   el.innerHTML = `
     <div class="bubble" role="button" tabindex="0" title="Long-press to edit">
-      <span class="edit-hint" aria-hidden="true">
-        <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13.5V16h2.5l9-9-2.5-2.5-9 9z"/></svg>
-      </span>
       ${html}
     </div>`;
   stream.insertBefore(el, stream.firstChild);
@@ -1763,9 +1787,8 @@ function addUserMsg(html) {
       el.classList.remove("long-pressing");
       el._longPressFired = true;
       if (navigator.vibrate) navigator.vibrate(20); // no-op on iOS, works on Android
-      const sid = el.dataset.stepId || "(no stepId)";
-      console.log("[long-press] edit intent for stepId:", sid);
-      // Cmd 2c will replace this console.log with: enterEditMode(sid)
+      const sid = el.dataset.stepId;
+      if (sid) enterEditMode(sid);
     }, LONG_PRESS_MS);
   });
   el.addEventListener("pointermove", (e) => {
@@ -2068,6 +2091,11 @@ function renderComposer(step) {
 }
 
 function submitAnswer(stepId, value, displayLabel) {
+  // Edit mode: route through commitEdit instead of advancing
+  if (state.editingStepId === stepId) {
+    commitEdit(stepId, value, displayLabel);
+    return;
+  }
   // snapshot for undo (capture state BEFORE mutating)
   const snap = {
     stepId,
@@ -2083,8 +2111,6 @@ function submitAnswer(stepId, value, displayLabel) {
   applyBachelorAutoPG();
   const userBubble = addUserMsg(displayLabel);
   userBubble.dataset.stepId = stepId;
-  // lastSnapshot kept temporarily — will be replaced by per-question snapshots when edit mode wires up in Cmd 2c.
-  lastSnapshot = snap;
   // High School → halt the quiz with a blocking message instead of advancing.
   if (stepId === "profile_degree_completed" && isUGBlocked()) {
     composer.innerHTML = "";
@@ -2110,39 +2136,6 @@ function submitAnswer(stepId, value, displayLabel) {
   advance();
 }
 
-let lastSnapshot = null;
-
-function undoTo(snap) {
-  // 1. Remove all DOM added after the anchor
-  const anchor = snap.anchor;
-  while (stream.firstElementChild && stream.firstElementChild !== anchor) {
-    stream.removeChild(stream.firstElementChild);
-  }
-  // 2. Restore engine state
-  state.answers = { ...snap.answers };
-  state.index = snap.index;
-  // counter: restore visually
-  const counterEl = $("#counter");
-  state.count = snap.count;
-  _renderCount();
-  if (snap.count != null) {
-    renderCounter(formatN(snap.count));
-    const pfEl = document.getElementById("poolFill");
-    if (pfEl) pfEl.style.width = Math.max(2, Math.min(100, (snap.count / POOL_START) * 100)) + "%";
-  }
-  // if count has never been revealed (shouldn't happen post-first-answer), keep hidden
-  updateProgress();
-  // clear any pending callouts that may have fired in-between
-  // (we don't re-fire them; they can re-trigger naturally on next advance)
-  // 3. Clear composer and re-ask the step we just undid
-  composer.innerHTML = "";
-  lastSnapshot = null;
-  if (snap.step) {
-    askStep(snap.step);
-  } else {
-    advance();
-  }
-}
 
 /* ----- CHIP picker ----- */
 function renderChips(step) {
@@ -2166,6 +2159,7 @@ function renderChips(step) {
   opts.forEach(o => {
     const b = document.createElement("button");
     b.className = "chip" + (wide ? " wide" : "");
+    b.dataset.chipValue = o.v;
     b.innerHTML = o.label;
     b.addEventListener("click", () => {
       // pick animation
@@ -2557,7 +2551,10 @@ async function microTick(prevStep) {
 
 function peekNext() {
   for (let i = state.index; i < FLOW.length; i++) {
-    if (isVisible(FLOW[i], state.answers)) { state.index = i; return FLOW[i]; }
+    if (isVisible(FLOW[i], state.answers) && !state.answers[FLOW[i].id]) {
+      state.index = i;
+      return FLOW[i];
+    }
   }
   return null;
 }
@@ -2611,7 +2608,7 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 async function askStep(step) {
   await showTyping(420);
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
-  addUniferMsg(prompt);
+  addUniferMsg(prompt, "", "", step.id);
   renderComposer(step);
   // Scroll after composer renders (composer can grow, shrinking streamWrap viewport)
   requestAnimationFrame(() => _hardScrollBottom());
@@ -2792,6 +2789,184 @@ document.querySelectorAll("#startBtn, #startBtn2").forEach(btn => btn.addEventLi
 
 /* Apply default visual variants once (Tweaks debug panel removed). */
 document.body.classList.add("pill-A", "trans-A", "call-A", "ribbon-soft");
+
+
+
+/* ============================================================
+   EDIT MODE (Cmd 2c) — long-press → edit past answer → cascade
+   ============================================================ */
+
+function enterEditMode(stepId) {
+  if (state.editingStepId) return; // already editing something; ignore
+  const step = FLOW.find(s => s.id === stepId);
+  if (!step) return;
+
+  // Save the step the user was being asked, so we can resume it on cancel
+  state.suspendedStep = FLOW[state.index] || null;
+  state.editingStepId = stepId;
+
+  // Scroll to the UNIFER question bubble (ancestor of the user bubble by DOM order)
+  const userBubbleEl = stream.querySelector(`.msg.me[data-step-id="${stepId}"]`);
+  const uniferBubbleEl = stream.querySelector(`.msg.u[data-step-id="${stepId}"]`);
+  if (uniferBubbleEl) uniferBubbleEl.scrollIntoView({ block: "start" });
+
+  // Render the question's composer (clears existing, replaces with chip/text/etc.)
+  composer.innerHTML = "";
+  renderComposer(step);
+
+  // Inject amber edit-chrome header at top of composer (inside composerInner wrapper)
+  const chrome = document.createElement("div");
+  chrome.className = "edit-chrome";
+  chrome.innerHTML = `
+    <span>Editing answer</span>
+    <button class="edit-chrome-cancel" type="button" aria-label="Cancel edit" title="Cancel">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 5l10 10M15 5l-10 10"/></svg>
+    </button>`;
+  composer.insertBefore(chrome, composer.firstChild);
+  chrome.querySelector(".edit-chrome-cancel").addEventListener("click", cancelEdit);
+
+  // Pre-select the current answer (chip highlighting + text input value)
+  preselectCurrentAnswer(step);
+
+  // Escape key cancels edit
+  document.addEventListener("keydown", _editEscapeHandler);
+}
+
+function _editEscapeHandler(e) {
+  if (e.key === "Escape" && state.editingStepId) {
+    e.preventDefault();
+    cancelEdit();
+  }
+}
+
+function preselectCurrentAnswer(step) {
+  const v = state.answers[step.id];
+  if (v == null) return;
+  // Chip: find matching data-chip-value and add .current class
+  const chip = composer.querySelector(`.chip[data-chip-value="${CSS.escape(String(v))}"]`);
+  if (chip) chip.classList.add("current");
+  // Text / numeric: populate input
+  const textInput = composer.querySelector('input[type="text"], input[type="number"], textarea');
+  if (textInput && !textInput.value) textInput.value = v;
+}
+
+function cancelEdit() {
+  const resume = state.suspendedStep;
+  state.editingStepId = null;
+  state.suspendedStep = null;
+  document.removeEventListener("keydown", _editEscapeHandler);
+  composer.innerHTML = "";
+  if (resume) {
+    renderComposer(resume);
+  }
+  // Scroll back to bottom (newest) now that edit mode is over
+  requestAnimationFrame(() => {
+    const w = document.getElementById("streamWrap");
+    if (w) w.scrollTop = w.scrollHeight;
+  });
+}
+
+function commitEdit(stepId, value, displayLabel) {
+  const prevValue = state.answers[stepId];
+  // No-op if unchanged: just resume normal flow
+  if (prevValue === value) {
+    const resume = state.suspendedStep;
+    state.editingStepId = null;
+    state.suspendedStep = null;
+    document.removeEventListener("keydown", _editEscapeHandler);
+    composer.innerHTML = "";
+    if (resume) renderComposer(resume);
+    requestAnimationFrame(() => {
+      const w = document.getElementById("streamWrap");
+      if (w) w.scrollTop = w.scrollHeight;
+    });
+    return;
+  }
+
+  // Apply new value
+  state.answers[stepId] = value;
+  applyBachelorAutoPG();
+
+  // Update user bubble text in place
+  const userBubbleEl = stream.querySelector(`.msg.me[data-step-id="${stepId}"]`);
+  if (userBubbleEl) {
+    const bubbleInner = userBubbleEl.querySelector(".bubble");
+    if (bubbleInner) bubbleInner.innerHTML = displayLabel;
+  }
+
+  // Run cascade — find and wipe downstream answers that are no longer valid
+  const wiped = cascadeFrom(stepId);
+
+  // Clear edit state
+  state.editingStepId = null;
+  state.suspendedStep = null;
+  document.removeEventListener("keydown", _editEscapeHandler);
+  composer.innerHTML = "";
+
+  // Refresh counter (answers changed)
+  if (typeof _refreshRealCount === "function") _refreshRealCount();
+
+  // Show cascade banner if any wipes happened
+  if (wiped.length > 0) {
+    const banner = document.createElement("div");
+    banner.className = "cascade-banner";
+    banner.textContent = wiped.length === 1
+      ? "This has reset 1 later answer. We'll re-ask it now."
+      : `This has reset ${wiped.length} later answers. We'll re-ask them now.`;
+    stream.insertBefore(banner, stream.firstChild);
+  }
+
+  // Edit to degree=HighSchool should trigger the UG block, just like normal flow
+  if (stepId === "profile_degree_completed" && typeof isUGBlocked === "function" && isUGBlocked()) {
+    composer.innerHTML = "";
+    showTyping(500).then(() => addUniferMsg(UG_BLOCK_MESSAGE));
+    return;
+  }
+
+  // Resume flow — reset state.index to the earliest position that needs asking,
+  // let peekNext (now skipping answered questions) find the next gap.
+  state.index = 0;
+  advance();
+
+  // Scroll back to bottom
+  requestAnimationFrame(() => {
+    const w = document.getElementById("streamWrap");
+    if (w) w.scrollTop = w.scrollHeight;
+  });
+}
+
+/* Cascade: when Q_edited changes, wipe downstream answers that become invalid.
+   - skipIf now true → question should be hidden, wipe its answer
+   - step.depends === Q_edited && step.optionsMap exists → options set changed, wipe
+   - Transitive: if Q depends on a wiped question, wipe Q too (iterate until stable)
+   Also removes both the UNIFER question bubble and the user answer bubble from DOM. */
+function cascadeFrom(editedStepId) {
+  const wipedIds = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < FLOW.length; i++) {
+      const step = FLOW[i];
+      if (step.id === editedStepId) continue;
+      if (wipedIds.has(step.id)) continue;
+      if (!(step.id in state.answers) || state.answers[step.id] == null) continue;
+
+      const nowHidden = typeof step.skipIf === "function" && step.skipIf(state.answers);
+      const optsDependOnEdited = step.optionsMap && (step.depends === editedStepId || wipedIds.has(step.depends));
+
+      if (nowHidden || optsDependOnEdited) {
+        delete state.answers[step.id];
+        wipedIds.add(step.id);
+        changed = true;
+      }
+    }
+  }
+  // Remove DOM for each wiped question (both user answer bubble AND UNIFER question bubble)
+  wipedIds.forEach(id => {
+    stream.querySelectorAll(`[data-step-id="${CSS.escape(id)}"]`).forEach(el => el.remove());
+  });
+  return Array.from(wipedIds);
+}
 
 /* Start-over reset — results.html dispatches this event before navigating
    back to the quiz. Clear closure-scoped state and DOM so the returning
