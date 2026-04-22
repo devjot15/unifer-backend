@@ -913,7 +913,7 @@ body.coach-on .composer { pointer-events: none; }
   padding: 16px 18px 14px;
   border-radius: 14px;
   box-shadow: 0 14px 32px -6px rgba(0, 0, 0, 0.35);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.45;
   letter-spacing: -0.005em;
   z-index: 10000;
@@ -935,12 +935,14 @@ body.coach-on .composer { pointer-events: none; }
 /* Inline × glyph in the text, rendered as a white-ringed circle so it matches the actual cancel button */
 .coachmark-x-chip {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; border-radius: 50%;
+  width: 22px; height: 22px; border-radius: 50%;
   background: rgba(255, 255, 255, 0.18);
   border: 1.5px solid #fff;
-  font-size: 12px; font-weight: 700;
-  vertical-align: -4px;
-  margin: 0 2px;
+  font-size: 13px; font-weight: 700; line-height: 1;
+  vertical-align: middle;
+  margin: 0 3px;
+  position: relative;
+  top: -1px;
 }
 .coachmark-ok {
   display: block;
@@ -2191,12 +2193,6 @@ function submitAnswer(stepId, value, displayLabel) {
   applyBachelorAutoPG();
   const userBubble = addUserMsg(displayLabel);
   userBubble.dataset.stepId = stepId;
-  // Coachmark: show once on the very first answer of the user's lifetime in this browser.
-  try {
-    if (!localStorage.getItem("unifer_coachmark_seen")) {
-      setTimeout(showCoachmark, 600);
-    }
-  } catch (e) { /* localStorage blocked (private mode); silently skip */ }
   // High School → halt the quiz with a blocking message instead of advancing.
   if (stepId === "profile_degree_completed" && isUGBlocked()) {
     composer.innerHTML = "";
@@ -2209,13 +2205,23 @@ function submitAnswer(stepId, value, displayLabel) {
     const name = (value || "").trim().split(/\s+/)[0] || "";
     const personalizedIntro = SECTIONS[0].intro.replace("{name}", name ? `, ${name}` : "");
     composer.innerHTML = "";
-    (async () => {
+    const runIntroFlow = async () => {
       await showTyping(700);
-      addUniferMsg(personalizedIntro, "section-intro", `Section 1 · ${SECTIONS[0].name}`);
+      addUniferMsg(personalizedIntro, "section-intro", `Section 1 · ${SECTIONS[0].name}`, "__section_1_intro__");
       document.getElementById("sectionPill").classList.remove("hidden");
       await new Promise(r => setTimeout(r, 1500));
       advance();
-    })();
+    };
+    // First-ever user: show coachmark NOW (layout is stable — just the user bubble is visible, no other pending bubbles),
+    // then run the intro flow after they tap OK. Subsequent users skip straight to the intro.
+    let showedCoach = false;
+    try {
+      if (!localStorage.getItem("unifer_coachmark_seen")) {
+        showedCoach = true;
+        setTimeout(() => showCoachmark(runIntroFlow), 400);
+      }
+    } catch (e) { /* localStorage blocked */ }
+    if (!showedCoach) runIntroFlow();
     return;
   }
   if (stepId === "profile_degree_completed") _refreshRealCount();
@@ -2882,10 +2888,16 @@ document.body.classList.add("pill-A", "trans-A", "call-A", "ribbon-soft");
    COACHMARK — first-answer onboarding tip (one-time via localStorage)
    ============================================================ */
 
-function showCoachmark() {
-  if (document.querySelector(".coachmark-overlay")) return;
+function showCoachmark(onDismiss) {
+  if (document.querySelector(".coachmark-overlay")) {
+    if (typeof onDismiss === "function") onDismiss();
+    return;
+  }
   const userBubble = document.querySelector("#stream .msg.me");
-  if (!userBubble) return;
+  if (!userBubble) {
+    if (typeof onDismiss === "function") onDismiss();
+    return;
+  }
 
   // Freeze scroll + spotlight the user bubble via body class (see .coach-on rules in CSS)
   document.body.classList.add("coach-on");
@@ -2938,6 +2950,7 @@ function showCoachmark() {
     setTimeout(() => overlay.remove(), 180);
     try { localStorage.setItem("unifer_coachmark_seen", "1"); } catch (e) {}
     document.removeEventListener("keydown", coachKey);
+    if (typeof onDismiss === "function") onDismiss();
   };
   const coachKey = (e) => {
     if (e.key === "Enter" || e.key === "Escape" || e.key === " ") {
