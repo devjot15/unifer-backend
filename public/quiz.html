@@ -2049,13 +2049,13 @@ function submitAnswer(stepId, value, displayLabel) {
     return;
   }
   if (stepId === "first_name") {
-    const name = (value || "").trim();
+    const name = (value || "").trim().split(/\s+/)[0] || "";
     const personalizedIntro = SECTIONS[0].intro.replace("{name}", name ? `, ${name}` : "");
     composer.innerHTML = "";
     (async () => {
       await showTyping(700);
       addUniferMsg(personalizedIntro, "section-intro", `Section 1 · ${SECTIONS[0].name}`);
-      await showTyping(700);
+      await new Promise(r => setTimeout(r, 1500));
       advance();
     })();
     return;
@@ -2602,6 +2602,7 @@ async function startChat() {
   await showTyping(700);
   const flowHTML = `Let's build your shortlist — 5 quick sections, ~5 minutes.<div class="flow-strip"><span class="flow-pill">PROFILE</span><span class="flow-arrow">↓</span><span class="flow-pill">PRIORITIES</span><span class="flow-arrow">↓</span><span class="flow-pill">COUNTRY</span><span class="flow-arrow">↓</span><span class="flow-pill">COURSE</span><span class="flow-arrow">↓</span><span class="flow-pill">UNIVERSITY</span></div>`;
   addUniferMsg(flowHTML, "welcome-flow");
+  await new Promise(r => setTimeout(r, 1500));
   // counter stays hidden until first real answer; section 1 intro fires AFTER name (see commitAnswer)
   state.index = 0;
   const first = FLOW[0];
