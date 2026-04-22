@@ -2906,13 +2906,26 @@ function commitEdit(stepId, value, displayLabel) {
   // Refresh counter (answers changed)
   if (typeof _refreshRealCount === "function") _refreshRealCount();
 
-  // Show cascade banner if any wipes happened
-  if (wiped.length > 0) {
+  // Count total questions the user will face before resuming: newly-revealed + wiped-and-still-visible questions.
+  // A wiped question that is NOW hidden (its skipIf turned true after the edit) is NOT counted — user won't answer it.
+  // A previously-hidden question that is now visible IS counted — user will answer it.
+  const editedIdx = FLOW.findIndex(s => s.id === stepId);
+  const suspendedIdx = state.suspendedStep
+    ? FLOW.findIndex(s => s.id === state.suspendedStep.id)
+    : FLOW.length;
+  let pendingCount = 0;
+  for (let i = editedIdx + 1; i < suspendedIdx; i++) {
+    const s = FLOW[i];
+    if (!isVisible(s, state.answers)) continue;
+    if (state.answers[s.id]) continue;
+    pendingCount++;
+  }
+  if (pendingCount > 0) {
     const banner = document.createElement("div");
     banner.className = "cascade-banner";
-    banner.textContent = wiped.length === 1
-      ? "This has reset 1 later answer. We'll re-ask it now."
-      : `This has reset ${wiped.length} later answers. We'll re-ask them now.`;
+    banner.textContent = pendingCount === 1
+      ? "Your change affects 1 later question. We'll ask it now."
+      : `Your change affects ${pendingCount} later questions. We'll walk through them.`;
     stream.insertBefore(banner, stream.firstChild);
   }
 
