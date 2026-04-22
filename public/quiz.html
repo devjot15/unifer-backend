@@ -328,6 +328,25 @@
   border-color: var(--line-2);
   box-shadow: var(--shadow-1);
 }
+.bubble.welcome-flow .flow-strip {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 6px;
+  margin-top: 14px;
+}
+.bubble.welcome-flow .flow-pill {
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--teal-soft);
+  border: 1px solid var(--teal-edge);
+  color: var(--teal-ink);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  min-width: 130px; text-align: center;
+}
+.bubble.welcome-flow .flow-arrow {
+  font-size: 14px; color: var(--ink-3); line-height: 1;
+}
 .bubble .lead {
   font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
   font-weight: 600; color: var(--ink-3); margin-bottom: 4px;
@@ -975,7 +994,7 @@ const INSTITUTIONS = [
    kinds: chip, chipMulti, numeric, search, grid, country, rank
 */
 const SECTIONS = [
-  { id: 1, name: "Academic profile",     intro: "Starting with the basics — your academic profile. This is what I'll check eligibility against.", drop: 2105 },
+  { id: 1, name: "Academic profile",     intro: "First up{name} — we'll walk through your academic profile. Grades, tests, qualifications. These decide which universities make the cut.", drop: 2105 },
   { id: 2, name: "Priorities",           intro: "Quick one — your priorities. This shapes how I weight everything else.",                             drop: 890 },
   { id: 3, name: "Country preferences",  intro: "Let's narrow by country. What factors matter most?",                                                  drop: 1640 },
   { id: 4, name: "Course & field",       intro: "Onto the programme details — level, field, budget.",                                                 drop: 2310 },
@@ -2029,6 +2048,19 @@ function submitAnswer(stepId, value, displayLabel) {
     });
     return;
   }
+  if (stepId === "first_name") {
+    const name = (value || "").trim();
+    const personalizedIntro = SECTIONS[0].intro.replace("{name}", name ? `, ${name}` : "");
+    composer.innerHTML = "";
+    (async () => {
+      await showTyping(700);
+      addUniferMsg(personalizedIntro, "section-intro", `Section 1 · ${SECTIONS[0].name}`);
+      await showTyping(700);
+      advance();
+    })();
+    return;
+  }
+  if (stepId === "profile_degree_completed") _refreshRealCount();
   advance();
 }
 
@@ -2566,23 +2598,15 @@ async function askStep(step) {
 }
 
 async function startChat() {
-  // counter stays hidden until the first answer triggers the first tick
-  // section 1 intro
-  const s1 = SECTIONS[0];
-  await showTyping(350);
-  addUniferMsg(
-    "Hi — I&rsquo;m UNIFER. I ask about 30 questions, then show the courses, universities, and countries that best fit you. No account, no commissions, no agenda.",
-    ""
-  );
-  await showTyping(420);
-  addUniferMsg(s1.intro, "section-intro", `Section 1 · ${s1.name}`);
-  // first question
+  // welcome bubble with vertical flow strip — fires on land
+  await showTyping(700);
+  const flowHTML = `Let's build your shortlist — 5 quick sections, ~5 minutes.<div class="flow-strip"><span class="flow-pill">PROFILE</span><span class="flow-arrow">↓</span><span class="flow-pill">PRIORITIES</span><span class="flow-arrow">↓</span><span class="flow-pill">COUNTRY</span><span class="flow-arrow">↓</span><span class="flow-pill">COURSE</span><span class="flow-arrow">↓</span><span class="flow-pill">UNIVERSITY</span></div>`;
+  addUniferMsg(flowHTML, "welcome-flow");
+  // counter stays hidden until first real answer; section 1 intro fires AFTER name (see commitAnswer)
   state.index = 0;
   const first = FLOW[0];
   updateProgress();
   await askStep(first);
-  // Stage 5E-B: get real total count on quiz mount
-  _refreshRealCount();
 }
 
 /* ---- finish ---- */
