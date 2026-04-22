@@ -993,6 +993,73 @@ body.coach-on .composer { pointer-events: none; }
   box-shadow: 0 0 6px rgba(217, 164, 65, 0.4);
 }
 
+/* Section summary card — purple, transparent. Appears at section boundaries; collapses when next section starts.
+   Purple chosen to stand out from amber (edit state) and red (announcements) — reads as "archived milestone". */
+.section-summary {
+  max-width: 720px; margin: 0 auto;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 12px;
+  color: #5b21b6;
+  overflow: hidden;
+  animation: msg-in 380ms var(--ease);
+}
+.summary-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(139, 92, 246, 0.12);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.summary-title { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; }
+.summary-count {
+  font-size: 12.5px; font-weight: 500;
+  color: rgba(91, 33, 182, 0.7);
+}
+.summary-body {
+  padding: 6px 0 10px;
+  max-height: 600px;
+  opacity: 1;
+  transition: max-height 300ms var(--ease), opacity 220ms var(--ease), padding 220ms var(--ease);
+}
+.section-summary.collapsed .summary-body {
+  max-height: 0; opacity: 0; padding: 0;
+}
+.summary-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  transition: background 140ms var(--ease), transform 120ms var(--ease);
+}
+.summary-row:hover { background: rgba(139, 92, 246, 0.06); }
+.summary-row.long-pressing {
+  background: rgba(139, 92, 246, 0.18);
+  transform: scale(0.98);
+}
+.summary-row-label {
+  font-size: 13.5px; font-weight: 500; color: #5b21b6;
+  flex-shrink: 0;
+}
+.summary-row-value {
+  font-size: 13.5px; font-weight: 500; color: #1a2828;
+  max-width: 60%;
+  text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
+  text-align: right;
+}
+.summary-hint {
+  padding: 8px 16px 4px;
+  font-size: 11.5px;
+  color: rgba(91, 33, 182, 0.55);
+  font-style: italic;
+  text-align: center;
+}
+
 </style>
 
 <div class="app" id="app">
@@ -2713,6 +2780,9 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
     `Got your ${SECTIONS[prevSectionId-1].name.toLowerCase()}. ${formatN(newCount)} courses match so far.`
   );
 
+  // Section summary card (purple, long-press-editable rows) — recap of answers from the section that just ended
+  renderSectionSummary(prevSectionId);
+
   // section intro
   const nextSection = SECTIONS[nextSectionId - 1];
   if (nextSection) {
@@ -2986,6 +3056,177 @@ function showCoachmark(onDismiss) {
   overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
   document.addEventListener("keydown", coachKey);
   requestAnimationFrame(() => pointer.querySelector(".coachmark-ok").focus());
+}
+
+/* ============================================================
+   SECTION SUMMARY CARDS (purple) — appears at section boundaries,
+   each row long-press-editable, past cards auto-collapse when next section starts.
+   ============================================================ */
+
+const SUMMARY_LABELS = {
+  // ---- Section 1: Academic profile ----
+  "first_name":                { label: "Name",             valueFn: (v) => v || "—" },
+  "profile_degree_completed":  { label: "Degree",           valueFn: (v, step) => _getChipLabel(step, v) },
+  "profile_grading_system":    { label: "Grading system",   valueFn: (v, step) => _getChipLabel(step, v) },
+  "profile_gpa_numeric":       { label: "GPA",              valueFn: (v) => v == null ? "—" : String(v) },
+  "profile_institution_name":  { label: "Institution",      valueFn: () => "Selected" }, // fixed word
+  "profile_backlogs":          { label: "Backlogs",         valueFn: (v, step) => _getChipLabel(step, v) },
+  "profile_english_test":      { label: "English test",     valueFn: (v, step) => _getChipLabel(step, v) },
+  "profile_english_scores":    { label: "Score",            valueFn: (v) => _getGridOverall(v) },
+  "profile_exam_type":         { label: "Exam",             valueFn: (v, step) => _getChipLabel(step, v) },
+  "profile_exam_scores":       { label: "Score",            valueFn: (v) => _getGridOverall(v) },
+  "profile_work_experience":   { label: "Work experience",  valueFn: (v, step) => _getChipLabel(step, v) },
+  // ---- Section 2: Priorities ----
+  "country_decided":           { label: "Country decided",  valueFn: (v, step) => _getChipLabel(step, v) },
+  "selected_country":          { label: "Country",          valueFn: () => "Selected" },
+  "priorities":                { label: "Priorities",       valueFn: () => "Ranked" },
+  // ---- Section 3: Country preferences ----
+  "work_permit_importance":    { label: "Work permit",      valueFn: (v, step) => _getChipLabel(step, v) },
+  "english_preference":        { label: "English",          valueFn: (v, step) => _getChipLabel(step, v) },
+  "pr_importance":             { label: "Path to PR",       valueFn: (v, step) => _getChipLabel(step, v) },
+  // ---- Section 4: Course & field ----
+  "level":                     { label: "Level",            valueFn: (v, step) => _getChipLabel(step, v) },
+  "program_type_preference":   { label: "Program type",     valueFn: (v, step) => _getChipLabel(step, v) },
+  "duration":                  { label: "Duration",         valueFn: (v, step) => _getChipLabel(step, v) },
+  "internship_importance":     { label: "Internship",       valueFn: (v, step) => _getChipLabel(step, v) },
+  "tuition_band":              { label: "Budget",           valueFn: (v, step) => _getChipLabel(step, v) },
+  "scholarship_importance":    { label: "Scholarship",      valueFn: (v, step) => _getChipLabel(step, v) },
+  "field":                     { label: "Field",            valueFn: (v, step) => _getChipLabel(step, v) },
+  "sub_field":                 { label: "Sub-field",        valueFn: (v, step) => _getChipLabel(step, v) },
+  // ---- Section 5: University selection ----
+  "ranking_importance":        { label: "Overall ranking",  valueFn: (v, step) => _getChipLabel(step, v) },
+  "subject_ranking_importance":{ label: "Subject ranking",  valueFn: (v, step) => _getChipLabel(step, v) },
+  "prestige_importance":       { label: "Prestige",         valueFn: (v, step) => _getChipLabel(step, v) },
+  "selectivity_importance":    { label: "Selectivity",      valueFn: (v, step) => _getChipLabel(step, v) },
+  "research_importance":       { label: "Research",         valueFn: (v, step) => _getChipLabel(step, v) },
+  "teaching_importance":       { label: "Teaching",         valueFn: (v, step) => _getChipLabel(step, v) },
+  "international_importance":  { label: "International students", valueFn: (v, step) => _getChipLabel(step, v) },
+  "career_importance":         { label: "Career outcomes",  valueFn: (v, step) => _getChipLabel(step, v) },
+  "career_type":               { label: "Career type",      valueFn: (v, step) => _getChipLabel(step, v) },
+};
+
+// Resolve stored chip value → display label (scans step.options and step.optionsMap)
+function _getChipLabel(step, value) {
+  if (value == null) return "—";
+  if (step && step.options) {
+    const opt = step.options.find(o => o.v === value);
+    if (opt) return opt.label;
+  }
+  if (step && step.optionsMap && step.depends) {
+    const opts = step.optionsMap[state.answers[step.depends]];
+    if (opts) {
+      const opt = opts.find(o => o.v === value);
+      if (opt) return opt.label;
+    }
+  }
+  return String(value);
+}
+
+// Grid score → overall number (tolerates several storage shapes)
+function _getGridOverall(v) {
+  if (v == null) return "—";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    if (v.overall != null) return String(v.overall);
+    if (v.total != null) return String(v.total);
+    // Fallback: first numeric value in the object
+    for (const k of Object.keys(v)) {
+      const n = parseFloat(v[k]);
+      if (!isNaN(n)) return String(n);
+    }
+    return "Completed";
+  }
+  return String(v);
+}
+
+// Attach long-press gesture to any element, invokes onFire on 500ms hold
+function _attachLongPress(el, onFire) {
+  let pressTimer = null;
+  let startX = 0, startY = 0;
+  const cancelPress = () => {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    el.classList.remove("long-pressing");
+  };
+  el.addEventListener("pointerdown", (e) => {
+    if (!e.isPrimary) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX = e.clientX; startY = e.clientY;
+    el._longPressFired = false;
+    el.classList.add("long-pressing");
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      el.classList.remove("long-pressing");
+      el._longPressFired = true;
+      if (navigator.vibrate) navigator.vibrate(20);
+      onFire();
+    }, 500);
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!pressTimer) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (dx * dx + dy * dy > 64) cancelPress();
+  });
+  el.addEventListener("pointerup", cancelPress);
+  el.addEventListener("pointercancel", cancelPress);
+  el.addEventListener("pointerleave", cancelPress);
+}
+
+// Build and prepend a section summary card for the given section number
+function renderSectionSummary(sectionNum) {
+  // Collapse any previously-expanded summary cards (past sections get auto-collapsed when a new one appears)
+  stream.querySelectorAll(".section-summary:not(.collapsed)").forEach(c => c.classList.add("collapsed"));
+
+  const section = SECTIONS[sectionNum - 1];
+  if (!section) return;
+
+  const rows = [];
+  FLOW.filter(step => step.section === sectionNum).forEach(step => {
+    const stored = state.answers[step.id];
+    if (stored == null || stored === "") return; // skip unanswered (or skipped)
+    const meta = SUMMARY_LABELS[step.id];
+    if (!meta) return; // no label mapping → skip
+    rows.push({
+      stepId: step.id,
+      label: meta.label,
+      value: meta.valueFn(stored, step)
+    });
+  });
+
+  if (rows.length === 0) return;
+
+  const card = document.createElement("div");
+  card.className = "section-summary"; // starts expanded (no .collapsed class)
+  card.dataset.section = sectionNum;
+  card.innerHTML = `
+    <div class="summary-header">
+      <span class="summary-title">&#x2713; Section ${sectionNum} &middot; ${section.name}</span>
+      <span class="summary-count">${rows.length} answer${rows.length !== 1 ? "s" : ""}</span>
+    </div>
+    <div class="summary-body">
+      ${rows.map(r => `
+        <div class="summary-row" data-step-id="${r.stepId}" role="button" tabindex="0">
+          <span class="summary-row-label">${r.label}</span>
+          <span class="summary-row-value">${String(r.value).replace(/</g, "&lt;")}</span>
+        </div>
+      `).join("")}
+      <div class="summary-hint">Long-press any row to edit it</div>
+    </div>
+  `;
+  stream.insertBefore(card, stream.firstChild);
+
+  // Tap header to toggle collapsed state
+  card.querySelector(".summary-header").addEventListener("click", () => {
+    card.classList.toggle("collapsed");
+  });
+
+  // Long-press each row → enter edit mode for that question
+  card.querySelectorAll(".summary-row").forEach(row => {
+    _attachLongPress(row, () => {
+      const sid = row.dataset.stepId;
+      if (sid) enterEditMode(sid);
+    });
+  });
 }
 
 /* ============================================================
