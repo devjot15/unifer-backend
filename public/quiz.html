@@ -1596,25 +1596,33 @@ const scrollState = { follow: true };
     scrollState.follow = distFromBottom < 200;
   }, { passive: true });
 })();
-// On composer resize, re-scroll streamWrap to bottom.
-// Composer is sibling to streamWrap; when composer grows (e.g. chip question
-// renders multiple rows), streamWrap shrinks via flex:1, pushing the
-// previously-visible bottom content out of view. Re-scrolling restores it.
+// Force scroll to bottom of BOTH streamWrap AND window.
+// On iOS Safari, the body sometimes scrolls instead of streamWrap, so we cover both.
+// Sticky composer overlays content if scroll isn't pushed past it — use generous padding too.
+function _hardScrollBottom() {
+  const w = document.getElementById("streamWrap");
+  const composerEl = document.getElementById("composer");
+  if (w && composerEl) {
+    // Generous bottom padding so content can sit above composer-overlap zone
+    w.style.paddingBottom = (composerEl.offsetHeight + 40) + "px";
+  }
+  if (w) w.scrollTop = w.scrollHeight;
+  // Window/body scroll fallback (iOS Safari)
+  window.scrollTo(0, document.documentElement.scrollHeight);
+}
+// Composer resize observer — re-scroll whenever composer grows/shrinks
 (() => {
   const composerEl = document.getElementById("composer");
-  const streamWrapEl = document.getElementById("streamWrap");
-  // Reset any inline padding-bottom set by previous (broken) implementation
-  if (streamWrapEl) streamWrapEl.style.paddingBottom = "";
   if (!composerEl || !window.ResizeObserver) return;
-  let pending = null;
+  let pending = false;
   new ResizeObserver(() => {
-    if (!scrollState.follow || pending) return;
-    pending = requestAnimationFrame(() => {
-      pending = null;
-      const w = document.getElementById("streamWrap");
-      if (!w) return;
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      w.scrollTo({ top: w.scrollHeight, behavior: reduce ? "auto" : "smooth" });
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        pending = false;
+        if (scrollState.follow) _hardScrollBottom();
+      });
     });
   }).observe(composerEl);
 })();
@@ -2625,13 +2633,12 @@ async function askStep(step) {
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
   addUniferMsg(prompt);
   renderComposer(step);
-  // Composer may grow significantly (chip/grid/rank); re-scroll to keep prompt visible
+  // Force scroll after question renders. New question = always go to bottom (override follow state).
+  scrollState.follow = true;
   requestAnimationFrame(() => {
-    const w = document.getElementById("streamWrap");
-    if (w && scrollState.follow) {
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      w.scrollTo({ top: w.scrollHeight, behavior: reduce ? "auto" : "smooth" });
-    }
+    requestAnimationFrame(() => {
+      _hardScrollBottom();
+    });
   });
 }
 
