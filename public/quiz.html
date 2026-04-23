@@ -1920,10 +1920,13 @@ function _smoothScrollBottom() {
 let _scrollTimer = null;
 function _scheduleScroll() {
   if (_scrollTimer) return;
+  // 120ms catches both MutationObserver (bubble added) and ResizeObserver
+  // (bubble height settles after CSS transition) in a single scroll animation,
+  // eliminating the double-settle micro-jitter visible in every question.
   _scrollTimer = setTimeout(() => {
     _scrollTimer = null;
     requestAnimationFrame(_smoothScrollBottom);
-  }, 80);
+  }, 120);
 }
 (() => {
   const s = document.getElementById("stream");
@@ -3024,8 +3027,9 @@ async function startChat() {
   await showTyping(700);
   const flowHTML = `Let's build your shortlist — 5 quick sections, ~5 minutes.<div class="flow-strip"><span class="flow-pill">PROFILE</span><span class="flow-arrow">↓</span><span class="flow-pill">PRIORITIES</span><span class="flow-arrow">↓</span><span class="flow-pill">COUNTRY</span><span class="flow-arrow">↓</span><span class="flow-pill">COURSE</span><span class="flow-arrow">↓</span><span class="flow-pill">UNIVERSITY</span></div>`;
   addUniferMsg(flowHTML, "welcome-flow");
-  // Dots visible from the moment welcome lands until the first question appears — no dead air.
-  await showTyping(1500);
+  // Brief typing bridge into the first question. Previously 1500ms; lowered so
+  // users don't stare at dots after scanning the 5-section flow strip.
+  await showTyping(800);
   // counter stays hidden until first real answer; section 1 intro fires AFTER name (see commitAnswer)
   state.index = 0;
   const first = FLOW[0];
