@@ -1929,8 +1929,11 @@ function _scheduleScroll() {
       document.documentElement.style.setProperty("--vvh", h);
       const app = document.getElementById("app");
       const chat = document.getElementById("chat");
-      if (app && app.classList.contains("in-chat")) app.style.height = h;
-      if (chat) chat.style.height = h;
+      if (app && app.classList.contains("in-chat")) {
+        app.style.height = h;
+        app.style.minHeight = h;
+      }
+      if (chat) { chat.style.height = h; chat.style.minHeight = h; }
     };
     syncVVH();
     vv.addEventListener("resize", () => {
