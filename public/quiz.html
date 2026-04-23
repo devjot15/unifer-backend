@@ -1884,26 +1884,40 @@ const scrollState = { follow: true };
   if (w) w.style.paddingBottom = "";
 })();
 function _hardScrollBottom() {
-  if (state && state.editingStepId) return; // don't auto-scroll while inspecting a past question in edit mode
+  // Called by visualViewport handler (iOS keyboard transitions) — must be instant,
+  // no smooth scroll. Regular message flow uses _smoothScrollBottom instead.
+  if (state && state.editingStepId) return;
   const composerEl = document.getElementById("composer");
   if (!composerEl || composerEl.offsetParent === null) return;
   const w = document.getElementById("streamWrap");
   if (!w) return;
-  // Idempotency guard: skip if already at bottom (prevents phantom scroll ping-pong
-  // when MutationObserver and ResizeObserver both fire in a burst)
   const max = w.scrollHeight - w.clientHeight;
   if (Math.abs(w.scrollTop - max) < 2) return;
   w.scrollTop = w.scrollHeight;
 }
-// Coalesce rapid MO + RO bursts into a single scroll call (typing indicator toggle,
-// composer transition animation frames, iOS URL bar resize events all fire together)
+// Smooth scroll for normal message flow — single pass per burst, uses
+// scrollIntoView on the newest bubble (column-reverse: stream.firstElementChild).
+// Eliminates the stutter from MO+RO firing multiple times during a new bubble.
+function _smoothScrollBottom() {
+  if (state && state.editingStepId) return;
+  const composerEl = document.getElementById("composer");
+  if (!composerEl || composerEl.offsetParent === null) return;
+  const newest = stream && stream.firstElementChild;
+  if (!newest) return;
+  if (newest.scrollIntoView) {
+    newest.scrollIntoView({ behavior: "smooth", block: "end" });
+  } else {
+    const w = document.getElementById("streamWrap");
+    if (w) w.scrollTop = w.scrollHeight;
+  }
+}
 let _scrollTimer = null;
 function _scheduleScroll() {
   if (_scrollTimer) return;
   _scrollTimer = setTimeout(() => {
     _scrollTimer = null;
-    requestAnimationFrame(_hardScrollBottom);
-  }, 120);
+    requestAnimationFrame(_smoothScrollBottom);
+  }, 80);
 }
 (() => {
   const s = document.getElementById("stream");
