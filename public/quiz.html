@@ -1360,7 +1360,7 @@ const FLOW = [
     ] },
 
   { id: "profile_english_scores", section: 1, kind: "grid",
-    prompt: "Enter your scores. I'll compute the overall.",
+    prompt: "",
     skipIf: (a) => a.profile_degree_completed === "High School" || a.profile_english_test === "None" || !a.profile_english_test,
     gridMap: {
       IELTS: { fields: [["Listening", 0, 9, 0.5], ["Reading", 0, 9, 0.5], ["Writing", 0, 9, 0.5], ["Speaking", 0, 9, 0.5]], overall: "Overall Band",   overallRange: [0, 9, 0.5] },
@@ -1378,7 +1378,7 @@ const FLOW = [
     ] },
 
   { id: "profile_exam_scores", section: 1, kind: "grid",
-    prompt: "Your exam scores:",
+    prompt: "",
     skipIf: (a) => a.profile_degree_completed === "High School" || a.profile_exam_type === "None" || !a.profile_exam_type,
     gridMap: {
       GRE:  { fields: [["Verbal (130–170)", 130, 170, 1], ["Quantitative (130–170)", 130, 170, 1], ["Writing (0–6)", 0, 6, 0.5]], overall: "Overall (260–340)", overallRange: [260, 340, 1] },
@@ -2653,7 +2653,7 @@ function renderGrid(step) {
       <div class="grid-scores" id="gridScores"></div>
       <div class="score-overall">
         <span class="ov-label">${config.overall}</span>
-        <input id="gridOverall" type="number" min="${config.overallRange[0]}" max="${config.overallRange[1]}" step="${config.overallRange[2]}" placeholder="auto" />
+        <input id="gridOverall" type="number" min="${config.overallRange[0]}" max="${config.overallRange[1]}" step="${config.overallRange[2]}" />
       </div>
     </div>
     <div class="bar">
@@ -2902,9 +2902,14 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 }
 
 async function askStep(step) {
-  await showTyping(420);
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
-  addUniferMsg(prompt, "", "", step.id);
+  // Grid steps (test-score tables) set prompt = "" because the grid's own label
+  // ("TOEFL scores" / "GMAT scores") is self-explanatory. Skip typing + UNIFER
+  // bubble in that case; composer still renders and pill helper no-ops on empty.
+  if (prompt) {
+    await showTyping(420);
+    addUniferMsg(prompt, "", "", step.id);
+  }
   renderComposer(step);
   _setComposerQuestion(prompt);
   // Scroll after composer renders (composer can grow, shrinking streamWrap viewport)
