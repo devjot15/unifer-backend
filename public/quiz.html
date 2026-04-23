@@ -1153,15 +1153,6 @@ body.coach-on .composer { pointer-events: none; }
   display: block;
 }
 
-/* iOS only: accessory bar overlays the viewport and can cover the composer.
-   Push sticky composer up 44px when focused to clear it. @supports on
-   -webkit-touch-callout is an iOS-only selector hack. */
-@supports (-webkit-touch-callout: none) {
-  .composer:focus-within {
-    bottom: 44px;
-  }
-}
-
 </style>
 
 <div class="app" id="app">
