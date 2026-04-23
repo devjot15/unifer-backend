@@ -2,14 +2,23 @@
 
 /* ——— Tokens ——————————————————————————————————————————— */
 .app {
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   position: relative;
+}
+/* Lock viewport only once we enter the chat view. On landing, the long-form
+   content (hero → stats → compare → close → foot) scrolls naturally. */
+.app.in-chat {
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
-html, body { height: 100%; overflow: hidden; }
+html:has(.app.in-chat), body:has(.app.in-chat) {
+  height: 100%;
+  overflow: hidden;
+}
 
 /* ——— Landing ——————————————————————————————————————————— */
 .landing {
