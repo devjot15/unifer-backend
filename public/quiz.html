@@ -1934,7 +1934,11 @@ function _scheduleScroll() {
         app.style.minHeight = h;
       }
       if (chat) { chat.style.height = h; chat.style.minHeight = h; }
-      if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
+      // Only reset scroll in chat view — landing needs its natural scroll.
+      const appEl = document.getElementById("app");
+      if (appEl && appEl.classList.contains("in-chat") && (window.scrollY || window.scrollX)) {
+        window.scrollTo(0, 0);
+      }
     };
     syncVVH();
     const rescroll = () => {
