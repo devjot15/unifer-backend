@@ -2931,29 +2931,38 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   await animateCounterTo(newCount, "section");
   addRibbon(oldCount, newCount);
 
+  // Pacing: let the ribbon's number morph animation breathe before the next beat.
+  await new Promise(r => setTimeout(r, 600));
+
   // smart suggestion if pool collapsed?
   const warning = maybeFireSuggestion(oldCount);
   if (warning) {
-    await showTyping(400);
+    await showTyping(500);
     if (warning.actions && warning.actions.length > 0) {
       addWarningCard(warning);
     } else {
       addUniferMsg(warning.text, "suggest", warning.level === 'info' ? 'FYI' : 'Heads up');
     }
+    await new Promise(r => setTimeout(r, 500));
   }
 
-  await showTyping(500);
+  await showTyping(600);
   addUniferMsg(
     `Got your ${SECTIONS[prevSectionId-1].name.toLowerCase()}. ${formatN(newCount)} courses match so far.`
   );
 
+  // Pacing: let "Got your X" bubble settle before summary card floats in.
+  await new Promise(r => setTimeout(r, 500));
+
   // Section summary card (purple, long-press-editable rows) — recap of answers from the section that just ended
   renderSectionSummary(prevSectionId);
 
-  // section intro
+  // section intro — generous pause so the student registers the summary milestone
+  // before moving on to the next section's framing.
   const nextSection = SECTIONS[nextSectionId - 1];
   if (nextSection) {
-    await showTyping(500);
+    await new Promise(r => setTimeout(r, 700));
+    await showTyping(650);
     addUniferMsg(nextSection.intro, "section-intro", `Section ${nextSection.id} · ${nextSection.name}`);
   }
 }
