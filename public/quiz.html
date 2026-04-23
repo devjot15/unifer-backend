@@ -1942,13 +1942,25 @@ function _scheduleScroll() {
       const w = document.getElementById("streamWrap");
       if (w) w.scrollTop = w.scrollHeight;
     };
+    let _lastVVH = vv.height;
+    let _expandT = null;
     vv.addEventListener("resize", () => {
+      const growing = vv.height > _lastVVH;
+      _lastVVH = vv.height;
+      if (_expandT) { clearTimeout(_expandT); _expandT = null; }
+      if (growing) {
+        // Keyboard closing: iOS resize fires instantly but keyboard slides
+        // out visually over ~300ms. Hold old small height so composer stays
+        // pinned above the retreating keyboard, then expand after it's gone.
+        _expandT = setTimeout(() => {
+          _expandT = null;
+          syncVVH();
+          requestAnimationFrame(rescroll);
+        }, 320);
+        return;
+      }
       syncVVH();
-      // iOS lays out in phases after vvresize — re-pin at multiple checkpoints
-      // to catch the final settled state (data showed a 250ms lag).
       requestAnimationFrame(rescroll);
-      setTimeout(rescroll, 100);
-      setTimeout(rescroll, 300);
     });
   }
 })();
