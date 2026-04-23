@@ -1934,6 +1934,9 @@ function _scheduleScroll() {
         app.style.minHeight = h;
       }
       if (chat) { chat.style.height = h; chat.style.minHeight = h; }
+      // iOS scrolls window to bring focused input into view, causing a visible
+      // bounce. Our height sync already made the input visible, so undo the scroll.
+      if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
     };
     syncVVH();
     vv.addEventListener("resize", () => {
