@@ -434,10 +434,12 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
 
 /* ——— Composer ——————————————————————————————————————————— */
 .composer {
-  position: sticky; bottom: 0; z-index: 10;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
   padding: 10px 12px calc(10px + var(--safe-bottom));
   background: linear-gradient(180deg, transparent, var(--bg) 30%);
 }
+/* Reserve space for the fixed composer so stream-wrap content isn't hidden behind it */
+.app.in-chat .stream-wrap { padding-bottom: 140px; }
 .composer-inner {
   max-width: 720px; margin: 0 auto;
   background: var(--surface);
@@ -1933,13 +1935,11 @@ function _scheduleScroll() {
         app.style.height = h;
         app.style.minHeight = h;
       }
-      if (chat) {
-        chat.style.height = h;
-        chat.style.minHeight = h;
-        // iOS lags sticky-positioned children repaint when the container
-        // resizes. Force reflow so the composer re-pins to bottom immediately.
-        void chat.offsetHeight;
-      }
+      if (chat) { chat.style.height = h; chat.style.minHeight = h; }
+      // Position fixed composer to sit on the visual viewport bottom directly,
+      // bypassing iOS's lagged repaint of sticky children on container resize.
+      const comp = document.getElementById("composer");
+      if (comp) comp.style.bottom = (innerHeight - vv.height - vv.offsetTop) + "px";
       if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
     };
     syncVVH();
