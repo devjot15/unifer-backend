@@ -1942,26 +1942,26 @@ function _scheduleScroll() {
       const w = document.getElementById("streamWrap");
       if (w) w.scrollTop = w.scrollHeight;
     };
-    let _lastVVH = vv.height;
-    let _expandT = null;
     vv.addEventListener("resize", () => {
-      const growing = vv.height > _lastVVH;
-      _lastVVH = vv.height;
-      if (_expandT) { clearTimeout(_expandT); _expandT = null; }
-      if (growing) {
-        // Keyboard closing: iOS resize fires instantly but keyboard slides
-        // out visually over ~300ms. Hold old small height so composer stays
-        // pinned above the retreating keyboard, then expand after it's gone.
-        _expandT = setTimeout(() => {
-          _expandT = null;
-          syncVVH();
-          requestAnimationFrame(rescroll);
-        }, 320);
-        return;
-      }
       syncVVH();
       requestAnimationFrame(rescroll);
+      setTimeout(rescroll, 100);
+      setTimeout(rescroll, 300);
     });
+    // iOS fires vvresize ~430ms late when keyboard starts closing. focusout
+    // fires instantly on submit/blur — force-expand layout then so composer
+    // reaches bottom in sync with keyboard slide-out.
+    document.addEventListener("focusout", (e) => {
+      if (!e.target || !e.target.closest || !e.target.closest("#composer")) return;
+      setTimeout(() => {
+        const h = window.innerHeight + "px";
+        document.documentElement.style.setProperty("--vvh", h);
+        const app = document.getElementById("app"), chat = document.getElementById("chat");
+        if (app && app.classList.contains("in-chat")) { app.style.height = h; app.style.minHeight = h; }
+        if (chat) { chat.style.height = h; chat.style.minHeight = h; }
+        requestAnimationFrame(rescroll);
+      }, 50);
+    }, true);
   }
 })();
 function scrollToBottom(delay = 20) {
