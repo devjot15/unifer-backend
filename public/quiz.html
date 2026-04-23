@@ -1282,7 +1282,13 @@ async function _refreshRealCount() {
 
   if (_pendingCountFetch !== myFetchToken) return;
   _pendingCountFetch = null;
-  if (realCount == null) return;
+  // Even on backend failure, still reveal the pill at current value.
+  // With the reveal moved above the early-return in animateCounterTo,
+  // a same-value call makes the hidden pill visible without animating.
+  if (realCount == null) {
+    animateCounterTo(state.count, "section");
+    return;
+  }
 
   _lastKnownRealCount = realCount;
   animateCounterTo(realCount, "section");
@@ -2153,13 +2159,14 @@ function formatN(n) {
 */
 function animateCounterTo(newN, mode = "section") {
   const oldN = state.count;
-  if (oldN === newN) return Promise.resolve();
   const counterEl = $("#counter");
-  // Reveal on first real change (counter is hidden until first answer registers)
+  // Reveal on first call (counter hidden until first meaningful answer).
+  // Guard is hidden->visible — idempotent; safe even when oldN === newN below.
   if (counterEl.classList.contains("hidden")) {
     renderCounter(formatN(oldN));
     counterEl.classList.remove("hidden");
   }
+  if (oldN === newN) return Promise.resolve();
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const duration = reduce ? 120 : (mode === "micro" ? 320 : 900);
   const start = performance.now();
