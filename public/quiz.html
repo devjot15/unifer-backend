@@ -2916,8 +2916,9 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   // as its starting point; presetting it short-circuits the animation (oldN === newN).
   // Counter animates in the top chip — the student's visible pool-updated feedback.
   await animateCounterTo(newCount, "section");
+  addRibbon(oldCount, newCount);
 
-  // Brief breathe after counter updates in top chip.
+  // Brief breathe after counter + ribbon updates before more content lands.
   await new Promise(r => setTimeout(r, 400));
 
   // Section-end callout — reflection on what the student just shared, framed
