@@ -1153,6 +1153,12 @@ body.coach-on .composer { pointer-events: none; }
   display: block;
 }
 
+/* Section intro bubble gets extra breathing room when landing after a summary
+   card, so the user isn't reading two large blocks back-to-back. */
+.section-summary + .msg .bubble.section-intro,
+.section-summary ~ .msg:first-of-type .bubble.section-intro {
+  margin-top: 20px;
+}
 </style>
 
 <div class="app" id="app">
@@ -2919,11 +2925,11 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 
   // Stage 5E-G: do NOT set state.count = newCount here. animateCounterTo reads state.count
   // as its starting point; presetting it short-circuits the animation (oldN === newN).
+  // Counter animates in the top chip — the student's visible pool-updated feedback.
   await animateCounterTo(newCount, "section");
-  addRibbon(oldCount, newCount);
 
-  // Pacing: let the ribbon's number morph animation breathe before the next beat.
-  await new Promise(r => setTimeout(r, 600));
+  // Brief breathe after counter updates in top chip.
+  await new Promise(r => setTimeout(r, 400));
 
   // Section-end callout — reflection on what the student just shared, framed
   // as Unifer processing it. Fires at most 3x per session; at boundaries only
@@ -2946,14 +2952,6 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
     }
     await new Promise(r => setTimeout(r, 500));
   }
-
-  await showTyping(600);
-  addUniferMsg(
-    `Got your ${SECTIONS[prevSectionId-1].name.toLowerCase()}. ${formatN(newCount)} courses match so far.`
-  );
-
-  // Pacing: let "Got your X" bubble settle before summary card floats in.
-  await new Promise(r => setTimeout(r, 500));
 
   // Section summary card (purple, long-press-editable rows) — recap of answers from the section that just ended
   renderSectionSummary(prevSectionId);
@@ -2980,6 +2978,12 @@ async function askStep(step) {
     await new Promise(r => setTimeout(r, 180));
     await showTyping(750);
     addUniferMsg(prompt, "", "", step.id);
+  }
+  // Extra breath for chip questions — the question bubble needs a moment to
+  // land before the (visually heavy) options appear. Text/numeric auto-focus
+  // the input, so adding delay there would feel like lag.
+  if (step.kind === "chip" || step.kind === "chipPlus" || step.kind === "field") {
+    await new Promise(r => setTimeout(r, 200));
   }
   renderComposer(step);
   _setComposerQuestion(prompt);
