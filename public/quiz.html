@@ -1109,6 +1109,28 @@ body.coach-on .composer { pointer-events: none; }
   text-align: center;
 }
 
+
+/* Keyboard open (any composer input focused): cap composer height and let the
+   body scroll internally. Reserves room above for the current question bubble.
+   Inert on short composers — cap always exceeds natural height for name/numeric/chip. */
+.composer:focus-within {
+  max-height: 60dvh;
+}
+.composer:focus-within .composer-inner {
+  max-height: calc(60dvh - 20px);
+  display: flex;
+  flex-direction: column;
+}
+.composer:focus-within .composer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.composer:focus-within .bar {
+  flex: 0 0 auto;
+}
+
 </style>
 
 <div class="app" id="app">
@@ -1872,11 +1894,21 @@ function _scheduleScroll() {
   }
   // Keyboard open/close (and orientation flip, URL-bar toggle) shrink the layout
   // viewport but NOT the composer's own box, so the composer RO doesn't fire.
-  // Track visualViewport directly and re-pin stream-wrap to the bottom on every
-  // frame of the animation so the question bubble stays above the composer.
+  // Anchor the CURRENT question bubble to stream-wrap's visual bottom via
+  // scrollIntoView — more robust than raw scrollTop math against column-reverse
+  // edge cases and survives any focus-triggered browser auto-scroll.
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", () => {
-      requestAnimationFrame(_hardScrollBottom);
+      requestAnimationFrame(() => {
+        if (state && state.editingStepId) return;
+        const step = FLOW[state.index];
+        const bubble = step && stream.querySelector(`.msg.u[data-step-id="${CSS.escape(step.id)}"]`);
+        if (bubble) {
+          bubble.scrollIntoView({ block: "end", behavior: "auto" });
+        } else {
+          _hardScrollBottom();
+        }
+      });
     });
   }
 })();
