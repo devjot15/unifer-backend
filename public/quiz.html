@@ -2983,7 +2983,7 @@ async function askStep(step) {
   // land before the (visually heavy) options appear. Text/numeric auto-focus
   // the input, so adding delay there would feel like lag.
   if (step.kind === "chip" || step.kind === "chipPlus" || step.kind === "field") {
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 400));
   }
   renderComposer(step);
   _setComposerQuestion(prompt);
@@ -3057,23 +3057,32 @@ async function finish() {
   await animateCounterTo(newCount, "section");
   addRibbon(oldCount, newCount);
 
+  // Pacing: ribbon's number morph animation needs room to breathe before
+  // more content lands — same rhythm as section boundaries.
+  await new Promise(r => setTimeout(r, 600));
+
   // Stage 6A-fix-5: fire warnings on the final count too. The card lets the
   // user loosen a filter inline before they ever see the All-done card; the
   // loosen handler updates .alldone-text in place if it's already on screen.
   const finalWarning = maybeFireSuggestion(oldCount);
   if (finalWarning) {
-    await showTyping(400);
+    await showTyping(500);
     if (finalWarning.actions && finalWarning.actions.length > 0) {
       addWarningCard(finalWarning);
     } else {
       addUniferMsg(finalWarning.text, "suggest", finalWarning.level === 'info' ? 'FYI' : 'Heads up');
     }
+    await new Promise(r => setTimeout(r, 500));
   }
 
-  await showTyping(500);
+  await showTyping(650);
   addUniferMsg(
     `That&rsquo;s it. I have everything I need.`, "section-intro", "All done"
   );
+
+  // Pacing: let the "All done" milestone bubble register before the big
+  // result card slides in underneath.
+  await new Promise(r => setTimeout(r, 700));
 
   const end = document.createElement("div");
   end.className = "msg u enter";
