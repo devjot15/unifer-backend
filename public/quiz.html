@@ -1813,7 +1813,7 @@ function applyBachelorAutoPG() {
 }
 
 /* ---- engine state ---- */
-const POOL_START = 10247;
+const POOL_START = 11746;
 const state = {
   index: 0,                // index in visible flow
   count: POOL_START,       // starting courses
@@ -2455,7 +2455,7 @@ function submitAnswer(stepId, value, displayLabel) {
       await showTyping(700);
       addUniferMsg(personalizedIntro, "section-intro", `Section 1 · ${SECTIONS[0].name}`, "__section_1_intro__");
       document.getElementById("sectionPill").classList.remove("hidden");
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 300));
       advance();
     };
     // First-ever user: show coachmark NOW (layout is stable — just the user bubble is visible, no other pending bubbles),
