@@ -401,6 +401,50 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
 .rib-row .tail { color: var(--ink-3); font-size: 13px; margin-left: 2px; }
 .rib-sub { color: var(--ink-3); font-size: 12.5px; font-style: italic; }
 
+/* Continue floater — post-summary section-transition control.
+   Sits below the summary card, counts down 4s to auto-advance, or freezes
+   on Pause so the student can review the summary without being rushed.
+   Auto-pauses if the student enters edit mode mid-countdown. */
+.continue-floater {
+  display: flex; justify-content: center;
+  margin: 10px 0 6px;
+  padding: 0 16px;
+  animation: callout-in 400ms var(--ease) both;
+}
+.continue-inner {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  width: 100%; max-width: 340px;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+.continue-row { display: flex; align-items: center; gap: 10px; }
+.continue-label { flex: 1; color: var(--ink-2); font-size: 13px; line-height: 1.35; }
+.continue-arrow { color: var(--teal); font-weight: 600; }
+.continue-pause {
+  flex-shrink: 0; background: transparent;
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 12px; font-size: 12px; font-weight: 500;
+  color: var(--ink-3); cursor: pointer; white-space: nowrap;
+  transition: color 150ms var(--ease), background 150ms var(--ease), border-color 150ms var(--ease);
+}
+.continue-pause.paused {
+  background: var(--teal-soft); border-color: var(--teal-edge);
+  color: var(--teal-ink); font-weight: 600;
+}
+@media (hover: hover) {
+  .continue-pause:hover { border-color: var(--teal-edge); color: var(--teal-ink); }
+}
+.continue-bar { height: 3px; background: var(--line-2); border-radius: 2px; overflow: hidden; }
+.continue-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--teal) 0%, var(--teal-ink) 100%);
+  border-radius: 2px;
+}
+
 /* ——— Composer ——————————————————————————————————————————— */
 /* Gentle entrance for composer contents after renderComposer() — prevents
    the "eruption" where chip options pop in instantly. Fires on every composer
@@ -1831,6 +1875,7 @@ const state = {
   insertedCallout: false,
   editingStepId: null,     // stepId currently being edited (null = normal flow)
   suspendedStep: null,     // step that was being asked when edit mode entered (restored on cancel)
+  afterSectionIntro: false, // when true, next askStep uses longer read-pause + typing so intro has room to breathe
 };
 
 /* Stage 6A-fix-4: single source of truth — `state.answers` is a live view of
@@ -2463,6 +2508,7 @@ function submitAnswer(stepId, value, displayLabel) {
       addUniferMsg(personalizedIntro, "section-intro", `Section 1 · ${SECTIONS[0].name}`, "__section_1_intro__");
       document.getElementById("sectionPill").classList.remove("hidden");
       await new Promise(r => setTimeout(r, 300));
+      state.afterSectionIntro = true;
       advance();
     };
     // First-ever user: show coachmark NOW (layout is stable — just the user bubble is visible, no other pending bubbles),
@@ -2895,6 +2941,73 @@ function peekNext() {
   return null;
 }
 
+function renderContinueFloater(nextSectionId) {
+  const nextSection = SECTIONS[nextSectionId - 1];
+  if (!nextSection) return Promise.resolve();
+
+  return new Promise(resolve => {
+    const DURATION = 4000;
+    const el = document.createElement("div");
+    el.className = "continue-floater";
+    el.innerHTML = `
+      <div class="continue-inner">
+        <div class="continue-row">
+          <span class="continue-label">Moving to Section ${nextSection.id} &mdash; ${nextSection.name} <span class="continue-arrow">&rarr;</span></span>
+          <button type="button" class="continue-pause" aria-label="Pause">Pause</button>
+        </div>
+        <div class="continue-bar"><div class="continue-fill"></div></div>
+      </div>`;
+    stream.insertBefore(el, stream.firstChild);
+
+    const fill = el.querySelector(".continue-fill");
+    const btn = el.querySelector(".continue-pause");
+
+    let paused = false, resolved = false, elapsed = 0;
+    let lastTick = performance.now();
+    let rafId = null;
+
+    function finish() {
+      if (resolved) return;
+      resolved = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      el.style.transition = "opacity 280ms var(--ease)";
+      el.style.opacity = "0";
+      setTimeout(() => { el.remove(); resolve(); }, 280);
+    }
+
+    function enterPaused() {
+      paused = true;
+      btn.textContent = "Continue →";
+      btn.classList.add("paused");
+      btn.setAttribute("aria-label", "Continue");
+    }
+
+    function onPauseClick() {
+      if (resolved) return;
+      if (!paused) enterPaused();
+      else finish();
+    }
+
+    function tick(now) {
+      if (resolved) return;
+      // Auto-pause if the student long-presses a summary row to edit.
+      if (state.editingStepId && !paused) enterPaused();
+      if (!paused) {
+        const dt = now - lastTick;
+        elapsed += dt;
+        const p = Math.min(1, elapsed / DURATION);
+        fill.style.width = (p * 100) + "%";
+        if (p >= 1) { finish(); return; }
+      }
+      lastTick = now;
+      rafId = requestAnimationFrame(tick);
+    }
+
+    btn.addEventListener("click", onPauseClick);
+    rafId = requestAnimationFrame(tick);
+  });
+}
+
 async function handleSectionBoundary(prevSectionId, nextSectionId) {
   const oldCount = state.count;
 
@@ -2947,6 +3060,13 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   // Section summary card (purple, long-press-editable rows) — recap of answers from the section that just ended
   renderSectionSummary(prevSectionId);
 
+  // Let the summary card land visually before the continue floater appears.
+  await new Promise(r => setTimeout(r, 500));
+
+  // Continue floater — 4s auto-advance unless the student taps Pause.
+  // Gives reviewers control over pacing without a hard gate.
+  await renderContinueFloater(nextSectionId);
+
   // section intro — generous pause so the student registers the summary milestone
   // before moving on to the next section's framing.
   const nextSection = SECTIONS[nextSectionId - 1];
@@ -2954,6 +3074,7 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
     await new Promise(r => setTimeout(r, 700));
     await showTyping(650);
     addUniferMsg(nextSection.intro, "section-intro", `Section ${nextSection.id} · ${nextSection.name}`);
+    state.afterSectionIntro = true;
   }
 }
 
@@ -2965,9 +3086,17 @@ async function askStep(step) {
   if (prompt) {
     // Pacing: brief pause so the user's answer bubble "lands" before Unifer
     // starts reacting, then a typing indicator long enough to register as
-    // "Unifer is thinking" rather than flickering on and off.
-    await new Promise(r => setTimeout(r, 180));
-    await showTyping(750);
+    // "Unifer is thinking" rather than flickering on and off. After a section
+    // intro, use a longer read-pause with visible typing dots so the student
+    // has real time to absorb the intro before Q1 surfaces.
+    if (state.afterSectionIntro) {
+      state.afterSectionIntro = false;
+      await new Promise(r => setTimeout(r, 500));
+      await showTyping(1800);
+    } else {
+      await new Promise(r => setTimeout(r, 180));
+      await showTyping(750);
+    }
     addUniferMsg(prompt, "", "", step.id);
   }
   // Extra breath for chip questions — the question bubble needs a moment to
