@@ -1957,19 +1957,21 @@ function _scheduleScroll() {
     // reaches bottom in sync with keyboard slide-out.
     document.addEventListener("focusout", (e) => {
       if (!e.target || !e.target.closest || !e.target.closest("#composer")) return;
+      // Small delay so activeElement has time to update to the new focus target.
       setTimeout(() => {
-        // Skip if focus moved to another composer input (field-to-field tap).
+        // Field-to-field tap: active immediately becomes another composer input.
+        // Real blur (submit/dismiss): active is body/button, keyboard will close.
         const active = document.activeElement;
-        if (active && active.closest && active.closest("#composer")) return;
-        // Skip if keyboard is still up — grid field-to-field doesn't close it.
-        if (vv.height < window.innerHeight - 50) return;
+        const stayedInComposer = active && active.tagName === "INPUT" &&
+          active.closest && active.closest("#composer");
+        if (stayedInComposer) return;
         const h = window.innerHeight + "px";
         document.documentElement.style.setProperty("--vvh", h);
         const app = document.getElementById("app"), chat = document.getElementById("chat");
         if (app && app.classList.contains("in-chat")) { app.style.height = h; app.style.minHeight = h; }
         if (chat) { chat.style.height = h; chat.style.minHeight = h; }
         requestAnimationFrame(rescroll);
-      }, 250);
+      }, 50);
     }, true);
   }
 })();
