@@ -2987,8 +2987,22 @@ async function askStep(step) {
   }
   renderComposer(step);
   _setComposerQuestion(prompt);
-  // Scroll after composer renders (composer can grow, shrinking streamWrap viewport)
-  requestAnimationFrame(() => _hardScrollBottom());
+  // Scroll strategy depends on composer height. Tall composers (field picker,
+  // ranking, country dropdown) shove the question out of view if we just pin
+  // newest-to-bottom. Instead, anchor the question bubble to the top of the
+  // user's viewport so reading flows naturally downward into the options.
+  requestAnimationFrame(() => {
+    if (state && state.editingStepId) return;
+    const composerEl = document.getElementById("composer");
+    const composerH = composerEl ? composerEl.offsetHeight : 0;
+    const bubble = step && stream.querySelector(`.msg.u[data-step-id="${CSS.escape(step.id)}"]`);
+    if (composerH > 300 && bubble && bubble.scrollIntoView) {
+      // Tall composer — anchor question bubble at top of visible stream area.
+      bubble.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      _hardScrollBottom();
+    }
+  });
 }
 
 // Inject a compact question label at the top of composer-inner. CSS hides it
