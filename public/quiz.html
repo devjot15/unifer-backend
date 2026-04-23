@@ -316,37 +316,6 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
   border-color: var(--teal-edge);
   color: var(--teal-ink);
 }
-/* Callout variant A — "thinking out loud" (default) */
-.msg.callout-wrap { animation: callout-in 500ms var(--ease) both; margin: 6px 0; }
-@keyframes callout-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.bubble.callout {
-  background: transparent;
-  border: none;
-  color: var(--ink-2);
-  font-style: italic;
-  font-family: var(--serif);
-  font-size: 17px;
-  line-height: 1.45;
-  padding: 6px 14px 6px 18px;
-  border-left: 2px solid var(--teal-edge);
-  border-radius: 0;
-  max-width: 44ch;
-}
-/* Callout variant B — "soft notification pill" */
-.callout-B .bubble.callout {
-  background: var(--teal-soft);
-  border: 1px solid var(--teal-edge);
-  border-left: 3px solid var(--teal);
-  border-radius: 14px;
-  color: var(--teal-ink);
-  font-family: var(--font);
-  font-style: normal;
-  font-size: 14.5px;
-  padding: 12px 14px;
-}
 .bubble.suggest {
   background: #fff;
   border-color: var(--line-2);
