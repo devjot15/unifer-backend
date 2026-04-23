@@ -994,15 +994,26 @@ body.coach-on .composer { pointer-events: none; }
 }
 
 /* Section summary card — purple, transparent. Appears at section boundaries; collapses when next section starts.
-   Purple chosen to stand out from amber (edit state) and red (announcements) — reads as "archived milestone". */
+   Purple chosen to stand out from amber (edit state) and red (announcements) — reads as "archived milestone".
+   .fresh = just-finished, celebratory header + stronger elevation/glow.
+   .collapsed = past section, calm archive header, body hidden. */
 .section-summary {
   max-width: 720px; margin: 0 auto;
   background: rgba(139, 92, 246, 0.08);
   border: 1px solid rgba(139, 92, 246, 0.35);
-  border-radius: 12px;
+  border-radius: 14px;
   color: #5b21b6;
   overflow: hidden;
+  box-shadow: 0 4px 14px -4px rgba(139, 92, 246, 0.18);
   animation: msg-in 380ms var(--ease);
+  transition: box-shadow 320ms var(--ease), border-color 320ms var(--ease), transform 320ms var(--ease);
+}
+/* Fresh state: louder elevation, stronger border, subtle lift — celebrates section completion */
+.section-summary.fresh {
+  background: rgba(139, 92, 246, 0.11);
+  border-color: rgba(139, 92, 246, 0.55);
+  box-shadow: 0 14px 32px -10px rgba(139, 92, 246, 0.42), 0 0 0 1px rgba(139, 92, 246, 0.1);
+  transform: translateY(-1px);
 }
 .summary-header {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -1013,11 +1024,21 @@ body.coach-on .composer { pointer-events: none; }
   user-select: none;
   -webkit-user-select: none;
 }
-.summary-title {
+/* Celebratory title visible only while .fresh; archive title visible otherwise */
+.summary-title-celebrate {
+  font-size: 14.5px; font-weight: 600; letter-spacing: -0.005em;
+  color: #5b21b6;
+  flex: 1 1 auto; min-width: 0;
+  display: none;
+}
+.summary-title-archive {
   font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
   flex: 1 1 auto; min-width: 0;
   display: flex; align-items: baseline; gap: 10px;
 }
+.section-summary.fresh .summary-title-celebrate { display: block; }
+.section-summary.fresh .summary-title-archive   { display: none; }
+.section-summary.fresh .summary-count           { display: none; } /* count is already in the celebratory line */
 .summary-section-num {
   font-weight: 500;
   color: rgba(91, 33, 182, 0.75);
@@ -1204,10 +1225,10 @@ const INSTITUTIONS = [
 */
 const SECTIONS = [
   { id: 1, name: "Academic profile",     intro: "First up{name} — we'll walk through your academic profile. Grades, tests, qualifications. These decide which universities make the cut.", drop: 2105 },
-  { id: 2, name: "Priorities",           intro: "Quick one — your priorities. This shapes how I weight everything else.",                             drop: 890 },
-  { id: 3, name: "Country preferences",  intro: "Let's narrow by country. What factors matter most?",                                                  drop: 1640 },
-  { id: 4, name: "Course & field",       intro: "Onto the programme details — level, field, budget.",                                                 drop: 2310 },
-  { id: 5, name: "University selection", intro: "Almost there. Now let's figure out what kind of university suits you.",                              drop: 1118 }
+  { id: 2, name: "Priorities",           intro: "Some quick choices coming up. What matters most to you ends up weighing everything else we recommend.", drop: 890 },
+  { id: 3, name: "Country preferences",  intro: "A few questions defining country fit. We'll use this to focus on countries that genuinely suit your career goals.", drop: 1640 },
+  { id: 4, name: "Course & field",       intro: "Time to focus on the course. Your answers shape a list of programmes that genuinely deserve a spot on your radar.", drop: 2310 },
+  { id: 5, name: "University selection", intro: "Final stretch. Your answers help us land on universities that fit not just your profile, but how you want to study.", drop: 1118 }
 ];
 
 // Stage 5E-B: real per-section counts fetched from /eligible-count at each boundary.
@@ -3197,8 +3218,12 @@ function _attachLongPress(el, onFire) {
 
 // Build and prepend a section summary card for the given section number
 function renderSectionSummary(sectionNum) {
-  // Collapse any previously-expanded summary cards (past sections get auto-collapsed when a new one appears)
-  stream.querySelectorAll(".section-summary:not(.collapsed)").forEach(c => c.classList.add("collapsed"));
+  // Collapse any previously-expanded summary cards AND drop their .fresh state
+  // (they revert to calm archive header). Keeps the "celebratory" feel scoped to the most recent.
+  stream.querySelectorAll(".section-summary").forEach(c => {
+    c.classList.add("collapsed");
+    c.classList.remove("fresh");
+  });
 
   const section = SECTIONS[sectionNum - 1];
   if (!section) return;
@@ -3219,11 +3244,13 @@ function renderSectionSummary(sectionNum) {
   if (rows.length === 0) return;
 
   const card = document.createElement("div");
-  card.className = "section-summary"; // starts expanded (no .collapsed class)
+  card.className = "section-summary fresh"; // .fresh = celebratory header; removed when card collapses
   card.dataset.section = sectionNum;
+  // Two header markups: celebratory (visible while .fresh) and archive (visible while collapsed/post-collapse)
   card.innerHTML = `
     <div class="summary-header">
-      <span class="summary-title">&#x2713; <span class="summary-section-num">Section ${sectionNum}</span> <span class="summary-section-name">${section.name}</span></span>
+      <span class="summary-title-celebrate">&#x2728; Section ${sectionNum} done — ${rows.length} answer${rows.length !== 1 ? "s" : ""} in</span>
+      <span class="summary-title-archive">&#x2713; <span class="summary-section-num">Section ${sectionNum}</span> <span class="summary-section-name">${section.name}</span></span>
       <span class="summary-count">${rows.length} answer${rows.length !== 1 ? "s" : ""}</span>
     </div>
     <div class="summary-body">
@@ -3238,9 +3265,10 @@ function renderSectionSummary(sectionNum) {
   `;
   stream.insertBefore(card, stream.firstChild);
 
-  // Tap header to toggle collapsed state
+  // Tap header → toggle collapsed. Once collapsed, drop .fresh so future re-expand uses archive header.
   card.querySelector(".summary-header").addEventListener("click", () => {
     card.classList.toggle("collapsed");
+    if (card.classList.contains("collapsed")) card.classList.remove("fresh");
   });
 
   // Long-press each row → enter edit mode for that question
