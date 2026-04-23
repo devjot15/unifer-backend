@@ -2898,6 +2898,17 @@ function peekNext() {
 async function handleSectionBoundary(prevSectionId, nextSectionId) {
   const oldCount = state.count;
 
+  // Section-end callout fires FIRST — it's commentary on the student's last
+  // answer (previous-section context), not on the section-completion event.
+  // Rendering before the ribbon keeps the italic note next to the answer
+  // bubble that triggered it, in the natural conversational order.
+  const calloutText = maybeFireCallout();
+  if (calloutText) {
+    await showTyping(500);
+    addCalloutMsg(calloutText);
+    await new Promise(r => setTimeout(r, 500));
+  }
+
   // Stage 5E-F: fetch real count BEFORE animating. Fake drop only on network failure.
   let realCount = null;
   if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
@@ -2920,16 +2931,6 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 
   // Brief breathe after counter + ribbon updates before more content lands.
   await new Promise(r => setTimeout(r, 400));
-
-  // Section-end callout — reflection on what the student just shared, framed
-  // as Unifer processing it. Fires at most 3x per session; at boundaries only
-  // so mid-section question flow stays uninterrupted.
-  const calloutText = maybeFireCallout();
-  if (calloutText) {
-    await showTyping(500);
-    addCalloutMsg(calloutText);
-    await new Promise(r => setTimeout(r, 500));
-  }
 
   // smart suggestion if pool collapsed?
   const warning = maybeFireSuggestion(oldCount);
