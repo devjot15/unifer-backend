@@ -1924,8 +1924,6 @@ function _scheduleScroll() {
     // iOS: dvh doesn't reliably shrink for keyboard+accessory bar. Mirror the
     // actual visible height to --vvh so .app.in-chat and .chat stay above the
     // keyboard. Android already shrinks dvh correctly; this is a no-op there.
-    let _lastH = vv.height;
-    let _expandT = null;
     const syncVVH = () => {
       const h = vv.height + "px";
       document.documentElement.style.setProperty("--vvh", h);
@@ -1942,15 +1940,7 @@ function _scheduleScroll() {
     };
     syncVVH();
     vv.addEventListener("resize", () => {
-      // Shrink immediately (keyboard opening); delay expand (keyboard closing)
-      // so the composer rides down with iOS's keyboard dismissal animation.
-      if (_expandT) { clearTimeout(_expandT); _expandT = null; }
-      if (vv.height < _lastH) {
-        _lastH = vv.height;
-        syncVVH();
-      } else {
-        _expandT = setTimeout(() => { _lastH = vv.height; syncVVH(); _expandT = null; }, 220);
-      }
+      syncVVH();
       requestAnimationFrame(() => {
         if (state && state.editingStepId) return;
         const step = FLOW[state.index];
