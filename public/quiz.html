@@ -1110,25 +1110,45 @@ body.coach-on .composer { pointer-events: none; }
 }
 
 
-/* Keyboard open (any composer input focused): cap composer height and let the
-   body scroll internally. Reserves room above for the current question bubble.
-   Inert on short composers — cap always exceeds natural height for name/numeric/chip. */
-.composer:focus-within {
+/* Keyboard open on GRID composers (IELTS/TOEFL/PTE/GRE/GMAT): cap height and
+   let the body scroll internally. Scoped via :has(.grid-scores) so text/chip/
+   numeric/search/country/rank composers keep natural height (important for the
+   search dropdown which renders inline and needs room to expand). */
+.composer:has(.grid-scores):focus-within {
   max-height: 60dvh;
 }
-.composer:focus-within .composer-inner {
+.composer:has(.grid-scores):focus-within .composer-inner {
   max-height: calc(60dvh - 20px);
   display: flex;
   flex-direction: column;
 }
-.composer:focus-within .composer-body {
+.composer:has(.grid-scores):focus-within .composer-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
-.composer:focus-within .bar {
+.composer:has(.grid-scores):focus-within .bar {
   flex: 0 0 auto;
+}
+
+/* Compact question pill shown inside the composer while keyboard is up. Gives
+   the user the question they're answering regardless of whether the bubble in
+   stream-wrap is fully visible (column-reverse scroll can land imprecisely
+   after keyboard-driven viewport resizes). Hidden when composer is idle. */
+.composer-question-pill {
+  display: none;
+  padding: 10px 14px 9px;
+  background: var(--teal-soft);
+  color: var(--teal-ink);
+  font-size: 13.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border-bottom: 1px solid var(--teal-edge);
+}
+.composer-inner:focus-within .composer-question-pill {
+  display: block;
 }
 
 </style>
@@ -2886,8 +2906,23 @@ async function askStep(step) {
   const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
   addUniferMsg(prompt, "", "", step.id);
   renderComposer(step);
+  _setComposerQuestion(prompt);
   // Scroll after composer renders (composer can grow, shrinking streamWrap viewport)
   requestAnimationFrame(() => _hardScrollBottom());
+}
+
+// Inject a compact question label at the top of composer-inner. CSS hides it
+// when composer is idle (display:none) and shows it on :focus-within, so the
+// student reads the current question right above the input when keyboard is up.
+function _setComposerQuestion(text) {
+  if (!composer) return;
+  const existing = composer.querySelector(".composer-question-pill");
+  if (existing) existing.remove();
+  if (!text) return;
+  const pill = document.createElement("div");
+  pill.className = "composer-question-pill";
+  pill.textContent = String(text);
+  composer.insertBefore(pill, composer.firstChild);
 }
 
 async function startChat() {
