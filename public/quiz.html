@@ -2868,15 +2868,6 @@ async function advance() {
     await handleSectionBoundary(prevSection, nextSection);
   }
 
-  // In-flight callout (not on section boundary turn)
-  if (peek && nextSection === prevSection) {
-    const text = maybeFireCallout();
-    if (text) {
-      await showTyping(500);
-      addCalloutMsg(text);
-    }
-  }
-
   // Between-section micro tick (a small narrowing after every answer)
   if (peek && nextSection === prevSection) {
     await microTick(prevStep);
@@ -2933,6 +2924,16 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 
   // Pacing: let the ribbon's number morph animation breathe before the next beat.
   await new Promise(r => setTimeout(r, 600));
+
+  // Section-end callout — reflection on what the student just shared, framed
+  // as Unifer processing it. Fires at most 3x per session; at boundaries only
+  // so mid-section question flow stays uninterrupted.
+  const calloutText = maybeFireCallout();
+  if (calloutText) {
+    await showTyping(500);
+    addCalloutMsg(calloutText);
+    await new Promise(r => setTimeout(r, 500));
+  }
 
   // smart suggestion if pool collapsed?
   const warning = maybeFireSuggestion(oldCount);
