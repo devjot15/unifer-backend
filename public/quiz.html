@@ -3521,6 +3521,8 @@ function cancelEdit() {
   composer.innerHTML = "";
   if (resume) {
     renderComposer(resume);
+    const p = typeof resume.promptFn === 'function' ? resume.promptFn(state.answers) : resume.prompt;
+    _setComposerQuestion(p);
   }
   // Scroll back to bottom (newest) now that edit mode is over
   requestAnimationFrame(() => {
@@ -3538,7 +3540,11 @@ function commitEdit(stepId, value, displayLabel) {
     state.suspendedStep = null;
     document.removeEventListener("keydown", _editEscapeHandler);
     composer.innerHTML = "";
-    if (resume) renderComposer(resume);
+    if (resume) {
+      renderComposer(resume);
+      const p = typeof resume.promptFn === 'function' ? resume.promptFn(state.answers) : resume.prompt;
+      _setComposerQuestion(p);
+    }
     requestAnimationFrame(() => {
       const w = document.getElementById("streamWrap");
       if (w) w.scrollTop = w.scrollHeight;
