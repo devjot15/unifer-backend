@@ -13,6 +13,7 @@
 .app.in-chat {
   height: 100vh;
   height: 100dvh;
+  height: var(--vvh, 100dvh);
   overflow: hidden;
 }
 html:has(.app.in-chat), body:has(.app.in-chat) {
@@ -175,6 +176,7 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
   flex: 1;
   height: 100vh;
   height: 100dvh;
+  height: var(--vvh, 100dvh);
   overflow: hidden;
 }
 .app.in-chat .chat { display: flex; }
@@ -1918,7 +1920,16 @@ function _scheduleScroll() {
   // scrollIntoView — more robust than raw scrollTop math against column-reverse
   // edge cases and survives any focus-triggered browser auto-scroll.
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", () => {
+    const vv = window.visualViewport;
+    // iOS: dvh doesn't reliably shrink for keyboard+accessory bar. Mirror the
+    // actual visible height to --vvh so .app.in-chat and .chat stay above the
+    // keyboard. Android already shrinks dvh correctly; this is a no-op there.
+    const syncVVH = () => {
+      document.documentElement.style.setProperty("--vvh", vv.height + "px");
+    };
+    syncVVH();
+    vv.addEventListener("resize", () => {
+      syncVVH();
       requestAnimationFrame(() => {
         if (state && state.editingStepId) return;
         const step = FLOW[state.index];
