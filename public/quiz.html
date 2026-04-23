@@ -1870,6 +1870,15 @@ function _scheduleScroll() {
   if (c && window.ResizeObserver) {
     new ResizeObserver(_scheduleScroll).observe(c);
   }
+  // Keyboard open/close (and orientation flip, URL-bar toggle) shrink the layout
+  // viewport but NOT the composer's own box, so the composer RO doesn't fire.
+  // Track visualViewport directly and re-pin stream-wrap to the bottom on every
+  // frame of the animation so the question bubble stays above the composer.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => {
+      requestAnimationFrame(_hardScrollBottom);
+    });
+  }
 })();
 function scrollToBottom(delay = 20) {
   /* No-op. Legacy function. scroll-to-bottom handled by MutationObserver on #stream
