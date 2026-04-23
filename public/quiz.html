@@ -1958,13 +1958,18 @@ function _scheduleScroll() {
     document.addEventListener("focusout", (e) => {
       if (!e.target || !e.target.closest || !e.target.closest("#composer")) return;
       setTimeout(() => {
+        // Skip if focus moved to another composer input (field-to-field tap).
+        const active = document.activeElement;
+        if (active && active.closest && active.closest("#composer")) return;
+        // Skip if keyboard is still up — grid field-to-field doesn't close it.
+        if (vv.height < window.innerHeight - 50) return;
         const h = window.innerHeight + "px";
         document.documentElement.style.setProperty("--vvh", h);
         const app = document.getElementById("app"), chat = document.getElementById("chat");
         if (app && app.classList.contains("in-chat")) { app.style.height = h; app.style.minHeight = h; }
         if (chat) { chat.style.height = h; chat.style.minHeight = h; }
         requestAnimationFrame(rescroll);
-      }, 50);
+      }, 250);
     }, true);
   }
 })();
