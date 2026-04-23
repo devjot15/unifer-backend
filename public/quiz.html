@@ -2127,7 +2127,7 @@ function addUserMsg(html) {
   scrollToBottom();
   return el;
 }
-function showTyping(delay=650) {
+function showTyping(delay=750) {
   const el = document.createElement("div");
   el.className = "msg u enter";
   el.innerHTML = `<div class="avatar small">U</div><div class="typing"><span></span><span></span><span></span></div>`;
@@ -2950,7 +2950,11 @@ async function askStep(step) {
   // ("TOEFL scores" / "GMAT scores") is self-explanatory. Skip typing + UNIFER
   // bubble in that case; composer still renders and pill helper no-ops on empty.
   if (prompt) {
-    await showTyping(420);
+    // Pacing: brief pause so the user's answer bubble "lands" before Unifer
+    // starts reacting, then a typing indicator long enough to register as
+    // "Unifer is thinking" rather than flickering on and off.
+    await new Promise(r => setTimeout(r, 180));
+    await showTyping(750);
     addUniferMsg(prompt, "", "", step.id);
   }
   renderComposer(step);
