@@ -446,7 +446,7 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
   transition: border-color 150ms var(--ease), background 150ms var(--ease), transform 120ms var(--ease), color 150ms var(--ease);
   text-align: left;
 }
-.chip:hover { border-color: var(--teal-edge); background: var(--teal-soft); }
+@media (hover: hover) { .chip:hover { border-color: var(--teal-edge); background: var(--teal-soft); } }
 .chip:active { transform: translateY(1px); }
 .chip.wide { flex: 1 1 46%; }
 .chip.picked {
