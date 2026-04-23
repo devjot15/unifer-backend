@@ -568,6 +568,8 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
   font-size: 16px; font-variant-numeric: tabular-nums;
 }
 .score-field input:focus { border-color: var(--teal); background: #fff; outline: none; }
+.score-field input.invalid,
+.score-overall input.invalid { border-color: #d65d5d; background: #fff5f5; }
 .score-overall {
   margin-top: 12px; display: flex; align-items: center; gap: 10px;
   background: var(--teal-soft); padding: 10px 12px; border-radius: 12px;
@@ -2751,7 +2753,7 @@ function renderGrid(step) {
       <div class="grid-scores" id="gridScores"></div>
       <div class="score-overall">
         <span class="ov-label">${config.overall}</span>
-        <input id="gridOverall" type="number" min="${config.overallRange[0]}" max="${config.overallRange[1]}" step="${config.overallRange[2]}" />
+        <input id="gridOverall" type="number" inputmode="decimal" min="${config.overallRange[0]}" max="${config.overallRange[1]}" step="${config.overallRange[2]}" />
       </div>
     </div>
     <div class="bar">
@@ -2767,10 +2769,11 @@ function renderGrid(step) {
     const id = "f_" + normaliseField(name);
     const el = document.createElement("div");
     el.className = "score-field";
-    el.innerHTML = `<label>${name}</label><input id="${id}" type="number" min="${min}" max="${max}" step="${step}" placeholder="—" />`;
+    el.innerHTML = `<label>${name}</label><input id="${id}" type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" placeholder="—" />`;
     grid.appendChild(el);
   });
   const inputs = grid.querySelectorAll("input");
+  const [ovMin, ovMax] = config.overallRange;
   function recompute() {
     // No auto-calculate. Student types the overall for every test — sub-scores are
     // validated independently, and auto-compute can't faithfully reproduce the
@@ -2779,9 +2782,33 @@ function renderGrid(step) {
     validate();
   }
   function validate() {
+    // Overall is required and must fall within its range.
     const o = parseFloat(overall.value);
-    send.disabled = isNaN(o);
+    let ok = !isNaN(o) && o >= ovMin && o <= ovMax;
+    // Sub-fields are optional but if filled must fall within their own range.
+    config.fields.forEach(([name, min, max]) => {
+      const el = grid.querySelector("#f_" + normaliseField(name));
+      if (!el || el.value === "") return;
+      const v = parseFloat(el.value);
+      if (isNaN(v) || v < min || v > max) ok = false;
+    });
+    send.disabled = !ok;
   }
+  // Visual .invalid state shows on blur only — partial values en route
+  // to a valid number (e.g. "1" heading to "15") don't flash red.
+  function wireInvalidOnBlur(el, min, max) {
+    el.addEventListener("focus", () => el.classList.remove("invalid"));
+    el.addEventListener("blur", () => {
+      if (el.value === "") { el.classList.remove("invalid"); return; }
+      const v = parseFloat(el.value);
+      el.classList.toggle("invalid", isNaN(v) || v < min || v > max);
+    });
+  }
+  config.fields.forEach(([name, min, max]) => {
+    const el = grid.querySelector("#f_" + normaliseField(name));
+    if (el) wireInvalidOnBlur(el, min, max);
+  });
+  wireInvalidOnBlur(overall, ovMin, ovMax);
   inputs.forEach(i => i.addEventListener("input", recompute));
   overall.addEventListener("input", validate);
   send.addEventListener("click", () => {
@@ -2946,7 +2973,7 @@ function renderContinueFloater(nextSectionId) {
   if (!nextSection) return Promise.resolve();
 
   return new Promise(resolve => {
-    const DURATION = 4000;
+    const DURATION = 5000;
     const el = document.createElement("div");
     el.className = "continue-floater";
     el.innerHTML = `
@@ -3157,6 +3184,17 @@ async function startChat() {
 /* ---- finish ---- */
 async function finish() {
   state.finished = true;
+
+  // Section-end callout fires FIRST — same pattern as handleSectionBoundary:
+  // commentary on the student's last answers precedes the final ribbon.
+  // Without this, Section 5 callouts (e.g. "Aiming high" on ranking_importance)
+  // would never appear because finish() previously skipped the callout step.
+  const calloutText = maybeFireCallout();
+  if (calloutText) {
+    await showTyping(500);
+    addCalloutMsg(calloutText);
+    await new Promise(r => setTimeout(r, 500));
+  }
 
   // Determine the final count deterministically
   const oldCount = state.count;
