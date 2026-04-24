@@ -2107,7 +2107,8 @@ function addWarningCard(warning) {
           if (typeof real === 'number') {
             _lastKnownRealCount = real;
             const oldC = state.count;
-            await animateCounterTo(real, 'section');
+            // Fire counter + ribbon in parallel (same fix as section boundaries).
+            animateCounterTo(real, 'section');
             addRibbon(oldC, real);
             addUniferMsg(`Loosened. ${formatN(real)} courses match now.`);
 
@@ -3251,11 +3252,13 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   // Stage 5E-G: do NOT set state.count = newCount here. animateCounterTo reads state.count
   // as its starting point; presetting it short-circuits the animation (oldN === newN).
   // Counter animates in the top chip — the student's visible pool-updated feedback.
-  await animateCounterTo(newCount, "section");
+  // Fire counter + ribbon in PARALLEL — both animate the same oldCount→newCount
+  // transition. Sequential awaits doubled the visible time (counter ~900ms +
+  // ribbon ~1100ms + breathe = 2400ms total). Now both animations run together
+  // and we wait for the longer one (ribbon, ~1100ms) before content continues.
+  animateCounterTo(newCount, "section");
   addRibbon(oldCount, newCount);
-
-  // Brief breathe after counter + ribbon updates before more content lands.
-  await new Promise(r => setTimeout(r, 400));
+  await new Promise(r => setTimeout(r, 1100));
 
   // smart suggestion if pool collapsed?
   const warning = maybeFireSuggestion(oldCount);
@@ -3402,12 +3405,12 @@ async function finish() {
 
   // Stage 5E-G: do NOT preset state.count — animateCounterTo reads it as the
   // start and sets it to newCount at the end. Presetting short-circuits animation.
-  await animateCounterTo(newCount, "section");
+  // Fire counter + ribbon in PARALLEL (same fix as section boundaries).
+  animateCounterTo(newCount, "section");
   addRibbon(oldCount, newCount);
-
-  // Pacing: ribbon's number morph animation needs room to breathe before
-  // more content lands — same rhythm as section boundaries.
-  await new Promise(r => setTimeout(r, 600));
+  // Wait for ribbon's ~1100ms animation, then a small extra beat before the
+  // All-done bubble lands so the milestone isn't crowded.
+  await new Promise(r => setTimeout(r, 1300));
 
   // Stage 6A-fix-5: fire warnings on the final count too. The card lets the
   // user loosen a filter inline before they ever see the All-done card; the
