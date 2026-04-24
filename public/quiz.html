@@ -2234,6 +2234,16 @@ async function addWarningCard(warning, opts) {
       renderPickerSubView(option);
     } else if (option.type === 'cascade') {
       renderCascadeSubView(option);
+    } else if (option.type === 'edit_jump') {
+      // Fade the amber card, hand off to composer edit mode. commitEdit
+      // (or cancelEdit) will resolve the freeze promise. handleSectionBoundary
+      // checks state._boundaryAborted to decide whether to continue or bail.
+      disableAllMainButtons();
+      fadeAndRemoveCard();
+      state._amberEditResolver = resolveFreeze;
+      if (typeof enterEditMode === 'function') {
+        enterEditMode(option.stepId);
+      }
     }
   }
 
@@ -2700,6 +2710,27 @@ function buildChangeOptions(a) {
         target = target || state.answers;
         target.sub_field = '';
       }
+    });
+  }
+
+  // Edit-jump: "Pick a different country". >5 options → redirect the user
+  // to the selected_country composer step. commitEdit (amber context) will
+  // refetch + ribbon + resolve freeze, then advance() re-walks from scratch.
+  if (a.country_decided === 'Yes' && a.selected_country) {
+    opts.push({
+      type: 'edit_jump',
+      text: 'Pick a different country',
+      stepId: 'selected_country'
+    });
+  }
+
+  // Edit-jump: "Change field". 10 options + cascade (sub_field wiped) makes
+  // inline picker cluttered; redirect to the field composer.
+  if (a.field) {
+    opts.push({
+      type: 'edit_jump',
+      text: 'Change field',
+      stepId: 'field'
     });
   }
 
@@ -3533,6 +3564,15 @@ async function advance() {
       skippedIds.push(s);
     }
     await handleSectionBoundary(prevSection, nextSection, skippedIds);
+
+    // Amber-card edit-jump aborted the boundary. Re-walk from scratch so
+    // peekNext returns the correct post-cascade next step and boundary
+    // detection sees the fresh prevSection.
+    if (state._boundaryAborted) {
+      state._boundaryAborted = false;
+      state.index = 0;
+      return advance();
+    }
   }
 
   // Between-section micro tick (a small narrowing after every answer)
@@ -3699,6 +3739,13 @@ async function handleSectionBoundary(prevSectionId, nextSectionId, skippedSectio
       // after since this served the same pause role.
       await addWarningCard(warning, { freeze: true });
       _freezeFired = true;
+      // Amber edit-jump committed during freeze: state has cascaded, stale
+      // continuation of this boundary would render a summary/intro for the
+      // wrong section context. Bail — advance() will detect the flag and
+      // re-walk from scratch with the new state.
+      if (state._boundaryAborted) {
+        return;
+      }
     } else if (warning.actions && warning.actions.length > 0) {
       await addWarningCard(warning);
       await new Promise(r => setTimeout(r, 500));
@@ -4343,6 +4390,16 @@ function cancelEdit() {
   stream.querySelectorAll(".msg.me.being-edited").forEach(el => el.classList.remove("being-edited"));
   document.removeEventListener("keydown", _editEscapeHandler);
   composer.innerHTML = "";
+
+  // Amber-card edit-jump cancelled: resolve freeze WITHOUT aborting. Flow
+  // continues with unchanged state — handleSectionBoundary renders summary
+  // + floater + intro as if user had clicked Continue on the original card.
+  if (state._amberEditResolver) {
+    const resolver = state._amberEditResolver;
+    state._amberEditResolver = null;
+    resolver();
+    return;
+  }
   if (resume) {
     renderComposer(resume);
     const p = typeof resume.promptFn === 'function' ? resume.promptFn(state.answers) : resume.prompt;
@@ -4415,6 +4472,34 @@ function commitEdit(stepId, value, displayLabel) {
   stream.querySelectorAll(".msg.me.being-edited").forEach(el => el.classList.remove("being-edited"));
   document.removeEventListener("keydown", _editEscapeHandler);
   composer.innerHTML = "";
+
+  // Amber-card edit-jump path: refetch count, fire ribbon, resolve freeze,
+  // and set boundary-aborted so handleSectionBoundary + advance() skip stale
+  // continuation and re-walk from scratch.
+  if (state._amberEditResolver) {
+    const resolver = state._amberEditResolver;
+    state._amberEditResolver = null;
+    state._boundaryAborted = true;
+
+    (async () => {
+      if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === 'function') {
+        try {
+          const real = await window.UNIFER.fetchEligibleCount(state.answers);
+          if (typeof real === 'number') {
+            _lastKnownRealCount = real;
+            const oldC = state.count;
+            animateCounterTo(real, 'section');
+            addRibbon(oldC, real);
+            await new Promise(r => setTimeout(r, 1100));
+          }
+        } catch (e) {
+          console.error('[unifer] amber edit refetch failed', e);
+        }
+      }
+      resolver();
+    })();
+    return;
+  }
 
   // Remove any stray UNIFER bubbles for unanswered questions.
   // Why: if user long-pressed WHILE being asked a question (composer active), that question's UNIFER bubble
