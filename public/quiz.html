@@ -3469,6 +3469,46 @@ function _easeScrollTo(targetTop, duration) {
   requestAnimationFrame(tick);
 }
 
+/* Walk FLOW backwards from idx-1 to find the most recent step the user
+   actually answered. Used by advance() to detect the real previous section,
+   since FLOW[idx-1] can be a skipped (hidden) step when whole sections
+   skipIf-out. Without this, section boundaries get absorbed: e.g. if Section
+   3 is fully skipped because country is pre-selected, FLOW[idx-1] would be
+   pr_importance (hidden, section 3), masking the true 2→3→4 traversal. */
+function prevSectionBeforeIdx(idx) {
+  for (let i = idx - 1; i >= 0; i--) {
+    const s = FLOW[i];
+    if (!s) continue;
+    const v = state.answers[s.id];
+    if (v != null && v !== '') return s.section;
+  }
+  return 1;
+}
+
+/* Reason-derivation for skipped sections. Only case currently: Section 3
+   skipped because country was pre-selected in Section 2. */
+function deriveSkipReason(sectionId) {
+  if (sectionId === 3 && state.answers.country_decided === 'Yes') {
+    return 'you pre-selected a country to study in';
+  }
+  return 'not applicable to your profile';
+}
+
+/* Compact purple archive-style pill indicating a whole section was skipped.
+   Rendered in handleSectionBoundary between the prev-section summary and the
+   next-section floater, once per intermediate skipped section. */
+function renderSkipCard(sectionId) {
+  const section = SECTIONS[sectionId - 1];
+  if (!section) return;
+  const reason = deriveSkipReason(sectionId);
+  const card = document.createElement('div');
+  card.className = 'section-skip msg-enter';
+  card.dataset.section = sectionId;
+  card.style.cssText = 'max-width:560px; margin:10px auto; padding:10px 14px; background:var(--purple-soft, #f0e9fb); border:1px solid var(--purple-edge, #d5c6ee); border-radius:12px; color:var(--purple-ink, #5b3d99); font-size:13px; line-height:1.45; opacity:0.85;';
+  card.innerHTML = `<span style="font-weight:600;">Section ${section.id} &middot; ${section.name}</span> &mdash; skipped, ${reason}.`;
+  stream.insertBefore(card, stream.firstChild);
+}
+
 async function advance() {
   // Await the collapse to eliminate the race where askStep's renderComposer
   // could fire before collapse's transitionend, causing the new content to be
@@ -3479,17 +3519,25 @@ async function advance() {
 
   // peek next step to know its section
   const peek = peekNext();
-  const prevStep = FLOW[state.index - 1];
-  const prevSection = prevStep ? prevStep.section : 1;
+  // Use last-ANSWERED step's section, not FLOW[idx-1]'s. FLOW[idx-1] can be a
+  // skipped step inside a section the user never answered (e.g., Section 3
+  // when country is pre-selected), which would mask the boundary transition.
+  const prevSection = prevSectionBeforeIdx(state.index);
   const nextSection = peek ? peek.section : null;
 
   // Section boundary?
   if (peek && nextSection !== prevSection) {
-    await handleSectionBoundary(prevSection, nextSection);
+    // Collect any fully-skipped intermediate sections for skip-card rendering.
+    const skippedIds = [];
+    for (let s = prevSection + 1; s < nextSection; s++) {
+      skippedIds.push(s);
+    }
+    await handleSectionBoundary(prevSection, nextSection, skippedIds);
   }
 
   // Between-section micro tick (a small narrowing after every answer)
   if (peek && nextSection === prevSection) {
+    const prevStep = FLOW[state.index - 1];
     await microTick(prevStep);
   }
 
@@ -3599,7 +3647,7 @@ function renderContinueFloater(nextSectionId, opts) {
   });
 }
 
-async function handleSectionBoundary(prevSectionId, nextSectionId) {
+async function handleSectionBoundary(prevSectionId, nextSectionId, skippedSectionIds = []) {
   const oldCount = state.count;
 
   // Section-end callout fires FIRST — it's commentary on the student's last
@@ -3665,6 +3713,17 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
 
   // Let the summary card land visually before the continue floater appears.
   await new Promise(r => setTimeout(r, 500));
+
+  // For each fully-skipped intermediate section, render a compact skip-card.
+  // These appear between the prev-section summary and the next-section floater,
+  // explaining why we jumped ahead (e.g. Section 3 skipped because country
+  // pre-selected). No floater/intro for skipped sections — user isn't going
+  // through them; only the destination section gets those.
+  for (const skippedId of skippedSectionIds) {
+    await showTyping(400);
+    renderSkipCard(skippedId);
+    await new Promise(r => setTimeout(r, 400));
+  }
 
   // Continue floater — 5s auto-advance unless the student taps Pause.
   // Gives reviewers control over pacing without a hard gate.
