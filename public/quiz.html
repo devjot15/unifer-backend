@@ -3008,9 +3008,43 @@ function renderRank(step) {
 /* =====================================================
    Engine: advance through flow
    ===================================================== */
+/* Smoothly tween streamWrap.scrollTop from a starting value to a target.
+   Used after composer collapse to prevent iOS's instant scrollTop clamp
+   from teleporting bubbles when streamWrap.scrollHeight shrinks. */
+function _easeScrollTo(targetTop, duration) {
+  const wrap = document.getElementById("streamWrap");
+  if (!wrap) return;
+  const startTop = wrap.scrollTop;
+  const delta = targetTop - startTop;
+  if (Math.abs(delta) < 2) return;
+  const startTime = performance.now();
+  function tick(now) {
+    const t = Math.min(1, (now - startTime) / duration);
+    // ease-out cubic for natural deceleration
+    const eased = 1 - Math.pow(1 - t, 3);
+    wrap.scrollTop = startTop + delta * eased;
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
 async function advance() {
+  // Capture pre-clear scroll target so we can ease into the new bottom
+  // instead of letting iOS snap it in one frame (causes ~270px bubble teleport
+  // on text questions where composer collapses from ~229px to 22px).
+  const wrap = document.getElementById("streamWrap");
+  const startScrollTop = wrap ? wrap.scrollTop : 0;
+  const wasAtBottom = wrap ? ((wrap.scrollHeight - wrap.clientHeight - startScrollTop) < 80) : false;
   // clear composer while Unifer "thinks"
   composer.innerHTML = "";
+  // After clear: if user was at/near bottom, ease scrollTop to the new bottom
+  // smoothly. If they were scrolled up reviewing, leave them where they were.
+  if (wasAtBottom && wrap) {
+    requestAnimationFrame(() => {
+      const newMax = wrap.scrollHeight - wrap.clientHeight;
+      _easeScrollTo(newMax, 250);
+    });
+  }
   state.index++;
   updateProgress();
 
