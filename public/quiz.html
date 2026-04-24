@@ -2528,18 +2528,27 @@ function _animateComposerHeight(mutate) {
 }
 
 function _collapseComposer() {
-  if (!composer) return;
+  if (!composer) return Promise.resolve();
   const oldH = composer.offsetHeight;
   if (oldH <= 22) {
     composer.innerHTML = "";
     composer.style.height = "";
-    return;
+    return Promise.resolve();
   }
+  // Clear innerHTML at START not END. The end-of-collapse cleanup used to wipe
+  // the composer — but a renderComposer firing during collapse (race window of
+  // ~320ms before async advance() reached askStep) would inject grid/chip
+  // content that the cleanup then wiped. Clearing upfront means the lock-and-
+  // animate is purely visual: composer keeps locked height while empty, then
+  // releases. Any race-injected content is safe because we no longer touch
+  // innerHTML at end. To prevent visible empty-flash, we lock height BEFORE
+  // clearing so the user sees the same composer until animation begins.
+  composer.style.height = oldH + "px";
+  composer.innerHTML = "";
   const wrap = document.getElementById("streamWrap");
   const startScrollTop = wrap ? wrap.scrollTop : 0;
   const startScrollMax = wrap ? (wrap.scrollHeight - wrap.clientHeight) : 0;
   const userIsAtBottom = wrap && (startScrollMax - startScrollTop) < 80;
-  composer.style.height = oldH + "px";
   _composerAnimating = true;
   _setScrollLock("composer-collapse");
   let lastH = oldH;
@@ -2554,28 +2563,33 @@ function _collapseComposer() {
     }
     requestAnimationFrame(syncCollapseScroll);
   }
-  requestAnimationFrame(() => {
+  return new Promise(resolve => {
     requestAnimationFrame(() => {
-      composer.style.height = targetH + "px";
-      requestAnimationFrame(syncCollapseScroll);
-      const onEnd = (e) => {
-        if (e.propertyName !== "height") return;
-        composer.innerHTML = "";
-        composer.style.height = "";
-        composer.removeEventListener("transitionend", onEnd);
-        _composerAnimating = false;
-        _clearScrollLock("composer-collapse");
-      };
-      composer.addEventListener("transitionend", onEnd);
-      setTimeout(() => {
-        if (_composerAnimating) {
-          composer.innerHTML = "";
-          composer.style.height = "";
+      requestAnimationFrame(() => {
+        composer.style.height = targetH + "px";
+        requestAnimationFrame(syncCollapseScroll);
+        let done = false;
+        function finish() {
+          if (done) return;
+          done = true;
+          // Only release height if NO new content has been injected meanwhile.
+          // If grid/chip content is now in the composer (race), leave height
+          // untouched so the next renderComposer's animator can take over.
+          if (composer.children.length === 0) {
+            composer.style.height = "";
+          }
           composer.removeEventListener("transitionend", onEnd);
           _composerAnimating = false;
           _clearScrollLock("composer-collapse");
+          resolve();
         }
-      }, 500);
+        const onEnd = (e) => {
+          if (e.propertyName !== "height") return;
+          finish();
+        };
+        composer.addEventListener("transitionend", onEnd);
+        setTimeout(finish, 500);
+      });
     });
   });
 }
@@ -3084,7 +3098,10 @@ function _easeScrollTo(targetTop, duration) {
 }
 
 async function advance() {
-  _collapseComposer();
+  // Await the collapse to eliminate the race where askStep's renderComposer
+  // could fire before collapse's transitionend, causing the new content to be
+  // injected, then wiped by collapse's end-of-animation cleanup.
+  await _collapseComposer();
   state.index++;
   updateProgress();
 
