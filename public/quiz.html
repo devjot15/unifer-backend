@@ -2173,6 +2173,7 @@ async function addWarningCard(warning, opts) {
   function renderMainView() {
     card.innerHTML = mainViewHtml();
     wireMainView();
+    _scheduleScroll();
   }
 
   function wireMainView() {
@@ -2259,6 +2260,7 @@ async function addWarningCard(warning, opts) {
         </div>
       </div>
     `;
+    _scheduleScroll();
     card.querySelector('.warning-back').addEventListener('click', renderMainView);
     fetchAndEnablePickerOptions(option);
   }
@@ -2325,6 +2327,7 @@ async function addWarningCard(warning, opts) {
           </div>
         </div>
       `;
+      _scheduleScroll();
       card.querySelector('.warning-back').addEventListener('click', () => {
         if (idx === 0) {
           renderMainView();
