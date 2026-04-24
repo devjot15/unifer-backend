@@ -4604,7 +4604,7 @@ function cascadeFrom(editedStepId) {
       if (wipedIds.has(step.id)) continue;
       if (!(step.id in state.answers) || state.answers[step.id] == null) continue;
 
-      const nowHidden = typeof step.skipIf === "function" && step.skipIf(state.answers);
+      const nowHidden = !isVisible(step, state.answers);
       const optsDependOnEdited = step.optionsMap && (step.depends === editedStepId || wipedIds.has(step.depends));
 
       if (nowHidden || optsDependOnEdited) {
