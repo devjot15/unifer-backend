@@ -1825,20 +1825,24 @@ function _renderCount() {
 
 /* ---- Callouts (spec: max 3/session, never consecutive, bias to S2–4) ---- */
 const CALLOUTS = [
-  { when: a => a.level === "PhD",                                        text: "A PhD path. That shifts the whole analysis toward research-strong universities." },
-  { when: a => a.selected_country === "Germany",                         text: "Germany — often the best-value option in Europe. Strong pick." },
-  { when: a => a.priorities_1 === "Course",                              text: "Refreshing — you care about the fit, not the badge." },
-  { when: a => a.tuition_band === "No limit",                            text: "Noted. That opens up a lot of premium options for you." },
-  { when: a => a.field === "computer science & data technology",         text: "Hot field. Also one where subject-specific ranking matters more than overall." },
-  { when: a => a.profile_backlogs && a.profile_backlogs !== "0",         text: "Noted. Many universities are fine with backlogs — we'll keep those in." },
-  { when: a => a.profile_english_test === "IELTS" && a.profile_english_scores && a.profile_english_scores.overall >= 7.5, text: "Strong score. That opens up the top universities in most countries." },
-  { when: a => a.priorities_1 === "Country",                             text: "Country-first. That makes the country filter the heaviest factor in your results." },
-  { when: a => a.selected_country === "United Kingdom",                  text: "UK — the classic choice for international Masters. Solid pick." },
-  { when: a => a.selected_country === "Canada",                          text: "Canada — strong post-study work rights and great value. Good call." },
-  { when: a => a.selected_country === "Australia",                       text: "Australia — generous work rights and long PR pathways. Worth noting." },
-  { when: a => a.program_type_preference === "research",                 text: "Research Masters. That's a pathway to PhD for many people — noted." },
-  { when: a => a.ranking_importance === "0.75",                          text: "Aiming high. I'll surface the most prestigious options in your field." },
-  { when: a => a.ranking_importance === "0.25",                          text: "Refreshing — you care about the fit, not the badge." }
+  // section: the section whose completion triggers this callout. maybeFireCallout
+  // only considers callouts tagged for the section that just finished, so a
+  // Section 1 profile comment (e.g. backlogs) never fires at a Section 3→4
+  // boundary.
+  { section: 4, when: a => a.level === "PhD",                                        text: "A PhD path. That shifts the whole analysis toward research-strong universities." },
+  { section: 2, when: a => a.selected_country === "Germany",                         text: "Germany — often the best-value option in Europe. Strong pick." },
+  { section: 2, when: a => a.priorities_1 === "Course",                              text: "Refreshing — you care about the fit, not the badge." },
+  { section: 4, when: a => a.tuition_band === "No limit",                            text: "Noted. That opens up a lot of premium options for you." },
+  { section: 4, when: a => a.field === "computer science & data technology",         text: "Hot field. Also one where subject-specific ranking matters more than overall." },
+  { section: 1, when: a => a.profile_backlogs && a.profile_backlogs !== "0",         text: "Noted. Many universities are fine with backlogs — we'll keep those in." },
+  { section: 1, when: a => a.profile_english_test === "IELTS" && a.profile_english_scores && a.profile_english_scores.overall >= 7.5, text: "Strong score. That opens up the top universities in most countries." },
+  { section: 2, when: a => a.priorities_1 === "Country",                             text: "Country-first. That makes the country filter the heaviest factor in your results." },
+  { section: 2, when: a => a.selected_country === "United Kingdom",                  text: "UK — the classic choice for international Masters. Solid pick." },
+  { section: 2, when: a => a.selected_country === "Canada",                          text: "Canada — strong post-study work rights and great value. Good call." },
+  { section: 2, when: a => a.selected_country === "Australia",                       text: "Australia — generous work rights and long PR pathways. Worth noting." },
+  { section: 4, when: a => a.program_type_preference === "research",                 text: "Research Masters. That's a pathway to PhD for many people — noted." },
+  { section: 5, when: a => a.ranking_importance === "0.75",                          text: "Aiming high. I'll surface the most prestigious options in your field." },
+  { section: 5, when: a => a.ranking_importance === "0.25",                          text: "Refreshing — you care about the fit, not the badge." }
 ];
 
 /* ---- High School block ---------------------------------------------------
@@ -2585,15 +2589,16 @@ function updateProgress() {
 }
 
 /* ---- callouts ---- */
-function maybeFireCallout() {
+function maybeFireCallout(forSection) {
   if (state.calloutsFired >= 3) return null;
   if ((state.index - state.lastCalloutIndex) < 2) return null;  // never consecutive
-  const curSection = FLOW[state.index - 1]?.section || 1;
-  // weight toward sections 2–4
-  const weight = curSection >= 2 && curSection <= 4 ? 1 : 0.35;
-  if (Math.random() > weight) return null;
+  // Section binding: only consider callouts tagged for the section that just
+  // finished. Keeps the commentary contextual (backlog remark fires at end
+  // of Section 1, not Section 3). Untagged callouts are never matched — that's
+  // intentional, force callers to tag them.
   for (const c of CALLOUTS) {
     if (c.fired) continue;
+    if (forSection != null && c.section !== forSection) continue;
     try {
       if (c.when(state.answers)) {
         c.fired = true;
@@ -2791,10 +2796,17 @@ function maybeFireSuggestion(oldCount) {
   }
 
   if (count < 5) {
+    // Suppress the warning if there are no actionable options. At early
+    // boundaries (e.g. Section 1→2 or country=No before Section 4 filters),
+    // buildChangeOptions returns []. A Heads-Up with only Continue is a
+    // dead end; the counter pill + ribbon already convey the low count.
+    // count=0 (critical) still fires in the block above regardless.
+    const _changeOpts = buildChangeOptions(a);
+    if (!_changeOpts || _changeOpts.length === 0) return null;
     return {
       level: 'warning',
       text: `Only ${count} course${count === 1 ? '' : 's'} match. Try changing your answers to open up more:`,
-      actions: buildChangeOptions(a)
+      actions: _changeOpts
     };
   }
 
@@ -3699,8 +3711,9 @@ async function handleSectionBoundary(prevSectionId, nextSectionId, skippedSectio
   // Section-end callout fires FIRST — it's commentary on the student's last
   // answer (previous-section context), not on the section-completion event.
   // Rendering before the ribbon keeps the italic note next to the answer
-  // bubble that triggered it, in the natural conversational order.
-  const calloutText = maybeFireCallout();
+  // bubble that triggered it, in the natural conversational order. Bound
+  // to prevSectionId so a Section 1 remark can't fire at a Section 3 boundary.
+  const calloutText = maybeFireCallout(prevSectionId);
   if (calloutText) {
     await showTyping(500);
     addCalloutMsg(calloutText);
@@ -4570,6 +4583,18 @@ function commitEdit(stepId, value, displayLabel) {
    Also removes both the UNIFER question bubble and the user answer bubble from DOM. */
 function cascadeFrom(editedStepId) {
   const wipedIds = new Set();
+
+  // Special-case: country_decided edit flips priorities' ranking semantics
+  // (Yes = rank 2 items with Country auto-appended; No = rank 3 items
+  // including Country). The stored priorities array length differs, so we
+  // must wipe priorities on any country_decided change so it re-asks.
+  if (editedStepId === 'country_decided') {
+    ['priorities', 'priorities_1', 'priorities_2', 'priorities_3'].forEach(k => {
+      if (k in state.answers) delete state.answers[k];
+    });
+    wipedIds.add('priorities');
+  }
+
   let changed = true;
   while (changed) {
     changed = false;
