@@ -1953,6 +1953,11 @@ function _smoothScrollBottom() {
 let _scrollTimer = null;
 function _scheduleScroll() {
   if (_scrollTimer) return;
+  // Suppress during composer height animation — _animateComposerHeight syncs
+  // scrollTop with composer growth on the same rAF clock, and a debounced
+  // _smoothScrollBottom firing 120ms after animation-end was re-targeting the
+  // scroll based on post-animation geometry, causing a visible ~20px drift-back.
+  if (_composerAnimating) return;
   // 120ms catches both MutationObserver (bubble added) and ResizeObserver
   // (bubble height settles after CSS transition) in a single scroll animation,
   // eliminating the double-settle micro-jitter visible in every question.
@@ -2516,9 +2521,9 @@ function _animateComposerHeight(mutate) {
         composer.style.maxHeight = "none";
         composer.removeEventListener("transitionend", onEnd);
         _composerAnimating = false;
-        // Final correction pass: if scrollTop overshot/undershot due to
-        // sub-pixel rounding, snap to the actual bottom.
-        if (wrap && userIsAtBottom) wrap.scrollTop = wrap.scrollHeight;
+        // No final correction — per-frame delta sync above keeps scrollTop
+        // aligned throughout the animation. A snap-to-bottom here was actually
+        // overshooting by ~20px and creating the visible bump.
       };
       composer.addEventListener("transitionend", onEnd);
       setTimeout(() => {
@@ -2526,7 +2531,6 @@ function _animateComposerHeight(mutate) {
           composer.style.maxHeight = "none";
           composer.removeEventListener("transitionend", onEnd);
           _composerAnimating = false;
-          if (wrap && userIsAtBottom) wrap.scrollTop = wrap.scrollHeight;
         }
       }, 500);
     });
