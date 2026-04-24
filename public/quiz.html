@@ -4367,7 +4367,7 @@ function commitEdit(stepId, value, displayLabel) {
   // completed section, which would re-add ribbons and summaries on top of
   // the existing ones. Removing them here keeps the stream clean — the
   // re-walk regenerates fresh ones reflecting post-edit state.answers.
-  stream.querySelectorAll('.ribbon, .section-summary').forEach(el => el.remove());
+  stream.querySelectorAll('.ribbon, .section-summary, .section-skip, .continue-floater').forEach(el => el.remove());
 
   // Resume flow — reset state.index to the earliest position that needs asking,
   // let peekNext (now skipping answered questions) find the next gap.
