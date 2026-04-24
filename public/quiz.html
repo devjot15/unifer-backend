@@ -3154,9 +3154,20 @@ function peekNext() {
   return null;
 }
 
-function renderContinueFloater(nextSectionId) {
-  const nextSection = SECTIONS[nextSectionId - 1];
-  if (!nextSection) return Promise.resolve();
+function renderContinueFloater(nextSectionId, opts) {
+  opts = opts || {};
+  const startPaused = !!opts.startPaused;
+
+  // Label: opts.label wins (used for freeze floaters that have no next section).
+  // Otherwise fall back to the section-transition label.
+  let labelHtml;
+  if (opts.label) {
+    labelHtml = opts.label;
+  } else {
+    const nextSection = SECTIONS[nextSectionId - 1];
+    if (!nextSection) return Promise.resolve();
+    labelHtml = `Moving to Section ${nextSection.id} &mdash; ${nextSection.name} <span class="continue-arrow">&rarr;</span>`;
+  }
 
   return new Promise(resolve => {
     const DURATION = 5000;
@@ -3165,7 +3176,7 @@ function renderContinueFloater(nextSectionId) {
     el.innerHTML = `
       <div class="continue-inner">
         <div class="continue-row">
-          <span class="continue-label">Moving to Section ${nextSection.id} &mdash; ${nextSection.name} <span class="continue-arrow">&rarr;</span></span>
+          <span class="continue-label">${labelHtml}</span>
           <button type="button" class="continue-pause" aria-label="Pause">Pause</button>
         </div>
         <div class="continue-bar"><div class="continue-fill"></div></div>
@@ -3217,6 +3228,7 @@ function renderContinueFloater(nextSectionId) {
     }
 
     btn.addEventListener("click", onPauseClick);
+    if (startPaused) enterPaused();
     rafId = requestAnimationFrame(tick);
   });
 }
@@ -3261,6 +3273,7 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   await new Promise(r => setTimeout(r, 1100));
 
   // smart suggestion if pool collapsed?
+  let _freezeFired = false;
   const warning = maybeFireSuggestion(oldCount);
   if (warning) {
     await showTyping(500);
@@ -3270,6 +3283,13 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
       addUniferMsg(warning.text, "suggest", warning.level === 'info' ? 'FYI' : 'Heads up');
     }
     await new Promise(r => setTimeout(r, 500));
+    // Cases 1 (count=0), 2 (count<5), 5 (PhD+taught) carry level 'critical' or
+    // 'warning'. Freeze the quiz so the user has explicit time to loosen or
+    // accept. Skip the post-summary floater after — this served that role.
+    if (warning.level === 'critical' || warning.level === 'warning') {
+      await renderContinueFloater(null, { startPaused: true, label: "Take your time" });
+      _freezeFired = true;
+    }
   }
 
   // Section summary card (purple, long-press-editable rows) — recap of answers from the section that just ended
@@ -3278,9 +3298,12 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   // Let the summary card land visually before the continue floater appears.
   await new Promise(r => setTimeout(r, 500));
 
-  // Continue floater — 4s auto-advance unless the student taps Pause.
+  // Continue floater — 5s auto-advance unless the student taps Pause.
   // Gives reviewers control over pacing without a hard gate.
-  await renderContinueFloater(nextSectionId);
+  // Skipped if a warning freeze already fired — user just got their pause.
+  if (!_freezeFired) {
+    await renderContinueFloater(nextSectionId);
+  }
 
   // section intro — generous pause so the student registers the summary milestone
   // before moving on to the next section's framing.
@@ -3424,6 +3447,11 @@ async function finish() {
       addUniferMsg(finalWarning.text, "suggest", finalWarning.level === 'info' ? 'FYI' : 'Heads up');
     }
     await new Promise(r => setTimeout(r, 500));
+    // Identical freeze logic to handleSectionBoundary — cases 1/2/5 get an
+    // explicit pause before the All-done bubble + results card.
+    if (finalWarning.level === 'critical' || finalWarning.level === 'warning') {
+      await renderContinueFloater(null, { startPaused: true, label: "Take your time" });
+    }
   }
 
   await showTyping(650);
