@@ -468,6 +468,7 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-2);
   overflow: hidden;
+  transition: max-height 320ms var(--ease);
 }
 .composer-body {
   padding: 14px 14px 10px;
@@ -2456,7 +2457,60 @@ function labelFor(step, value) {
 /* =====================================================
    Composer renderers (one per input kind)
    ===================================================== */
-function renderComposer(step) {
+/* Composer height animator — eliminates the snap when composer content
+   changes between question types (text input ~80px → 4 chip rows ~200px).
+   Pattern: lock current height → run mutate() (per-kind renderer rebuilds
+   composer.innerHTML synchronously) → measure new natural height → animate
+   max-height from old to new. Keeps the composer's outer geometry calm even
+   as inner contents change shape. overflow:hidden on .composer-inner hides
+   the content swap during the transition. */
+let _composerAnimating = false;
+function _animateComposerHeight(mutate) {
+  const oldInner = composer.querySelector(".composer-inner");
+  // First render (no inner yet) or mid-animation reentry → just mutate.
+  if (!oldInner || _composerAnimating) {
+    mutate();
+    return;
+  }
+  const oldH = oldInner.offsetHeight;
+  // Lock current height so the snap is visually suppressed during mutation.
+  oldInner.style.maxHeight = oldH + "px";
+  mutate();
+  // The mutation replaces .composer-inner with a new element — re-query.
+  const newInner = composer.querySelector(".composer-inner");
+  if (!newInner) return;
+  // Measure natural new height by temporarily unlocking, then re-lock to oldH
+  // so the transition has a defined start point.
+  newInner.style.maxHeight = "none";
+  const newH = newInner.offsetHeight;
+  newInner.style.maxHeight = oldH + "px";
+  _composerAnimating = true;
+  // Double rAF: first frame commits the start state, second frame triggers
+  // the transition. Required on iOS Safari to prevent the browser from
+  // collapsing both frames into a single layout pass (which would skip animation).
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      newInner.style.maxHeight = newH + "px";
+      const onEnd = (e) => {
+        if (e.propertyName !== "max-height") return;
+        newInner.style.maxHeight = "none"; // unclamp so future focus-pill toggles can grow it
+        newInner.removeEventListener("transitionend", onEnd);
+        _composerAnimating = false;
+      };
+      newInner.addEventListener("transitionend", onEnd);
+      // Safety net — if transitionend never fires (oldH===newH, etc.), unclamp anyway.
+      setTimeout(() => {
+        if (_composerAnimating) {
+          newInner.style.maxHeight = "none";
+          newInner.removeEventListener("transitionend", onEnd);
+          _composerAnimating = false;
+        }
+      }, 500);
+    });
+  });
+}
+
+function _renderComposerInner(step) {
   composer.innerHTML = "";
   if (!step) return;
   switch (step.kind) {
@@ -2468,6 +2522,10 @@ function renderComposer(step) {
     case "rank":    return renderRank(step);
     case "text":    return renderText(step);
   }
+}
+
+function renderComposer(step) {
+  _animateComposerHeight(() => _renderComposerInner(step));
 }
 
 function submitAnswer(stepId, value, displayLabel) {
