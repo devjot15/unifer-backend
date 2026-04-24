@@ -4321,6 +4321,15 @@ function commitEdit(stepId, value, displayLabel) {
   state.answers[stepId] = value;
   applyBachelorAutoPG();
 
+  // Patch F: applyBachelorAutoPG silently sets level='PG' for Bachelor's users
+  // so the level question is never asked. When user edits Bachelor's → Master's,
+  // cascadeFrom doesn't wipe level (it's not now-hidden, just newly-visible with
+  // a stale implicit value), so peekNext skips it on re-walk. User never gets to
+  // pick between PG and PhD. Explicit wipe here triggers re-ask.
+  if (stepId === "profile_degree_completed" && prevValue === "Bachelor's" && value === "Master's") {
+    delete state.answers.level;
+  }
+
   // Capture suspendedIdx BEFORE we clear state (otherwise null defaults it to FLOW.length → count is wrong by ~10×)
   const editedIdx = FLOW.findIndex(s => s.id === stepId);
   const suspendedIdx = state.suspendedStep
