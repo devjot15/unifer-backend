@@ -468,7 +468,7 @@ html:has(.app.in-chat), body:has(.app.in-chat) {
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-2);
   overflow: hidden;
-  transition: max-height 320ms var(--ease);
+  transition: height 320ms var(--ease);
 }
 .composer-body {
   padding: 14px 14px 10px;
@@ -1950,16 +1950,10 @@ function _smoothScrollBottom() {
 let _scrollTimer = null;
 function _scheduleScroll() {
   if (_scrollTimer) return;
-  // Suppress during composer height animation — _animateComposerHeight syncs
-  // scrollTop with composer growth on the same rAF clock, and a debounced
-  // _smoothScrollBottom firing 120ms after animation-end was re-targeting the
-  // scroll based on post-animation geometry, causing a visible ~20px drift-back.
-  if (_composerAnimating) return;
-  // 120ms catches both MutationObserver (bubble added) and ResizeObserver
-  // (bubble height settles after CSS transition) in a single scroll animation,
-  // eliminating the double-settle micro-jitter visible in every question.
+  if (_scrollLockReason) return;
   _scrollTimer = setTimeout(() => {
     _scrollTimer = null;
+    if (_scrollLockReason) return;
     requestAnimationFrame(_smoothScrollBottom);
   }, 120);
 }
@@ -2001,6 +1995,7 @@ function _scheduleScroll() {
     syncVVH();
     const rescroll = () => {
       if (state && state.editingStepId) return;
+      if (_scrollLockReason) return;
       const w = document.getElementById("streamWrap");
       if (w) w.scrollTop = w.scrollHeight;
     };
@@ -2466,6 +2461,12 @@ function labelFor(step, value) {
    max-height from old to new. Keeps the composer's outer geometry calm even
    as inner contents change shape. overflow:hidden on .composer-inner hides
    the content swap during the transition. */
+let _scrollLockReason = null;
+function _setScrollLock(reason) { _scrollLockReason = reason; }
+function _clearScrollLock(reason) {
+  if (_scrollLockReason === reason) _scrollLockReason = null;
+}
+
 let _composerAnimating = false;
 function _animateComposerHeight(mutate) {
   // `composer` is the .composer-inner element itself (const composer = $("#composerInner"))
@@ -2476,19 +2477,17 @@ function _animateComposerHeight(mutate) {
     return;
   }
   const oldH = composer.offsetHeight;
-  composer.style.maxHeight = oldH + "px";
+  composer.style.height = oldH + "px";
   mutate();
-  // Measure new natural height by unclamping, then snap back to oldH so the
-  // transition has a defined start point.
-  composer.style.maxHeight = "none";
+  composer.style.height = "auto";
   const newH = composer.offsetHeight;
-  if (oldH === newH) { return; } // no animation needed
-  composer.style.maxHeight = oldH + "px";
+  if (oldH === newH) {
+    composer.style.height = "";
+    return;
+  }
+  composer.style.height = oldH + "px";
   _composerAnimating = true;
-  // Synchronized scroll: capture the streamWrap and decide whether to track.
-  // Skip auto-scroll if the user has manually scrolled away from bottom — they
-  // are reviewing earlier content, don't yank them back. (Threshold 80px gives
-  // some tolerance for resize jitter without being overly cautious.)
+  _setScrollLock("composer-animation");
   const wrap = document.getElementById("streamWrap");
   const startScrollTop = wrap ? wrap.scrollTop : 0;
   const startScrollMax = wrap ? (wrap.scrollHeight - wrap.clientHeight) : 0;
@@ -2499,35 +2498,82 @@ function _animateComposerHeight(mutate) {
     const currentH = composer.offsetHeight;
     const delta = currentH - lastH;
     if (delta !== 0) {
-      // Add the same delta to scrollTop so the bubble layer slides up at
-      // exactly the rate the composer grows. They become mechanically locked.
       wrap.scrollTop += delta;
       lastH = currentH;
     }
     requestAnimationFrame(syncScroll);
   }
-  // Double rAF: first frame commits the start state, second frame triggers
-  // the transition. Required on iOS Safari to prevent layout coalescing.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      composer.style.maxHeight = newH + "px";
-      // Kick off parallel scroll-sync loop on the same rAF clock as the height transition.
+      composer.style.height = newH + "px";
       requestAnimationFrame(syncScroll);
       const onEnd = (e) => {
-        if (e.propertyName !== "max-height") return;
-        composer.style.maxHeight = "none";
+        if (e.propertyName !== "height") return;
+        composer.style.height = "";
         composer.removeEventListener("transitionend", onEnd);
         _composerAnimating = false;
-        // No final correction — per-frame delta sync above keeps scrollTop
-        // aligned throughout the animation. A snap-to-bottom here was actually
-        // overshooting by ~20px and creating the visible bump.
+        _clearScrollLock("composer-animation");
       };
       composer.addEventListener("transitionend", onEnd);
       setTimeout(() => {
         if (_composerAnimating) {
-          composer.style.maxHeight = "none";
+          composer.style.height = "";
           composer.removeEventListener("transitionend", onEnd);
           _composerAnimating = false;
+          _clearScrollLock("composer-animation");
+        }
+      }, 500);
+    });
+  });
+}
+
+function _collapseComposer() {
+  if (!composer) return;
+  const oldH = composer.offsetHeight;
+  if (oldH <= 22) {
+    composer.innerHTML = "";
+    composer.style.height = "";
+    return;
+  }
+  const wrap = document.getElementById("streamWrap");
+  const startScrollTop = wrap ? wrap.scrollTop : 0;
+  const startScrollMax = wrap ? (wrap.scrollHeight - wrap.clientHeight) : 0;
+  const userIsAtBottom = wrap && (startScrollMax - startScrollTop) < 80;
+  composer.style.height = oldH + "px";
+  _composerAnimating = true;
+  _setScrollLock("composer-collapse");
+  let lastH = oldH;
+  const targetH = 0;
+  function syncCollapseScroll() {
+    if (!_composerAnimating || !wrap || !userIsAtBottom) return;
+    const currentH = composer.offsetHeight;
+    const delta = currentH - lastH;
+    if (delta !== 0) {
+      wrap.scrollTop = Math.max(0, wrap.scrollTop + delta);
+      lastH = currentH;
+    }
+    requestAnimationFrame(syncCollapseScroll);
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      composer.style.height = targetH + "px";
+      requestAnimationFrame(syncCollapseScroll);
+      const onEnd = (e) => {
+        if (e.propertyName !== "height") return;
+        composer.innerHTML = "";
+        composer.style.height = "";
+        composer.removeEventListener("transitionend", onEnd);
+        _composerAnimating = false;
+        _clearScrollLock("composer-collapse");
+      };
+      composer.addEventListener("transitionend", onEnd);
+      setTimeout(() => {
+        if (_composerAnimating) {
+          composer.innerHTML = "";
+          composer.style.height = "";
+          composer.removeEventListener("transitionend", onEnd);
+          _composerAnimating = false;
+          _clearScrollLock("composer-collapse");
         }
       }, 500);
     });
@@ -2900,6 +2946,15 @@ function renderGrid(step) {
   wireInvalidOnBlur(overall, ovMin, ovMax);
   inputs.forEach(i => i.addEventListener("input", recompute));
   overall.addEventListener("input", validate);
+  function lockFieldFocus(el) {
+    el.addEventListener("touchstart", (e) => {
+      if (document.activeElement === el) return;
+      e.preventDefault();
+      el.focus({ preventScroll: true });
+    }, { passive: false });
+  }
+  inputs.forEach(lockFieldFocus);
+  lockFieldFocus(overall);
   send.addEventListener("click", () => {
     const ov = parseFloat(overall.value);
     // Collect all sub-field values into a structured object the backend can JSON-serialise.
@@ -3029,13 +3084,7 @@ function _easeScrollTo(targetTop, duration) {
 }
 
 async function advance() {
-  // Animate the composer collapse instead of clearing instantly. The instant
-  // clear was causing iOS Safari to clamp scrollTop to the new (much shorter)
-  // scrollMax in one frame, teleporting the bubble ~270px on text-question
-  // submits. Routing through _animateComposerHeight collapses composer from
-  // current height to 22px over 320ms; scroll-sync inside the animator slides
-  // scrollTop in lockstep so the bubble glides into its new position.
-  _animateComposerHeight(() => { composer.innerHTML = ""; });
+  _collapseComposer();
   state.index++;
   updateProgress();
 
