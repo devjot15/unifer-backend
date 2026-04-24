@@ -2793,7 +2793,7 @@ function maybeFireSuggestion(oldCount) {
   if (count < 5) {
     return {
       level: 'warning',
-      text: `Only ${count} course${count === 1 ? '' : 's'} match. Try changing one to open up more:`,
+      text: `Only ${count} course${count === 1 ? '' : 's'} match. Try changing your answers to open up more:`,
       actions: buildChangeOptions(a)
     };
   }
@@ -3510,6 +3510,12 @@ function prevSectionBeforeIdx(idx) {
   for (let i = idx - 1; i >= 0; i--) {
     const s = FLOW[i];
     if (!s) continue;
+    // Skip hidden steps — their pseudo-answers don't represent real user
+    // activity. Example: applyBachelorAutoPG silently sets level="PG" for
+    // Bachelor's users even though the level question is skipIf'd out.
+    // Without this guard, we'd misread the last-answered section as 4 and
+    // the 2→4 (country pre-selected) boundary would never fire.
+    if (!isVisible(s, state.answers)) continue;
     const v = state.answers[s.id];
     if (v != null && v !== '') return s.section;
   }
@@ -3535,7 +3541,7 @@ function renderSkipCard(sectionId) {
   const card = document.createElement('div');
   card.className = 'section-skip msg-enter';
   card.dataset.section = sectionId;
-  card.style.cssText = 'max-width:560px; margin:10px auto; padding:10px 14px; background:var(--purple-soft, #f0e9fb); border:1px solid var(--purple-edge, #d5c6ee); border-radius:12px; color:var(--purple-ink, #5b3d99); font-size:13px; line-height:1.45; opacity:0.85;';
+  card.style.cssText = 'max-width:560px; margin:10px auto; padding:10px 14px; background:#fff7e6; border:1px solid #f5d493; border-radius:12px; color:#8b5a00; font-size:13px; line-height:1.45; opacity:0.9;';
   card.innerHTML = `<span style="font-weight:600;">Section ${section.id} &middot; ${section.name}</span> &mdash; skipped, ${reason}.`;
   stream.insertBefore(card, stream.firstChild);
 }
