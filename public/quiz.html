@@ -3201,7 +3201,11 @@ async function askStep(step) {
       // Tall composer — anchor question bubble at top of visible stream area.
       bubble.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
-      _hardScrollBottom();
+      // Smooth scroll, not hard — runs in parallel with the 320ms composer
+      // height animation so bubbles slide UP at the same rhythm as the composer
+      // grows, instead of snap-scrolling first and then having the composer
+      // overgrow into the scrolled-to position (covering the question bubble).
+      _smoothScrollBottom();
     }
   });
 }
