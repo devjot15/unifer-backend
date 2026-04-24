@@ -1165,7 +1165,7 @@ body.coach-on .composer { pointer-events: none; }
    stream-wrap is fully visible (column-reverse scroll can land imprecisely
    after keyboard-driven viewport resizes). Hidden when composer is idle. */
 .composer-question-pill {
-  display: none;
+  display: block;
   padding: 10px 14px 9px;
   background: var(--teal-soft);
   color: var(--teal-ink);
@@ -1174,9 +1174,6 @@ body.coach-on .composer { pointer-events: none; }
   font-weight: 500;
   letter-spacing: -0.005em;
   border-bottom: 1px solid var(--teal-edge);
-}
-.composer-inner:focus-within .composer-question-pill {
-  display: block;
 }
 
 /* Section intro bubble gets extra breathing room when landing after a summary
@@ -2541,14 +2538,21 @@ function _renderComposerInner(step) {
   composer.innerHTML = "";
   if (!step) return;
   switch (step.kind) {
-    case "chip":    return renderChips(step);
-    case "numeric": return renderNumeric(step);
-    case "search":  return renderSearch(step);
-    case "grid":    return renderGrid(step);
-    case "country": return renderCountry(step);
-    case "rank":    return renderRank(step);
-    case "text":    return renderText(step);
+    case "chip":    renderChips(step); break;
+    case "numeric": renderNumeric(step); break;
+    case "search":  renderSearch(step); break;
+    case "grid":    renderGrid(step); break;
+    case "country": renderCountry(step); break;
+    case "rank":    renderRank(step); break;
+    case "text":    renderText(step); break;
   }
+  // Insert the question pill INSIDE the same mutate() the animator measures
+  // around. Previously _setComposerQuestion ran AFTER renderComposer returned,
+  // meaning the pill was added after the animator had already measured newH —
+  // causing text composers (which auto-focus and reveal the pill) to grow
+  // beyond the animation target. Pill is now part of the measured layout.
+  const prompt = step ? (typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt) : '';
+  _setComposerQuestion(prompt);
 }
 
 function renderComposer(step) {
@@ -3218,7 +3222,9 @@ async function askStep(step) {
     await new Promise(r => setTimeout(r, 400));
   }
   renderComposer(step);
-  _setComposerQuestion(prompt);
+  // _setComposerQuestion is now called from inside _renderComposerInner so the
+  // pill is in the DOM when the animator measures newH (was creating a 39px
+  // post-animation snap on text composers).
   // Scroll strategy depends on composer height. Tall composers (field picker,
   // ranking, country dropdown) shove the question out of view if we just pin
   // newest-to-bottom. Instead, anchor the question bubble to the top of the
