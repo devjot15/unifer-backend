@@ -2028,15 +2028,7 @@ function _scheduleScroll() {
         const app = document.getElementById("app"), chat = document.getElementById("chat");
         if (app && app.classList.contains("in-chat")) { app.style.height = h; app.style.minHeight = h; }
         if (chat) { chat.style.height = h; chat.style.minHeight = h; }
-        // Ease scrollTop to new bottom over 280ms instead of instant snap.
-        // The instant snap was teleporting the bubble ~270px on text-question
-        // submit (visible jolt). Ease keeps the bubble sliding down smoothly
-        // in sync with the keyboard slide-out.
-        requestAnimationFrame(() => {
-          if (state && state.editingStepId) return;
-          const w = document.getElementById("streamWrap");
-          if (w) _easeScrollTo(w.scrollHeight, 280);
-        });
+        requestAnimationFrame(rescroll);
       }, 50);
     }, true);
   }
@@ -3037,8 +3029,13 @@ function _easeScrollTo(targetTop, duration) {
 }
 
 async function advance() {
-  // clear composer while Unifer "thinks"
-  composer.innerHTML = "";
+  // Animate the composer collapse instead of clearing instantly. The instant
+  // clear was causing iOS Safari to clamp scrollTop to the new (much shorter)
+  // scrollMax in one frame, teleporting the bubble ~270px on text-question
+  // submits. Routing through _animateComposerHeight collapses composer from
+  // current height to 22px over 320ms; scroll-sync inside the animator slides
+  // scrollTop in lockstep so the bubble glides into its new position.
+  _animateComposerHeight(() => { composer.innerHTML = ""; });
   state.index++;
   updateProgress();
 
