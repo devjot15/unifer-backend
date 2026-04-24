@@ -2483,16 +2483,42 @@ function _animateComposerHeight(mutate) {
   if (oldH === newH) { return; } // no animation needed
   composer.style.maxHeight = oldH + "px";
   _composerAnimating = true;
+  // Synchronized scroll: capture the streamWrap and decide whether to track.
+  // Skip auto-scroll if the user has manually scrolled away from bottom — they
+  // are reviewing earlier content, don't yank them back. (Threshold 80px gives
+  // some tolerance for resize jitter without being overly cautious.)
+  const wrap = document.getElementById("streamWrap");
+  const startScrollTop = wrap ? wrap.scrollTop : 0;
+  const startScrollMax = wrap ? (wrap.scrollHeight - wrap.clientHeight) : 0;
+  const userIsAtBottom = wrap && (startScrollMax - startScrollTop) < 80;
+  let lastH = oldH;
+  function syncScroll() {
+    if (!_composerAnimating || !wrap || !userIsAtBottom) return;
+    const currentH = composer.offsetHeight;
+    const delta = currentH - lastH;
+    if (delta !== 0) {
+      // Add the same delta to scrollTop so the bubble layer slides up at
+      // exactly the rate the composer grows. They become mechanically locked.
+      wrap.scrollTop += delta;
+      lastH = currentH;
+    }
+    requestAnimationFrame(syncScroll);
+  }
   // Double rAF: first frame commits the start state, second frame triggers
   // the transition. Required on iOS Safari to prevent layout coalescing.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       composer.style.maxHeight = newH + "px";
+      // Kick off parallel scroll-sync loop on the same rAF clock as the height transition.
+      requestAnimationFrame(syncScroll);
       const onEnd = (e) => {
         if (e.propertyName !== "max-height") return;
         composer.style.maxHeight = "none";
         composer.removeEventListener("transitionend", onEnd);
         _composerAnimating = false;
+        // Final correction pass: if scrollTop overshot/undershot due to
+        // sub-pixel rounding, snap to the actual bottom.
+        if (wrap && userIsAtBottom) wrap.scrollTop = wrap.scrollHeight;
       };
       composer.addEventListener("transitionend", onEnd);
       setTimeout(() => {
@@ -2500,6 +2526,7 @@ function _animateComposerHeight(mutate) {
           composer.style.maxHeight = "none";
           composer.removeEventListener("transitionend", onEnd);
           _composerAnimating = false;
+          if (wrap && userIsAtBottom) wrap.scrollTop = wrap.scrollHeight;
         }
       }, 500);
     });
@@ -3201,11 +3228,9 @@ async function askStep(step) {
       // Tall composer — anchor question bubble at top of visible stream area.
       bubble.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
-      // Smooth scroll, not hard — runs in parallel with the 320ms composer
-      // height animation so bubbles slide UP at the same rhythm as the composer
-      // grows, instead of snap-scrolling first and then having the composer
-      // overgrow into the scrolled-to position (covering the question bubble).
-      _smoothScrollBottom();
+      // Scroll is handled by _animateComposerHeight which syncs scrollTop with
+      // composer height growth on the same rAF clock. No early scroll call here
+      // — that fired before the composer had grown and silently overshot.
     }
   });
 }
