@@ -2048,16 +2048,24 @@ function addUniferMsg(html, variant="", lead="", stepId=null) {
   scrollToBottom();
   return el;
 }
-/* Stage 6A-fix-5: actionable warning card. Renders the warning text plus
-   loosen-action buttons. Clicking a button mutates state.answers, refetches the
-   real eligible-count, animates the counter, and updates any rendered All-done
-   card so the displayed total matches the new pool. */
-function addWarningCard(warning, opts) {
+/* Actionable warning card with freeze semantics.
+
+   For freeze cases (level critical/warning), the card blocks the boundary flow
+   until the user either:
+   - clicks a binary change option (auto-continues after refetch + ribbon);
+   - completes a picker sub-view (option click auto-continues);
+   - completes the cascade sub-view (Consider any country — 3 Section 3 Qs);
+   - clicks the in-card Continue button (accept current state, move on).
+
+   Continue button visibility:
+   - level 'critical' (count=0): hidden unless no viable options exist.
+   - level 'warning' (count<5 or PhD+taught clash): shown.
+
+   Non-freeze calls (opts.freeze = false/undefined) render a static card and
+   resolve to the card element instead of a blocking promise. */
+async function addWarningCard(warning, opts) {
   opts = opts || {};
   const freeze = !!opts.freeze;
-
-  const card = document.createElement('div');
-  card.className = 'msg u enter';
 
   const palette = {
     critical: { bg: '#fff5f0', border: '#f5c0a3', label: '#a83f00', labelText: 'HEADS UP' },
@@ -2066,100 +2074,276 @@ function addWarningCard(warning, opts) {
   };
   const p = palette[warning.level] || palette.info;
 
-  const actionsHtml = (warning.actions && warning.actions.length > 0)
-    ? `<div class="warning-actions" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
-         ${warning.actions.map((a, i) => `
-           <button type="button" class="warning-action" data-idx="${i}"
-                   style="padding:7px 12px; background:white; border:1px solid ${p.border}; border-radius:999px; font-size:13px; color:var(--ink); cursor:pointer; transition:background 140ms;">
-             ${a.text}
-           </button>
-         `).join('')}
-       </div>`
-    : '';
+  const options = Array.isArray(warning.actions) ? warning.actions : [];
 
-  // Freeze cases get an in-card Continue button. Right-aligned teal pill, sits
-  // below loosen actions. Renders regardless of whether loosen actions exist.
-  const continueHtml = freeze
-    ? `<div class="warning-continue" style="display:flex; justify-content:flex-end; margin-top:12px;">
-         <button type="button" class="warning-continue-btn"
-                 style="padding:7px 14px; background:var(--teal-soft); border:1px solid var(--teal-edge); border-radius:999px; font-size:13px; color:var(--teal-ink); font-weight:500; cursor:pointer; transition:background 140ms;">
-           Continue &rarr;
-         </button>
-       </div>`
-    : '';
+  // Prefetch preview counts for binary options in parallel. Picker counts are
+  // fetched lazily when the user opens that sub-view, to avoid hammering the
+  // backend for options never viewed.
+  const binaryOpts = options.filter(o => o.type === 'binary');
+  if (binaryOpts.length > 0 && window.UNIFER && typeof window.UNIFER.fetchEligibleCount === 'function') {
+    const counts = await Promise.all(binaryOpts.map(async opt => {
+      try {
+        const clone = JSON.parse(JSON.stringify(state.answers));
+        opt.apply(clone);
+        return await window.UNIFER.fetchEligibleCount(clone);
+      } catch (e) {
+        console.error('[unifer] preview fetch failed', e);
+        return null;
+      }
+    }));
+    binaryOpts.forEach((opt, i) => { opt.previewCount = counts[i]; });
+  }
 
-  card.innerHTML = `
-    <div class="avatar small">U</div>
-    <div class="warning-card" style="background:${p.bg}; border:1px solid ${p.border}; border-radius:14px; padding:14px 16px; max-width:500px;">
-      <div style="font-size:11px; font-weight:600; letter-spacing:0.08em; color:${p.label}; text-transform:uppercase; margin-bottom:6px;">${p.labelText}</div>
-      <div style="font-size:14.5px; color:var(--ink); line-height:1.5;">${warning.text}</div>
-      ${actionsHtml}
-      ${continueHtml}
-    </div>
-  `;
+  // Drop dead binary options (preview = 0). If that leaves the card with no
+  // viable options in a critical warning, force Continue visible as an
+  // escape hatch.
+  const viableOptions = options.filter(o => {
+    if (o.type !== 'binary') return true;
+    return o.previewCount !== null && o.previewCount !== 0;
+  });
 
-  stream.insertBefore(card, stream.firstChild);
-  scrollToBottom(50);
+  let hideContinue = warning.level === 'critical';
+  if (hideContinue && viableOptions.length === 0) hideContinue = false;
 
-  if (warning.actions && warning.actions.length > 0) {
+  const card = document.createElement('div');
+  card.className = 'msg u enter';
+
+  let resolveFreeze = null;
+  const freezePromise = freeze ? new Promise(r => { resolveFreeze = r; }) : null;
+
+  const btnBase = `padding:7px 12px; background:white; border:1px solid ${p.border}; border-radius:999px; font-size:13px; color:var(--ink); cursor:pointer; transition:background 140ms;`;
+  const continueBase = `padding:7px 14px; background:var(--teal-soft); border:1px solid var(--teal-edge); border-radius:999px; font-size:13px; color:var(--teal-ink); font-weight:500; cursor:pointer; transition:background 140ms;`;
+  const backBase = `display:inline-flex; align-items:center; gap:4px; padding:4px 0 8px; background:transparent; border:none; font-size:13px; color:${p.label}; cursor:pointer;`;
+
+  function formatCountPhrase(n) {
+    return n === 1 ? '1 course' : `${formatN(n)} courses`;
+  }
+
+  function mainViewHtml() {
+    const actionsHtml = (viableOptions.length > 0)
+      ? `<div class="warning-actions" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+           ${viableOptions.map((o, i) => {
+             let countSuffix = '';
+             if (o.type === 'binary' && typeof o.previewCount === 'number') {
+               countSuffix = ` <span style="opacity:0.6; font-weight:400;">&rarr; ${formatCountPhrase(o.previewCount)}</span>`;
+             }
+             return `<button type="button" class="warning-action" data-idx="${i}" style="${btnBase}">${o.text}${countSuffix}</button>`;
+           }).join('')}
+         </div>`
+      : '';
+
+    const continueHtml = (freeze && !hideContinue)
+      ? `<div class="warning-continue" style="display:flex; justify-content:flex-end; margin-top:12px;">
+           <button type="button" class="warning-continue-btn" style="${continueBase}">Continue &rarr;</button>
+         </div>`
+      : '';
+
+    return `
+      <div class="avatar small">U</div>
+      <div class="warning-card" style="background:${p.bg}; border:1px solid ${p.border}; border-radius:14px; padding:14px 16px; max-width:500px;">
+        <div style="font-size:11px; font-weight:600; letter-spacing:0.08em; color:${p.label}; text-transform:uppercase; margin-bottom:6px;">${p.labelText}</div>
+        <div style="font-size:14.5px; color:var(--ink); line-height:1.5;">${warning.text}</div>
+        ${actionsHtml}
+        ${continueHtml}
+      </div>
+    `;
+  }
+
+  function renderMainView() {
+    card.innerHTML = mainViewHtml();
+    wireMainView();
+  }
+
+  function wireMainView() {
     card.querySelectorAll('.warning-action').forEach((btn, i) => {
+      const option = viableOptions[i];
+      btn.addEventListener('mouseenter', () => { if (!btn.disabled) btn.style.background = p.border; });
+      btn.addEventListener('mouseleave', () => { if (!btn.disabled) btn.style.background = 'white'; });
+      btn.addEventListener('click', () => onOptionClick(option));
+    });
+
+    if (freeze && !hideContinue) {
+      const cBtn = card.querySelector('.warning-continue-btn');
+      if (cBtn) {
+        cBtn.addEventListener('mouseenter', () => { if (!cBtn.disabled) cBtn.style.background = 'var(--teal-edge)'; });
+        cBtn.addEventListener('mouseleave', () => { if (!cBtn.disabled) cBtn.style.background = 'var(--teal-soft)'; });
+        cBtn.addEventListener('click', onContinueClick);
+      }
+    }
+  }
+
+  function disableAllMainButtons() {
+    card.querySelectorAll('.warning-action').forEach(b => {
+      b.disabled = true;
+      b.style.opacity = '0.5';
+      b.style.cursor = 'default';
+      b.style.background = 'white';
+    });
+    const cBtn = card.querySelector('.warning-continue-btn');
+    if (cBtn) {
+      cBtn.disabled = true;
+      cBtn.style.opacity = '0.5';
+      cBtn.style.cursor = 'default';
+    }
+  }
+
+  async function refetchAndRibbon() {
+    if (!window.UNIFER || typeof window.UNIFER.fetchEligibleCount !== 'function') return;
+    const real = await window.UNIFER.fetchEligibleCount(state.answers);
+    if (typeof real !== 'number') return;
+    _lastKnownRealCount = real;
+    const oldC = state.count;
+    animateCounterTo(real, 'section');
+    addRibbon(oldC, real);
+    addUniferMsg(`${formatCountPhrase(real)} match${real === 1 ? 'es' : ''} now.`);
+    const alldoneText = document.querySelector('.alldone-text');
+    if (alldoneText) {
+      alldoneText.textContent = `${formatCountPhrase(real)} match${real === 1 ? 'es' : ''} your profile.`;
+    }
+  }
+
+  async function onOptionClick(option) {
+    if (option.type === 'binary') {
+      disableAllMainButtons();
+      option.apply();
+      await refetchAndRibbon();
+      await new Promise(r => setTimeout(r, 1200));
+      if (resolveFreeze) resolveFreeze();
+    } else if (option.type === 'picker') {
+      renderPickerSubView(option);
+    } else if (option.type === 'cascade') {
+      renderCascadeSubView(option);
+    }
+  }
+
+  function onContinueClick() {
+    disableAllMainButtons();
+    if (resolveFreeze) resolveFreeze();
+  }
+
+  // ----- Picker sub-view -----
+  function renderPickerSubView(option) {
+    card.innerHTML = `
+      <div class="avatar small">U</div>
+      <div class="warning-card" style="background:${p.bg}; border:1px solid ${p.border}; border-radius:14px; padding:14px 16px; max-width:500px;">
+        <button class="warning-back" type="button" style="${backBase}">&larr; back</button>
+        <div style="font-size:14.5px; color:var(--ink); line-height:1.5; margin-bottom:10px;">${option.pickerPrompt}</div>
+        <div class="warning-picker-options" style="display:flex; flex-direction:column; gap:8px;">
+          ${option.pickerOptions.map((po, i) => `
+            <button type="button" class="warning-picker-option" data-idx="${i}" disabled
+                    style="${btnBase} text-align:left; opacity:0.7;">
+              ${po.label}<span class="warning-picker-count" style="opacity:0.6; font-weight:400;"> &rarr; loading&hellip;</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    card.querySelector('.warning-back').addEventListener('click', renderMainView);
+    fetchAndEnablePickerOptions(option);
+  }
+
+  async function fetchAndEnablePickerOptions(option) {
+    const counts = await Promise.all(option.pickerOptions.map(async po => {
+      try {
+        const clone = JSON.parse(JSON.stringify(state.answers));
+        po.apply(clone);
+        return await window.UNIFER.fetchEligibleCount(clone);
+      } catch (e) {
+        return null;
+      }
+    }));
+
+    option.pickerOptions.forEach((po, i) => { po.previewCount = counts[i]; });
+
+    card.querySelectorAll('.warning-picker-option').forEach((btn, i) => {
+      const po = option.pickerOptions[i];
+      const countEl = btn.querySelector('.warning-picker-count');
+      if (countEl) {
+        if (typeof po.previewCount === 'number') {
+          countEl.innerHTML = ` &rarr; ${formatCountPhrase(po.previewCount)}`;
+        } else {
+          countEl.textContent = '';
+        }
+      }
+      btn.disabled = false;
+      btn.style.opacity = '1';
       btn.addEventListener('mouseenter', () => { if (!btn.disabled) btn.style.background = p.border; });
       btn.addEventListener('mouseleave', () => { if (!btn.disabled) btn.style.background = 'white'; });
       btn.addEventListener('click', async () => {
-        const action = warning.actions[i];
-        if (!action) return;
-        action.apply();
-
-        card.querySelectorAll('.warning-action').forEach(b => {
+        card.querySelectorAll('.warning-picker-option').forEach(b => {
           b.disabled = true;
           b.style.opacity = '0.5';
           b.style.cursor = 'default';
-          b.style.background = 'white';
         });
+        po.apply();
+        await refetchAndRibbon();
+        await new Promise(r => setTimeout(r, 1200));
+        if (resolveFreeze) resolveFreeze();
+      });
+    });
+  }
 
-        if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === 'function') {
-          const real = await window.UNIFER.fetchEligibleCount(state.answers);
-          if (typeof real === 'number') {
-            _lastKnownRealCount = real;
-            const oldC = state.count;
-            // Fire counter + ribbon in parallel (same fix as section boundaries).
-            animateCounterTo(real, 'section');
-            addRibbon(oldC, real);
-            addUniferMsg(`Loosened. ${formatN(real)} courses match now.`);
+  // ----- Cascade sub-view (Consider any country: 3 Section 3 Qs) -----
+  function renderCascadeSubView(option) {
+    const steps = option.cascadeSteps;
+    const cascadeAnswers = {};
+    let idx = 0;
 
-            // If All-done card is already on screen, keep its count in sync.
-            const alldoneText = document.querySelector('.alldone-text');
-            if (alldoneText) {
-              alldoneText.textContent = `${formatN(real)} courses match your profile.`;
-            }
-          }
+    function renderStep() {
+      const step = steps[idx];
+      card.innerHTML = `
+        <div class="avatar small">U</div>
+        <div class="warning-card" style="background:${p.bg}; border:1px solid ${p.border}; border-radius:14px; padding:14px 16px; max-width:500px;">
+          <button class="warning-back" type="button" style="${backBase}">&larr; back</button>
+          <div style="font-size:11px; font-weight:600; letter-spacing:0.08em; color:${p.label}; text-transform:uppercase; margin-bottom:6px;">Step ${idx + 1} of ${steps.length}</div>
+          <div style="font-size:14.5px; color:var(--ink); line-height:1.5; margin-bottom:10px;">${step.prompt}</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${step.options.map((o, i) => `
+              <button type="button" class="warning-cascade-option" data-idx="${i}" style="${btnBase} text-align:left;">${o.label}</button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      card.querySelector('.warning-back').addEventListener('click', () => {
+        if (idx === 0) {
+          renderMainView();
+        } else {
+          idx--;
+          delete cascadeAnswers[steps[idx].id];
+          renderStep();
         }
       });
-    });
-  }
-
-  if (freeze) {
-    return new Promise(resolve => {
-      const cBtn = card.querySelector('.warning-continue-btn');
-      cBtn.addEventListener('mouseenter', () => { if (!cBtn.disabled) cBtn.style.background = 'var(--teal-edge)'; });
-      cBtn.addEventListener('mouseleave', () => { if (!cBtn.disabled) cBtn.style.background = 'var(--teal-soft)'; });
-      cBtn.addEventListener('click', () => {
-        // Disable Continue + loosen buttons so the user can't re-interact
-        // after the flow has moved on.
-        cBtn.disabled = true;
-        cBtn.style.opacity = '0.5';
-        cBtn.style.cursor = 'default';
-        card.querySelectorAll('.warning-action').forEach(b => {
-          b.disabled = true;
-          b.style.opacity = '0.5';
-          b.style.cursor = 'default';
-          b.style.background = 'white';
+      card.querySelectorAll('.warning-cascade-option').forEach((btn, i) => {
+        btn.addEventListener('mouseenter', () => { if (!btn.disabled) btn.style.background = p.border; });
+        btn.addEventListener('mouseleave', () => { if (!btn.disabled) btn.style.background = 'white'; });
+        btn.addEventListener('click', async () => {
+          cascadeAnswers[step.id] = step.options[i].v;
+          idx++;
+          if (idx < steps.length) {
+            renderStep();
+          } else {
+            card.querySelectorAll('.warning-cascade-option').forEach(b => {
+              b.disabled = true;
+              b.style.opacity = '0.5';
+              b.style.cursor = 'default';
+            });
+            option.applyAll(cascadeAnswers);
+            await refetchAndRibbon();
+            await new Promise(r => setTimeout(r, 1200));
+            if (resolveFreeze) resolveFreeze();
+          }
         });
-        resolve();
       });
-    });
+    }
+    renderStep();
   }
 
+  // Initial render + insert into stream
+  renderMainView();
+  stream.insertBefore(card, stream.firstChild);
+  scrollToBottom(50);
+
+  if (freeze) return freezePromise;
   return card;
 }
 
@@ -2371,55 +2555,147 @@ function maybeFireCallout() {
    level (info | warning | critical), display text, and optional action buttons
    the user can click to loosen filters inline. Returns null when nothing's
    worth surfacing. */
-function buildLoosenOptions(a) {
+/* Change-option builder (Patch A — renamed from buildLoosenOptions).
+
+   Each option carries a `type`:
+   - 'binary': single preset mutation; rendered as a button with preview count;
+     auto-continues on click.
+   - 'picker': opens an in-bubble sub-view showing that question's full options
+     (each with its own preview count); back arrow returns to main view.
+   - 'cascade': opens an in-bubble sequential flow of multiple questions; used
+     only by "Consider any country" which unlocks 3 Section 3 Qs.
+
+   Answer-gating: only surface an option if the underlying answer has been
+   committed. Unanswered filters haven't narrowed the pool yet and so
+   shouldn't appear as change options.
+
+   apply(target) and applyAll(answers, target) accept an optional target so
+   callers can preview changes against a cloned state.answers before commit.
+*/
+function buildChangeOptions(a) {
   const opts = [];
 
-  if (a.tuition_band && a.tuition_band !== 'No limit') {
+  // Binary: level (PhD → PG)
+  if (a.level === 'PhD') {
     opts.push({
-      text: 'Remove budget cap',
-      apply: () => { state.answers.tuition_band = 'No limit'; }
-    });
-  }
-  if (a.country_decided === 'Yes' && a.selected_country) {
-    opts.push({
-      text: `Expand beyond ${a.selected_country}`,
-      apply: () => {
-        state.answers.country_decided = 'No';
-        state.answers.selected_country = null;
-
-        // Stage 6A-fix-6: removing the country pre-selection flips the user
-        // from 2-entity priorities (Course, Institution) to 3-entity. The
-        // backend rejects 2 priorities when no country is selected, so promote
-        // by appending 'Country' at position 3 — least-important, which lines
-        // up with the user just removing the country constraint.
-        if (state.answers.priorities_1 && state.answers.priorities_2 && !state.answers.priorities_3) {
-          state.answers.priorities_3 = 'Country';
-          state.answers.priorities = [
-            state.answers.priorities_1,
-            state.answers.priorities_2,
-            'Country',
-          ];
-        }
+      type: 'binary',
+      text: 'Include Masters too',
+      apply: (target) => {
+        target = target || state.answers;
+        target.level = 'PG';
       }
     });
   }
-  if (a.duration === '1 year or less' || a.duration === '3 years or less') {
+
+  // Binary: duration (1yr → More than 1yr)
+  if (a.duration === '1 year or less') {
     opts.push({
+      type: 'binary',
       text: 'Allow longer programmes',
-      apply: () => { state.answers.duration = 'More than 1 year'; }
+      apply: (target) => {
+        target = target || state.answers;
+        target.duration = 'More than 1 year';
+      }
     });
   }
+
+  // Picker: tuition_band — 4 alternatives excluding current answer
+  if (a.tuition_band) {
+    const tuitionStep = FLOW.find(s => s.id === 'tuition_band');
+    if (tuitionStep && Array.isArray(tuitionStep.options)) {
+      const alts = tuitionStep.options.filter(o => o.v !== a.tuition_band);
+      if (alts.length > 0) {
+        opts.push({
+          type: 'picker',
+          text: 'Change budget',
+          pickerPrompt: tuitionStep.prompt,
+          pickerOptions: alts.map(o => ({
+            label: o.label,
+            v: o.v,
+            apply: (target) => {
+              target = target || state.answers;
+              target.tuition_band = o.v;
+            }
+          }))
+        });
+      }
+    }
+  }
+
+  // Picker: sub_field — sibling sub_fields within the same parent field
+  if (a.sub_field && a.field) {
+    const subStep = FLOW.find(s => s.id === 'sub_field');
+    if (subStep && subStep.optionsMap && Array.isArray(subStep.optionsMap[a.field])) {
+      const siblings = subStep.optionsMap[a.field].filter(o => o.v !== a.sub_field);
+      if (siblings.length > 0) {
+        opts.push({
+          type: 'picker',
+          text: 'Change specialisation',
+          pickerPrompt: subStep.prompt,
+          pickerOptions: siblings.map(o => ({
+            label: o.label,
+            v: o.v,
+            apply: (target) => {
+              target = target || state.answers;
+              target.sub_field = o.v;
+            }
+          }))
+        });
+      }
+    }
+  }
+
+  // Binary: "Any specialisation" — remove sub_field filter entirely
   if (a.sub_field && a.sub_field !== '') {
     opts.push({
-      text: `Broaden beyond "${a.sub_field}"`,
-      apply: () => { state.answers.sub_field = ''; }
+      type: 'binary',
+      text: 'Any specialisation',
+      apply: (target) => {
+        target = target || state.answers;
+        target.sub_field = '';
+      }
     });
   }
-  if (a.level === 'PhD') {
-    opts.push({
-      text: 'Include Masters too',
-      apply: () => { state.answers.level = 'PG'; }
-    });
+
+  // Cascade: country_decided Yes → No. Unlocks 3 Section 3 questions
+  // (work_permit_importance, english_preference, pr_importance) which are
+  // asked sequentially inside the amber bubble before the change commits.
+  if (a.country_decided === 'Yes' && a.selected_country) {
+    const cascadeIds = ['work_permit_importance', 'english_preference', 'pr_importance'];
+    const cascadeSteps = cascadeIds
+      .map(id => FLOW.find(s => s.id === id))
+      .filter(Boolean)
+      .map(step => ({
+        id: step.id,
+        prompt: step.prompt,
+        options: step.options
+      }));
+
+    if (cascadeSteps.length > 0) {
+      opts.push({
+        type: 'cascade',
+        text: 'Consider any country',
+        cascadeSteps,
+        applyAll: (cascadeAnswers, target) => {
+          target = target || state.answers;
+          target.country_decided = 'No';
+          target.selected_country = null;
+
+          if (target.priorities_1 && target.priorities_2 && !target.priorities_3) {
+            target.priorities_3 = 'Country';
+            target.priorities = [
+              target.priorities_1,
+              target.priorities_2,
+              'Country',
+            ];
+          }
+
+          Object.keys(cascadeAnswers).forEach(id => {
+            target[id] = cascadeAnswers[id];
+          });
+        }
+      });
+    }
   }
 
   return opts;
@@ -2432,16 +2708,16 @@ function maybeFireSuggestion(oldCount) {
   if (count === 0) {
     return {
       level: 'critical',
-      text: "That combination leaves nothing. Try loosening one:",
-      actions: buildLoosenOptions(a)
+      text: "That combination leaves nothing. Try changing one:",
+      actions: buildChangeOptions(a)
     };
   }
 
   if (count < 5) {
     return {
       level: 'warning',
-      text: `Only ${count} course${count === 1 ? '' : 's'} match. Widen a preference to see more:`,
-      actions: buildLoosenOptions(a)
+      text: `Only ${count} course${count === 1 ? '' : 's'} match. Try changing one to open up more:`,
+      actions: buildChangeOptions(a)
     };
   }
 
@@ -2467,7 +2743,14 @@ function maybeFireSuggestion(oldCount) {
       level: 'warning',
       text: 'PhDs are typically research programmes, not taught. This filter may clash.',
       actions: [
-        { text: 'Remove taught-only filter', apply: () => { state.answers.program_type_preference = ''; } }
+        {
+          type: 'binary',
+          text: 'Remove taught-only filter',
+          apply: (target) => {
+            target = target || state.answers;
+            target.program_type_preference = '';
+          }
+        }
       ]
     };
   }
@@ -3322,7 +3605,7 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
       await addWarningCard(warning, { freeze: true });
       _freezeFired = true;
     } else if (warning.actions && warning.actions.length > 0) {
-      addWarningCard(warning);
+      await addWarningCard(warning);
       await new Promise(r => setTimeout(r, 500));
     } else {
       addUniferMsg(warning.text, "suggest", 'FYI');
@@ -3485,7 +3768,7 @@ async function finish() {
       // explicit pause before the All-done bubble + results card.
       await addWarningCard(finalWarning, { freeze: true });
     } else if (finalWarning.actions && finalWarning.actions.length > 0) {
-      addWarningCard(finalWarning);
+      await addWarningCard(finalWarning);
       await new Promise(r => setTimeout(r, 500));
     } else {
       addUniferMsg(finalWarning.text, "suggest", 'FYI');
