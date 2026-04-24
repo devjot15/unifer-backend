@@ -2435,6 +2435,28 @@ function showTyping(delay=750) {
   return new Promise(r => setTimeout(() => { el.remove(); r(); }, delay));
 }
 
+/* Show typing indicator while an async task runs. Guarantees a minimum
+   display time so the indicator doesn't flash for fast fetches. Used to
+   cover the perceived-freeze window between last-answer and count ribbon
+   while fetchEligibleCount is pending. */
+async function showTypingWhile(fn, minDuration = 400) {
+  const el = document.createElement("div");
+  el.className = "msg u enter";
+  el.innerHTML = `<div class="avatar small">U</div><div class="typing"><span></span><span></span><span></span></div>`;
+  stream.insertBefore(el, stream.firstChild);
+  scrollToBottom();
+  const start = performance.now();
+  try {
+    const result = await fn();
+    const elapsed = performance.now() - start;
+    const remaining = Math.max(0, minDuration - elapsed);
+    if (remaining > 0) await new Promise(r => setTimeout(r, remaining));
+    return result;
+  } finally {
+    el.remove();
+  }
+}
+
 /* ---- counter (odometer-style tick-down) ---- */
 function renderCounter(n) {
   const digits = String(n).split("");
@@ -3592,10 +3614,11 @@ async function handleSectionBoundary(prevSectionId, nextSectionId) {
   }
 
   // Stage 5E-F: fetch real count BEFORE animating. Fake drop only on network failure.
+  // Typing indicator covers the fetch window (was a perceived freeze for 500-1500ms).
   let realCount = null;
   if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
     try {
-      realCount = await window.UNIFER.fetchEligibleCount(state.answers);
+      realCount = await showTypingWhile(() => window.UNIFER.fetchEligibleCount(state.answers));
     } catch (e) {
       console.error("[unifer] boundary fetch failed", e);
     }
@@ -3761,7 +3784,7 @@ async function finish() {
   let realFinal = null;
   if (window.UNIFER && typeof window.UNIFER.fetchEligibleCount === "function") {
     try {
-      realFinal = await window.UNIFER.fetchEligibleCount(state.answers);
+      realFinal = await showTypingWhile(() => window.UNIFER.fetchEligibleCount(state.answers));
     } catch (e) {
       console.error("[unifer] all-done final fetch failed", e);
     }
