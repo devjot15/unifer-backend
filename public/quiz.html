@@ -2607,12 +2607,17 @@ function _renderComposerInner(step) {
     case "text":    renderText(step); break;
   }
   // Insert the question pill INSIDE the same mutate() the animator measures
-  // around. Previously _setComposerQuestion ran AFTER renderComposer returned,
-  // meaning the pill was added after the animator had already measured newH —
-  // causing text composers (which auto-focus and reveal the pill) to grow
-  // beyond the animation target. Pill is now part of the measured layout.
-  const prompt = step ? (typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt) : '';
-  _setComposerQuestion(prompt);
+  // around so the pill is in the DOM when the animator measures newH.
+  // Pill only on keyboard-opening kinds (text, numeric, grid, search, country) —
+  // chip/chipPlus/rank/field tap directly without obscuring the chat, so the
+  // pill adds clutter without solving any view problem there.
+  const PILL_KINDS = new Set(["text", "numeric", "grid", "search", "country"]);
+  if (step && PILL_KINDS.has(step.kind)) {
+    const prompt = typeof step.promptFn === 'function' ? step.promptFn(state.answers) : step.prompt;
+    _setComposerQuestion(prompt);
+  } else {
+    _setComposerQuestion("");
+  }
 }
 
 function renderComposer(step) {
