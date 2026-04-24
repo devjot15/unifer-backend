@@ -2115,6 +2115,27 @@ async function addWarningCard(warning, opts) {
   const continueBase = `padding:7px 14px; background:var(--teal-soft); border:1px solid var(--teal-edge); border-radius:999px; font-size:13px; color:var(--teal-ink); font-weight:500; cursor:pointer; transition:background 140ms;`;
   const backBase = `display:inline-flex; align-items:center; gap:4px; padding:4px 0 8px; background:transparent; border:none; font-size:13px; color:${p.label}; cursor:pointer;`;
 
+  // Hover styling is only attached on devices that actually support hover.
+  // Touch-only devices (iOS Safari) don't reliably fire mouseleave, so
+  // without this guard whichever option the user last tapped stays
+  // pre-highlighted until they tap elsewhere.
+  const supportsHover = window.matchMedia('(hover: hover)').matches;
+
+  function _attachHover(el, activeBg, restBg) {
+    if (!supportsHover) return;
+    el.addEventListener('mouseenter', () => { if (!el.disabled) el.style.background = activeBg; });
+    el.addEventListener('mouseleave', () => { if (!el.disabled) el.style.background = restBg; });
+  }
+
+  // Fade + remove the card once the user commits a change or hits Continue.
+  // The stream still carries the ribbon and "N courses match now" bubble, so
+  // the change is documented — the resolved warning just gets out of the way.
+  function fadeAndRemoveCard() {
+    card.style.transition = "opacity 280ms var(--ease)";
+    card.style.opacity = "0";
+    setTimeout(() => { card.remove(); }, 280);
+  }
+
   function formatCountPhrase(n) {
     return n === 1 ? '1 course' : `${formatN(n)} courses`;
   }
@@ -2157,16 +2178,14 @@ async function addWarningCard(warning, opts) {
   function wireMainView() {
     card.querySelectorAll('.warning-action').forEach((btn, i) => {
       const option = viableOptions[i];
-      btn.addEventListener('mouseenter', () => { if (!btn.disabled) btn.style.background = p.border; });
-      btn.addEventListener('mouseleave', () => { if (!btn.disabled) btn.style.background = 'white'; });
+      _attachHover(btn, p.border, 'white');
       btn.addEventListener('click', () => onOptionClick(option));
     });
 
     if (freeze && !hideContinue) {
       const cBtn = card.querySelector('.warning-continue-btn');
       if (cBtn) {
-        cBtn.addEventListener('mouseenter', () => { if (!cBtn.disabled) cBtn.style.background = 'var(--teal-edge)'; });
-        cBtn.addEventListener('mouseleave', () => { if (!cBtn.disabled) cBtn.style.background = 'var(--teal-soft)'; });
+        _attachHover(cBtn, 'var(--teal-edge)', 'var(--teal-soft)');
         cBtn.addEventListener('click', onContinueClick);
       }
     }
@@ -2207,6 +2226,7 @@ async function addWarningCard(warning, opts) {
       disableAllMainButtons();
       option.apply();
       await refetchAndRibbon();
+      fadeAndRemoveCard();
       await new Promise(r => setTimeout(r, 1200));
       if (resolveFreeze) resolveFreeze();
     } else if (option.type === 'picker') {
@@ -2218,6 +2238,7 @@ async function addWarningCard(warning, opts) {
 
   function onContinueClick() {
     disableAllMainButtons();
+    fadeAndRemoveCard();
     if (resolveFreeze) resolveFreeze();
   }
 
@@ -2267,8 +2288,7 @@ async function addWarningCard(warning, opts) {
       }
       btn.disabled = false;
       btn.style.opacity = '1';
-      btn.addEventListener('mouseenter', () => { if (!btn.disabled) btn.style.background = p.border; });
-      btn.addEventListener('mouseleave', () => { if (!btn.disabled) btn.style.background = 'white'; });
+      _attachHover(btn, p.border, 'white');
       btn.addEventListener('click', async () => {
         card.querySelectorAll('.warning-picker-option').forEach(b => {
           b.disabled = true;
@@ -2277,6 +2297,7 @@ async function addWarningCard(warning, opts) {
         });
         po.apply();
         await refetchAndRibbon();
+        fadeAndRemoveCard();
         await new Promise(r => setTimeout(r, 1200));
         if (resolveFreeze) resolveFreeze();
       });
@@ -2314,8 +2335,7 @@ async function addWarningCard(warning, opts) {
         }
       });
       card.querySelectorAll('.warning-cascade-option').forEach((btn, i) => {
-        btn.addEventListener('mouseenter', () => { if (!btn.disabled) btn.style.background = p.border; });
-        btn.addEventListener('mouseleave', () => { if (!btn.disabled) btn.style.background = 'white'; });
+        _attachHover(btn, p.border, 'white');
         btn.addEventListener('click', async () => {
           cascadeAnswers[step.id] = step.options[i].v;
           idx++;
@@ -2329,6 +2349,7 @@ async function addWarningCard(warning, opts) {
             });
             option.applyAll(cascadeAnswers);
             await refetchAndRibbon();
+            fadeAndRemoveCard();
             await new Promise(r => setTimeout(r, 1200));
             if (resolveFreeze) resolveFreeze();
           }
