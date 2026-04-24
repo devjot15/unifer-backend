@@ -2466,43 +2466,39 @@ function labelFor(step, value) {
    the content swap during the transition. */
 let _composerAnimating = false;
 function _animateComposerHeight(mutate) {
-  const oldInner = composer.querySelector(".composer-inner");
-  // First render (no inner yet) or mid-animation reentry → just mutate.
-  if (!oldInner || _composerAnimating) {
+  // `composer` is the .composer-inner element itself (const composer = $("#composerInner"))
+  // — not a parent of it. Earlier version queried for .composer-inner as a descendant,
+  // got null, and bailed every time. We operate on `composer` directly.
+  if (_composerAnimating) {
     mutate();
     return;
   }
-  const oldH = oldInner.offsetHeight;
-  // Lock current height so the snap is visually suppressed during mutation.
-  oldInner.style.maxHeight = oldH + "px";
+  const oldH = composer.offsetHeight;
+  composer.style.maxHeight = oldH + "px";
   mutate();
-  // The mutation replaces .composer-inner with a new element — re-query.
-  const newInner = composer.querySelector(".composer-inner");
-  if (!newInner) return;
-  // Measure natural new height by temporarily unlocking, then re-lock to oldH
-  // so the transition has a defined start point.
-  newInner.style.maxHeight = "none";
-  const newH = newInner.offsetHeight;
-  newInner.style.maxHeight = oldH + "px";
+  // Measure new natural height by unclamping, then snap back to oldH so the
+  // transition has a defined start point.
+  composer.style.maxHeight = "none";
+  const newH = composer.offsetHeight;
+  if (oldH === newH) { return; } // no animation needed
+  composer.style.maxHeight = oldH + "px";
   _composerAnimating = true;
   // Double rAF: first frame commits the start state, second frame triggers
-  // the transition. Required on iOS Safari to prevent the browser from
-  // collapsing both frames into a single layout pass (which would skip animation).
+  // the transition. Required on iOS Safari to prevent layout coalescing.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      newInner.style.maxHeight = newH + "px";
+      composer.style.maxHeight = newH + "px";
       const onEnd = (e) => {
         if (e.propertyName !== "max-height") return;
-        newInner.style.maxHeight = "none"; // unclamp so future focus-pill toggles can grow it
-        newInner.removeEventListener("transitionend", onEnd);
+        composer.style.maxHeight = "none";
+        composer.removeEventListener("transitionend", onEnd);
         _composerAnimating = false;
       };
-      newInner.addEventListener("transitionend", onEnd);
-      // Safety net — if transitionend never fires (oldH===newH, etc.), unclamp anyway.
+      composer.addEventListener("transitionend", onEnd);
       setTimeout(() => {
         if (_composerAnimating) {
-          newInner.style.maxHeight = "none";
-          newInner.removeEventListener("transitionend", onEnd);
+          composer.style.maxHeight = "none";
+          composer.removeEventListener("transitionend", onEnd);
           _composerAnimating = false;
         }
       }, 500);
