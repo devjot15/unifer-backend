@@ -4541,12 +4541,10 @@ function commitEdit(stepId, value, displayLabel) {
     if (state.answers[s.id]) continue;
     pendingCount++;
   }
-  if (pendingCount > 0) {
+  if (pendingCount > 3) {
     const banner = document.createElement("div");
     banner.className = "cascade-banner";
-    banner.textContent = pendingCount === 1
-      ? "Your change affects 1 later question. We'll ask it now."
-      : `Your change affects ${pendingCount} later questions. We'll walk through them.`;
+    banner.textContent = `Changing this answer cleared ${pendingCount} answers. We'll have to answer them again.`;
     stream.insertBefore(banner, stream.firstChild);
   }
 
